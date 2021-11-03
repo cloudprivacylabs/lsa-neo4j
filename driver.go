@@ -8,7 +8,7 @@
 //
 // Node IDs are stored as the neo4j node property "neo4j_id".
 //
-// Node values are stored as the neo4j node property "neo4j_alue"`.
+// Node values are stored as the neo4j node property "neo4j_value"`.
 //
 // All node properties are stores as neo4j node properties.
 //
@@ -37,13 +37,17 @@ type Driver struct {
 }
 
 type Session struct {
-	session neo4j.Session
+	neo4j.Session
 }
 
 const (
 	PropNodeID    = "neo4j_id"
 	PropNodeValue = "neo4j_value"
 )
+
+type ErrMultipleFound string
+
+func (e ErrMultipleFound) Error() string { return "Multiple found: " + string(e) }
 
 func NewDriver(driver neo4j.Driver, databaseName string) *Driver {
 	return &Driver{
@@ -58,11 +62,11 @@ func (d *Driver) Close() {
 
 func (d *Driver) NewSession() *Session {
 	s := d.drv.NewSession(neo4j.SessionConfig{DatabaseName: d.dbName})
-	return &Session{session: s}
+	return &Session{s}
 }
 
 func (s *Session) Close() {
-	s.session.Close()
+	s.Session.Close()
 }
 
 // LoadNode attempts to load a node with the given ID. The ID is
@@ -72,15 +76,18 @@ func (s *Session) LoadNode(tx neo4j.Transaction, ID string) (ls.Node, int64, err
 	if err != nil {
 		return nil, 0, err
 	}
-	nodei, err := ret.Single()
-	if err != nil {
-		return nil, 0, err
+	if ret.Next() {
+		record := ret.Record()
+		if ret.Next() {
+			return nil, 0, ErrMultipleFound(ID)
+		}
+		node, ok := record.Values[0].(neo4j.Node)
+		if !ok {
+			return nil, 0, ls.ErrNotFound(ID)
+		}
+		return s.MakeNode(node), node.Id, nil
 	}
-	node, ok := nodei.Values[0].(neo4j.Node)
-	if !ok {
-		return nil, 0, ls.ErrNotFound(ID)
-	}
-	return s.MakeNode(node), node.Id, nil
+	return nil, 0, ls.ErrNotFound(ID)
 }
 
 // MakeNode builds a graph node from the given db node
@@ -163,8 +170,8 @@ func (s *Session) UpdateNode(tx neo4j.Transaction, oldNode, newNode ls.Node) err
 		// No changes to the node
 		return nil
 	}
-	idAndValue["id"] = ls.StringPropertyValue(oldNode.GetID())
-	stmt := fmt.Sprintf("MATCH (n {%s: $id})", PropNodeID)
+	vars[PropNodeID] = oldNode.GetID()
+	stmt := fmt.Sprintf("MATCH (n {%s: $%s})", PropNodeID, PropNodeID)
 	if len(deleteLabelsClause) > 0 {
 		stmt += " REMOVE n" + deleteLabelsClause
 	}
@@ -189,7 +196,7 @@ type Edge struct {
 
 // LoadEdges returns all outgoing edges of the given node
 func (s *Session) LoadEdges(tx neo4j.Transaction, nodeID string) ([]Edge, error) {
-	results, err := tx.Run(fmt.Sprintf("MATCH (from {%s: %id})-[r]-(target) RETURN r,target", PropNodeID), map[string]interface{}{"id": nodeID})
+	results, err := tx.Run(fmt.Sprintf("MATCH (from {%s: $id})-[r]-(target) RETURN r,target", PropNodeID), map[string]interface{}{"id": nodeID})
 	if err != nil {
 		return nil, err
 	}
@@ -215,11 +222,10 @@ func (s *Session) LoadEdges(tx neo4j.Transaction, nodeID string) ([]Edge, error)
 // already be in the db. The edge should not exist in the db
 func (s *Session) CreateEdge(tx neo4j.Transaction, edge ls.Edge) error {
 	vars := make(map[string]interface{})
-	props := makeProperties(vars, edge.GetProperties(), map[string]*ls.PropertyValue{
-		"fromId": ls.StringPropertyValue(fmt.Sprint(edge.GetFrom().GetLabel())),
-		"toId":   ls.StringPropertyValue(fmt.Sprint(edge.GetTo().GetLabel())),
-	})
-	_, err := tx.Run(fmt.Sprintf("MATCH (from {%s:$fromId}), (to {%s:$toId}) CREATE (from)-[$lbl %s]-(to)", PropNodeID, PropNodeID, props), vars)
+	props := makeProperties(vars, edge.GetProperties(), nil)
+	vars["fromId"] = fmt.Sprint(edge.GetFrom().GetLabel())
+	vars["toId"] = fmt.Sprint(edge.GetTo().GetLabel())
+	_, err := tx.Run(fmt.Sprintf("MATCH (from {%s:$fromId}), (to {%s:$toId}) CREATE (from)-[:%s %s]->(to)", PropNodeID, PropNodeID, quoteBacktick(edge.GetLabelStr()), props), vars)
 	if err != nil {
 		return err
 	}
@@ -241,11 +247,10 @@ func (s *Session) UpdateEdge(tx neo4j.Transaction, edge ls.Edge) error {
 func makeLabels(vars map[string]interface{}, types []string) string {
 	out := strings.Builder{}
 	for _, x := range types {
-		tname := fmt.Sprintf("t%d", len(vars))
-		vars[tname] = x
 		out.WriteRune(':')
-		out.WriteRune('$')
-		out.WriteString(tname)
+		out.WriteRune('`')
+		out.WriteString(x)
+		out.WriteRune('`')
 	}
 	return out.String()
 }
