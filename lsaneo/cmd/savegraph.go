@@ -4,7 +4,7 @@ import (
 	"log"
 
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
-	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/spf13/cobra"
 )
 
@@ -15,21 +15,16 @@ var (
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			drv := getNeoDriver(cmd)
-			inp, err := readJSONFileOrStdin(args)
+			inputFormat, _ := cmd.Flags().GetString("input")
+			g, err := cmdutil.ReadGraph(args, nil, inputFormat)
 			if err != nil {
 				log.Fatal(err)
 			}
 			session := drv.NewSession()
 			defer session.Close()
-			for _, x := range inp {
-				g, err := ls.UnmarshalGraph(x, ls.NewInterner())
-				if err != nil {
-					log.Fatal(err)
-				}
-				err = neo.SaveGraph(session, g)
-				if err != nil {
-					log.Fatal(err)
-				}
+			err = neo.SaveGraph(session, g)
+			if err != nil {
+				log.Fatal(err)
 			}
 		},
 	}
@@ -37,4 +32,5 @@ var (
 
 func init() {
 	rootCmd.AddCommand(saveGraphCmd)
+	saveGraphCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
 }

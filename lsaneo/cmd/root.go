@@ -1,13 +1,8 @@
 package cmd
 
 import (
-	"bytes"
-	"io"
-	"io/ioutil"
 	"log"
-	"os"
 
-	"github.com/bserdar/jsonstream"
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"github.com/spf13/cobra"
@@ -57,31 +52,4 @@ func getNeoDriver(cmd *cobra.Command) *neo.Driver {
 	drv := getDriver(cmd)
 	db, _ := cmd.Flags().GetString("db")
 	return neo.NewDriver(drv, db)
-}
-
-// reads input[0] if it exists, otherwise reads from stdin
-func readJSONFileOrStdin(input []string) ([]interface{}, error) {
-	var rd jsonstream.ConcatReader
-	if len(input) == 0 {
-		rd = jsonstream.NewConcatReader(os.Stdin)
-	} else {
-		data, err := ioutil.ReadFile(input[0])
-		if err != nil {
-			return nil, err
-		}
-		rd = jsonstream.NewConcatReader(bytes.NewReader(data))
-	}
-
-	out := make([]interface{}, 0)
-	for {
-		var v interface{}
-		err := rd.Unmarshal(&v)
-		if err == io.EOF {
-			return out, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
 }
