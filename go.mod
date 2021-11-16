@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/bserdar/digraph v1.1.4
-	github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211115192638-ad14e1b39a87
+	github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211116022518-c60a33c061bf
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/spf13/cobra v1.1.3
 )
