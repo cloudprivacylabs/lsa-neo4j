@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/Masterminds/sprig"
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
@@ -73,13 +74,13 @@ SET c.standard = CASE $standard_concept WHEN "S" THEN TRUE else null END
 				}
 				tmplInput = string(data)
 			}
-			tmpl, err := template.New("cmd").Funcs(map[string]interface{}{
-				"esc": func(in string) string {
-					in = strings.Replace(in, `\`, `\\`, -1)
-					in = strings.Replace(in, `"`, `\"`, -1)
-					return strings.Replace(in, `'`, `\'`, -1)
-				},
-			}).Parse(tmplInput)
+			funcmap := sprig.TxtFuncMap()
+			funcmap["esc"] = func(in string) string {
+				in = strings.Replace(in, `\`, `\\`, -1)
+				in = strings.Replace(in, `"`, `\"`, -1)
+				return strings.Replace(in, `'`, `\'`, -1)
+			}
+			tmpl, err := template.New("cmd").Funcs(funcmap).Parse(tmplInput)
 			if err != nil {
 				log.Fatal(err)
 			}
