@@ -9,6 +9,7 @@ import (
 // SaveGraph saves all the nodes and edges of a graph in a
 // transaction. Any existing nodes/edges are updated.
 func SaveGraph(session *Session, g *digraph.Graph) error {
+	session.Logf("Start: SaveGraph")
 	_, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
 		// Find all existing nodes
 		// Map of graph nodes to DB nodes
@@ -27,6 +28,7 @@ func SaveGraph(session *Session, g *digraph.Graph) error {
 				nodeMap[node] = nd
 			}
 		}
+		session.Logf("There are %d nodes", len(nodeMap))
 
 		// Insert/update nodes
 		for graphNode, dbNode := range nodeMap {

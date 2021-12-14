@@ -41,6 +41,8 @@ github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211115192638-ad14e1b39a87 h1:60
 github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211115192638-ad14e1b39a87/go.mod h1:vFxtjwbyZkH1Qs+Zn9Fza+QmiTUrGrLxXnZ2ZS86N5k=
 github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211116022518-c60a33c061bf h1:e+Ma32GzQZD+idNUXLlWekVkubh8CO6gXZSidbD30CE=
 github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211116022518-c60a33c061bf/go.mod h1:vFxtjwbyZkH1Qs+Zn9Fza+QmiTUrGrLxXnZ2ZS86N5k=
+github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211208061934-e4aadd23cf76 h1:o5btFsRUjJgGDTei5zC6CpICfmzAwNaTorRa36+QYis=
+github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211208061934-e4aadd23cf76/go.mod h1:ULgY0yQtnkj7eTjAXArDSAh7AJgamsWurs6N5hP7/zE=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/coreos/etcd v3.3.13+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
 github.com/coreos/go-semver v0.3.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=

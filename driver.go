@@ -24,6 +24,7 @@ package neo4j
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
@@ -38,6 +39,7 @@ type Driver struct {
 
 type Session struct {
 	neo4j.Session
+	logOutput io.Writer
 }
 
 const (
@@ -62,7 +64,18 @@ func (d *Driver) Close() {
 
 func (d *Driver) NewSession() *Session {
 	s := d.drv.NewSession(neo4j.SessionConfig{DatabaseName: d.dbName})
-	return &Session{s}
+	return &Session{Session: s}
+}
+
+func (s *Session) SetLogOutput(w io.Writer) {
+	s.logOutput = w
+}
+
+func (s *Session) Logf(format string, args ...interface{}) {
+	if s.logOutput != nil {
+		fmt.Fprintf(s.logOutput, format, args...)
+		fmt.Fprintln(s.logOutput, "")
+	}
 }
 
 func (s *Session) Close() {
