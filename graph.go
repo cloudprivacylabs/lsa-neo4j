@@ -16,7 +16,7 @@ func SaveGraph(session *Session, g *digraph.Graph) error {
 		nodeMap := map[ls.Node]ls.Node{}
 		for nodes := g.GetAllNodes(); nodes.HasNext(); {
 			node := nodes.Next().(ls.Node)
-			nd, _, err := session.LoadNode(tx, node.GetID())
+			nd, _, err := session.LoadNode(tx, node.GetTypes().Slice(), node.GetID())
 			if err != nil {
 				if _, ok := err.(ls.ErrNotFound); !ok {
 					return nil, err
@@ -47,7 +47,7 @@ func SaveGraph(session *Session, g *digraph.Graph) error {
 
 		// Insert/update edges
 		for graphNode, _ := range nodeMap {
-			dbEdges, err := session.LoadEdges(tx, graphNode.GetID())
+			dbEdges, err := session.LoadEdges(tx, graphNode.GetTypes().Slice(), graphNode.GetID())
 			if err != nil {
 				return nil, err
 			}

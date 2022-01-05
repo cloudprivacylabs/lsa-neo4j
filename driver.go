@@ -84,8 +84,11 @@ func (s *Session) Close() {
 
 // LoadNode attempts to load a node with the given ID. The ID is
 // looked up in id node property
-func (s *Session) LoadNode(tx neo4j.Transaction, ID string) (ls.Node, int64, error) {
-	ret, err := tx.Run(fmt.Sprintf("MATCH (node {%s:$id}) RETURN node", PropNodeID), map[string]interface{}{"id": ID})
+func (s *Session) LoadNode(tx neo4j.Transaction, labels []string, ID string) (ls.Node, int64, error) {
+	query := fmt.Sprintf("MATCH (node%s {%s:$id}) RETURN node", makeLabels(labels), PropNodeID)
+	data := map[string]interface{}{"id": ID}
+	s.Logf("Query: %s with %v", query, data)
+	ret, err := tx.Run(query, data)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -138,7 +141,7 @@ func buildPropertyMap(in map[string]interface{}, out map[string]*ls.PropertyValu
 // CreateNode creates a new node and returns its neo4j ID
 func (s *Session) CreateNode(tx neo4j.Transaction, node ls.Node) (int64, error) {
 	vars := make(map[string]interface{})
-	labelsClause := makeLabels(vars, node.GetTypes().Slice())
+	labelsClause := makeLabels(node.GetTypes().Slice())
 	idAndValue := make(map[string]*ls.PropertyValue)
 	if len(node.GetID()) > 0 {
 		idAndValue[PropNodeID] = ls.StringPropertyValue(node.GetID())
@@ -147,7 +150,9 @@ func (s *Session) CreateNode(tx neo4j.Transaction, node ls.Node) (int64, error) 
 		idAndValue[PropNodeValue] = ls.StringPropertyValue(fmt.Sprint(node.GetValue()))
 	}
 	propertiesClause := makeProperties(vars, node.GetProperties(), idAndValue)
-	idrec, err := tx.Run(fmt.Sprintf("CREATE (n %s %s) RETURN n", labelsClause, propertiesClause), vars)
+	query := fmt.Sprintf("CREATE (n %s %s) RETURN n", labelsClause, propertiesClause)
+	s.Logf("Create node %s with %v", query, vars)
+	idrec, err := tx.Run(query, vars)
 	if err != nil {
 		return 0, err
 	}
@@ -177,14 +182,14 @@ func (s *Session) UpdateNode(tx neo4j.Transaction, oldNode, newNode ls.Node) err
 	newTypes := newNode.GetTypes().Slice()
 	deleteLabels := ls.StringSetSubtract(oldTypes, newTypes)
 	insertLabels := ls.StringSetSubtract(newTypes, oldTypes)
-	deleteLabelsClause := makeLabels(vars, deleteLabels)
-	insertLabelsClause := makeLabels(vars, insertLabels)
+	deleteLabelsClause := makeLabels(deleteLabels)
+	insertLabelsClause := makeLabels(insertLabels)
 	if len(deleteLabelsClause) == 0 && len(insertLabelsClause) == 0 && len(propertiesClause) == 0 {
 		// No changes to the node
 		return nil
 	}
 	vars[PropNodeID] = oldNode.GetID()
-	stmt := fmt.Sprintf("MATCH (n {%s: $%s})", PropNodeID, PropNodeID)
+	stmt := fmt.Sprintf("MATCH (n %s {%s: $%s})", makeLabels(oldNode.GetTypes().Slice()), PropNodeID, PropNodeID)
 	if len(deleteLabelsClause) > 0 {
 		stmt += " REMOVE n" + deleteLabelsClause
 	}
@@ -194,6 +199,7 @@ func (s *Session) UpdateNode(tx neo4j.Transaction, oldNode, newNode ls.Node) err
 	if len(propertiesClause) > 0 {
 		stmt += " SET n=" + propertiesClause
 	}
+	s.Logf("UpdateNode %s with %v", stmt, vars)
 	_, err := tx.Run(stmt, vars)
 	return err
 }
@@ -208,8 +214,11 @@ type Edge struct {
 }
 
 // LoadEdges returns all outgoing edges of the given node
-func (s *Session) LoadEdges(tx neo4j.Transaction, nodeID string) ([]Edge, error) {
-	results, err := tx.Run(fmt.Sprintf("MATCH (from {%s: $id})-[r]-(target) RETURN r,target", PropNodeID), map[string]interface{}{"id": nodeID})
+func (s *Session) LoadEdges(tx neo4j.Transaction, labels []string, nodeID string) ([]Edge, error) {
+	query := fmt.Sprintf("MATCH (from %s {%s: $id})-[r]-(target) RETURN r,target", makeLabels(labels), PropNodeID)
+	data := map[string]interface{}{"id": nodeID}
+	s.Logf("LoadEdges query=%s with data=%v", query, data)
+	results, err := tx.Run(query, data)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +247,9 @@ func (s *Session) CreateEdge(tx neo4j.Transaction, edge ls.Edge) error {
 	props := makeProperties(vars, edge.GetProperties(), nil)
 	vars["fromId"] = fmt.Sprint(edge.GetFrom().GetLabel())
 	vars["toId"] = fmt.Sprint(edge.GetTo().GetLabel())
-	_, err := tx.Run(fmt.Sprintf("MATCH (from {%s:$fromId}), (to {%s:$toId}) CREATE (from)-[:%s %s]->(to)", PropNodeID, PropNodeID, quoteBacktick(edge.GetLabelStr()), props), vars)
+	stmt := fmt.Sprintf("MATCH (from %s {%s:$fromId}), (to %s {%s:$toId}) CREATE (from)-[:%s %s]->(to)", makeLabels(edge.GetFrom().(ls.Node).GetTypes().Slice()), PropNodeID, makeLabels(edge.GetTo().(ls.Node).GetTypes().Slice()), PropNodeID, quoteBacktick(edge.GetLabelStr()), props)
+	s.Logf("CreateEdge %s with %v", stmt, vars)
+	_, err := tx.Run(stmt, vars)
 	if err != nil {
 		return err
 	}
@@ -253,11 +264,13 @@ func (s *Session) UpdateEdge(tx neo4j.Transaction, edge ls.Edge) error {
 		"toId":   ls.StringPropertyValue(fmt.Sprint(edge.GetTo().GetLabel())),
 		"lbl":    ls.StringPropertyValue(fmt.Sprint(edge.GetLabel())),
 	})
-	_, err := tx.Run(fmt.Sprintf("MATCH (from {%s:$fromId})-[r:$lbl]->(to {%s:$toId}) SET r=%s", PropNodeID, PropNodeID, props), vars)
+	stmt := fmt.Sprintf("MATCH (from %s {%s:$fromId})-[r:$lbl]->(to %s {%s:$toId}) SET r=%s", makeLabels(edge.GetFrom().(ls.Node).GetTypes().Slice()), PropNodeID, makeLabels(edge.GetTo().(ls.Node).GetTypes().Slice()), PropNodeID, props)
+	s.Logf("UpdateEdge %s with %v", stmt, vars)
+	_, err := tx.Run(stmt, vars)
 	return err
 }
 
-func makeLabels(vars map[string]interface{}, types []string) string {
+func makeLabels(types []string) string {
 	out := strings.Builder{}
 	for _, x := range types {
 		out.WriteRune(':')
