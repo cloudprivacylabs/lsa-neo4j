@@ -225,9 +225,8 @@ func (s *Session) CreateGraph(tx neo4j.Transaction, nodes []graph.Node) (int64, 
 	allNodes := make(map[graph.Node]struct{})
 
 	// Find triples:
-	for idx, node := range nodes {
+	for _, node := range nodes {
 		allNodes[node] = struct{}{}
-		ls.SetNodeIndex(node, idx)
 	}
 	var lastRoot graph.Node
 	seen := make(map[graph.Node]struct{})
@@ -253,7 +252,7 @@ func (s *Session) CreateGraph(tx neo4j.Transaction, nodes []graph.Node) (int64, 
 			s.CreateNode(tx, node)
 		}
 	}
-	return int64(ls.GetNodeIndex(lastRoot)), nil
+	return nodeIds[lastRoot], nil
 }
 
 func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds map[graph.Node]int64) {
