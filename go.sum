@@ -37,12 +37,10 @@ github.com/bserdar/digraph v1.1.4/go.mod h1:WFchHPeFWFkQsvnyB/jZyLNsgw+VlYGS8Md/
 github.com/bserdar/jsonom v0.0.0-20211005020717-9af6d87a0e9f/go.mod h1:TQmmc1021Sypc6dta8Ssw+m9ZP2L7dIz5tH+YHknUD0=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
-github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211115192638-ad14e1b39a87 h1:60H9wMAsHj3WKlmhc57bvnZZ5FAzmSK7aHwdNA/8Bu0=
-github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211115192638-ad14e1b39a87/go.mod h1:vFxtjwbyZkH1Qs+Zn9Fza+QmiTUrGrLxXnZ2ZS86N5k=
-github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211116022518-c60a33c061bf h1:e+Ma32GzQZD+idNUXLlWekVkubh8CO6gXZSidbD30CE=
-github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211116022518-c60a33c061bf/go.mod h1:vFxtjwbyZkH1Qs+Zn9Fza+QmiTUrGrLxXnZ2ZS86N5k=
 github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211208061934-e4aadd23cf76 h1:o5btFsRUjJgGDTei5zC6CpICfmzAwNaTorRa36+QYis=
 github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20211208061934-e4aadd23cf76/go.mod h1:ULgY0yQtnkj7eTjAXArDSAh7AJgamsWurs6N5hP7/zE=
+github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20220304195930-18c5ccdb0618 h1:jzxZ5XzjjMW15Tt65RITtMmjX8Hm32OGgszCupsC7dA=
+github.com/cloudprivacylabs/lsa v1.0.0-beta7.0.20220304195930-18c5ccdb0618/go.mod h1:3n9aY/x32tCFA427Jg8D/mTrtaCyCj1SpM2QMfwcCqk=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/coreos/etcd v3.3.13+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
 github.com/coreos/go-semver v0.3.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=
@@ -197,6 +195,7 @@ github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFR
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/santhosh-tekuri/jsonschema/v3 v3.0.1/go.mod h1:oOUSf2vgwmcYO4CkIJnEKle02MmEeI3cyItX+fxgpzg=
+github.com/santhosh-tekuri/jsonschema/v5 v5.0.0/go.mod h1:FKdcjfQW6rpZSnxxUvEA5H/cDPdvJ/SZJQLWWXWGrZ0=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
 github.com/shurcooL/sanitized_anchor_name v1.0.0/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
