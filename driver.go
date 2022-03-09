@@ -42,8 +42,7 @@ type Session struct {
 }
 
 const (
-	PropNodeID    = "neo4j_id"
-	PropNodeValue = "neo4j_value"
+	PropNodeID = "neo4j_id"
 )
 
 type ErrMultipleFound string
@@ -253,6 +252,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 		if err != nil {
 			return err
 		}
+		return nil
 	}
 	// contains only source node
 	if contains(edge.GetFrom(), nodeIds) && !contains(edge.GetTo(), nodeIds) {
@@ -261,6 +261,9 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 		props := makeProperties(vars, ls.PropertiesAsMap(edge), nil)
 		vars["toId"] = makeProperties(vars, ls.PropertiesAsMap(edge.GetTo()), nil)
 		idrec, err := tx.Run(fmt.Sprintf("MATCH (from) WHERE ID(from) = %v CREATE (from)-[:%s %s]->(to {%s:$toId}) RETURN to", nodeIds[edge.GetFrom()], quoteBacktick(ls.GetNodeID(edge.GetFrom())), props, PropNodeID), vars)
+		//                                                                                ^^  this should be the result of makeLabels([]string{edge.GetLabel()})
+		//                                                                                    ^^ $edgeProps: makeProperties(edge properties)
+		//                                                                                             ^^ (to %s $nodeProps) first s: nodeLabels, props: nodeProps
 		if err != nil {
 			return err
 		}
@@ -270,6 +273,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 		}
 		nd := rec.Values[0].(neo4j.Node)
 		nodeIds[edge.GetTo()] = nd.Id
+		return nil
 	}
 	// contains only target node
 	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
@@ -288,6 +292,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 		}
 		nd := rec.Values[0].(neo4j.Node)
 		nodeIds[edge.GetFrom()] = nd.Id
+		return nil
 	}
 	// source,target does not exist in db
 	// (newNode) --edge-->(newNode)
@@ -319,6 +324,7 @@ func (s *Session) CreateNode(tx neo4j.Transaction, node graph.Node) (int64, erro
 	}
 	propertiesClause := makeProperties(nodeVars, ls.PropertiesAsMap(node), idAndValue)
 	idrec, err := tx.Run(fmt.Sprintf("CREATE (n %s %s) RETURN n", labelsClause, propertiesClause), nodeVars)
+	//                                             $props
 	if err != nil {
 		return 0, err
 	}
