@@ -248,22 +248,19 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	// Contains both node and target nodes
 	if contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (node)--edge-->(node)
-		err := s.CreateEdge(tx, edge)
+		err := s.CreateEdge(tx, edge, nodeIds)
 		if err != nil {
 			return err
 		}
-		return nil
 	}
 	// contains only source node
 	if contains(edge.GetFrom(), nodeIds) && !contains(edge.GetTo(), nodeIds) {
 		// (match) --edge-->(newNode)
 		vars := make(map[string]interface{})
-		props := makeProperties(vars, ls.PropertiesAsMap(edge), nil)
-		vars["toId"] = makeProperties(vars, ls.PropertiesAsMap(edge.GetTo()), nil)
-		idrec, err := tx.Run(fmt.Sprintf("MATCH (from) WHERE ID(from) = %v CREATE (from)-[:%s %s]->(to {%s:$toId}) RETURN to", nodeIds[edge.GetFrom()], quoteBacktick(ls.GetNodeID(edge.GetFrom())), props, PropNodeID), vars)
-		//                                                                                ^^  this should be the result of makeLabels([]string{edge.GetLabel()})
-		//                                                                                    ^^ $edgeProps: makeProperties(edge properties)
-		//                                                                                             ^^ (to %s $nodeProps) first s: nodeLabels, props: nodeProps
+		idrec, err := tx.Run(fmt.Sprintf("MATCH (from) WHERE ID(from) = %v CREATE (from)-[:%s %s]->(to %s %s) RETURN to",
+			nodeIds[edge.GetFrom()], makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
+			makeLabels(vars, edge.GetTo().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(edge.GetTo()), nil)), vars)
+
 		if err != nil {
 			return err
 		}
@@ -273,16 +270,14 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 		}
 		nd := rec.Values[0].(neo4j.Node)
 		nodeIds[edge.GetTo()] = nd.Id
-		return nil
 	}
 	// contains only target node
 	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (newNode) --edge-->(match) --edge-->(newNode)
 		vars := make(map[string]interface{})
-		props := makeProperties(vars, ls.PropertiesAsMap(edge), nil)
-		vars["fromId"] = makeProperties(vars, ls.PropertiesAsMap(edge.GetFrom()), nil)
-		idrec, err := tx.Run(fmt.Sprintf("MATCH (to) WHERE ID(to) = %v CREATE (to)<-[:%s %s]-(from {%s:$fromId}) RETURN from", nodeIds[edge.GetTo()], quoteBacktick(ls.GetNodeID(edge.GetFrom())), props, PropNodeID), vars)
-		// idrec, err := tx.Run(fmt.Sprintf("MATCH (to {%s:$toId}) MERGE (from {%s:$fromId}) CREATE (from)-[:%s %s]->(to)", PropNodeID, PropNodeID, quoteBacktick(ls.GetNodeID(edge.GetTo())), props), vars)
+		idrec, err := tx.Run(fmt.Sprintf("MATCH (to) WHERE ID(to) = %v CREATE (to)<-[:%s %s]-(from %s %s) RETURN from",
+			nodeIds[edge.GetTo()], makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
+			makeLabels(vars, edge.GetFrom().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(edge.GetFrom()), nil)), vars)
 		if err != nil {
 			return err
 		}
@@ -292,7 +287,6 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 		}
 		nd := rec.Values[0].(neo4j.Node)
 		nodeIds[edge.GetFrom()] = nd.Id
-		return nil
 	}
 	// source,target does not exist in db
 	// (newNode) --edge-->(newNode)
@@ -308,7 +302,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	}
 	nodeIds[edge.GetTo()] = toId
 
-	err = s.CreateEdge(tx, edge)
+	err = s.CreateEdge(tx, edge, nodeIds)
 	if err != nil {
 		return err
 	}
@@ -324,7 +318,6 @@ func (s *Session) CreateNode(tx neo4j.Transaction, node graph.Node) (int64, erro
 	}
 	propertiesClause := makeProperties(nodeVars, ls.PropertiesAsMap(node), idAndValue)
 	idrec, err := tx.Run(fmt.Sprintf("CREATE (n %s %s) RETURN n", labelsClause, propertiesClause), nodeVars)
-	//                                             $props
 	if err != nil {
 		return 0, err
 	}
@@ -338,12 +331,12 @@ func (s *Session) CreateNode(tx neo4j.Transaction, node graph.Node) (int64, erro
 
 // CreateEdge creates an edge. The from and to nodes of the edge must
 // already be in the db. The edge should not exist in the db
-func (s *Session) CreateEdge(tx neo4j.Transaction, edge graph.Edge) error {
+func (s *Session) CreateEdge(tx neo4j.Transaction, edge graph.Edge, nodeIds map[graph.Node]int64) error {
 	vars := make(map[string]interface{})
 	props := makeProperties(vars, ls.PropertiesAsMap(edge), nil)
-	vars["fromId"] = fmt.Sprint(ls.GetNodeID(edge.GetFrom()))
-	vars["toId"] = fmt.Sprint(edge.GetTo().GetEdges(graph.OutgoingEdge).Edge().GetLabel())
-	_, err := tx.Run(fmt.Sprintf("MATCH (from {%s:$fromId}), (to {%s:$toId}) CREATE (from)-[:%s %s]->(to)", PropNodeID, PropNodeID, quoteBacktick(edge.GetLabel()), props), vars)
+	_, err := tx.Run(fmt.Sprintf("MATCH (f) WITH f MATCH (t) WHERE ID(f)=%v AND ID(t)=%v CREATE (f)-[:%s %s]->(t)",
+		nodeIds[edge.GetFrom()], nodeIds[edge.GetTo()], makeLabels(vars, []string{edge.GetLabel()}), props), vars)
+	// MATCH (from), (to) WHERE ID(from)=%v AND ID(to)=%v CREATE (from)-[:%s %s]->(to)    <--- slow performance
 	if err != nil {
 		return err
 	}
