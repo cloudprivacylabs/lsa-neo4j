@@ -24,7 +24,6 @@ package neo4j
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
@@ -228,48 +227,31 @@ func (s *Session) CreateGraph(tx neo4j.Transaction, nodes []graph.Node) (int64, 
 	for _, node := range nodes {
 		allNodes[node] = struct{}{}
 	}
-	var lastRoot graph.Node
-	seen := make(map[graph.Node]struct{})
 	for node := range allNodes {
 		hasEdges := false
 		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
 			edge := edges.Edge()
 			if _, exists := allNodes[edge.GetTo()]; exists {
 				// Triple: edge.GetFrom(), edge, edge.GetTo()
-				nodeIds[edge.GetTo()], _ = strconv.ParseInt(ls.GetNodeID(edge.GetTo()), 10, 64)
-				nodeIds[edge.GetFrom()], _ = strconv.ParseInt(ls.GetNodeID(edge.GetFrom()), 10, 64)
 				s.processTriple(tx, edge, nodeIds)
-				lastRoot = edge.GetFrom()
-				seen[edge.GetTo()] = struct{}{}
 				hasEdges = true
 			}
 		}
 		// Disconnected
 		if !hasEdges {
-			if seen[node] == struct{}{} {
-				continue
-			}
 			s.CreateNode(tx, node)
 		}
 	}
-	return nodeIds[lastRoot], nil
+	return 0, nil
 }
 
-func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds map[graph.Node]int64) {
+func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds map[graph.Node]int64) error {
 	// Contains both node and target nodes
 	if contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
-		// (newNode) --edge-->(newNode)
-		_, err := s.CreateNode(tx, edge.GetFrom())
+		// (node)--edge-->(node)
+		err := s.CreateEdge(tx, edge)
 		if err != nil {
-			return
-		}
-		_, err = s.CreateNode(tx, edge.GetTo())
-		if err != nil {
-			return
-		}
-		err = s.CreateEdge(tx, edge)
-		if err != nil {
-			return
+			return err
 		}
 	}
 	// contains only source node
@@ -277,27 +259,55 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 		// (match) --edge-->(newNode)
 		vars := make(map[string]interface{})
 		props := makeProperties(vars, ls.PropertiesAsMap(edge), nil)
-		vars["fromId"] = fmt.Sprint(ls.GetNodeID(edge.GetFrom()))
-		//vars["toId"] = fmt.Sprint(edge.GetTo().GetEdges(graph.OutgoingEdge).Edge().GetLabel())
-		vars["toId"] = fmt.Sprint(ls.GetNodeID(edge.GetTo()))
-		_, err := tx.Run(fmt.Sprintf("MATCH (from {%s:$fromId}) MERGE (to {%s:$toId}) CREATE (from)-[:%s %s]->(to)", PropNodeID, PropNodeID, quoteBacktick(ls.GetNodeID(edge.GetFrom())), props), vars)
+		vars["toId"] = makeProperties(vars, ls.PropertiesAsMap(edge.GetTo()), nil)
+		idrec, err := tx.Run(fmt.Sprintf("MATCH (from) WHERE ID(from) = %v CREATE (from)-[:%s %s]->(to {%s:$toId}) RETURN to", nodeIds[edge.GetFrom()], quoteBacktick(ls.GetNodeID(edge.GetFrom())), props, PropNodeID), vars)
 		if err != nil {
-			return
+			return err
 		}
+		rec, err := idrec.Single()
+		if err != nil {
+			return err
+		}
+		nd := rec.Values[0].(neo4j.Node)
+		nodeIds[edge.GetTo()] = nd.Id
 	}
 	// contains only target node
 	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (newNode) --edge-->(match) --edge-->(newNode)
 		vars := make(map[string]interface{})
 		props := makeProperties(vars, ls.PropertiesAsMap(edge), nil)
-		vars["fromId"] = fmt.Sprint(ls.GetNodeID(edge.GetFrom()))
-		//vars["toId"] = fmt.Sprint(edge.GetTo().GetEdges(graph.OutgoingEdge).Edge().GetLabel())
-		vars["toId"] = fmt.Sprint(ls.GetNodeID(edge.GetTo()))
-		_, err := tx.Run(fmt.Sprintf("MATCH (to {%s:$toId}) MERGE (from {%s:$fromId}) CREATE (from)-[:%s %s]->(to)", PropNodeID, PropNodeID, quoteBacktick(ls.GetNodeID(edge.GetTo())), props), vars)
+		vars["fromId"] = makeProperties(vars, ls.PropertiesAsMap(edge.GetFrom()), nil)
+		idrec, err := tx.Run(fmt.Sprintf("MATCH (to) WHERE ID(to) = %v CREATE (to)<-[:%s %s]-(from {%s:$fromId}) RETURN from", nodeIds[edge.GetTo()], quoteBacktick(ls.GetNodeID(edge.GetFrom())), props, PropNodeID), vars)
+		// idrec, err := tx.Run(fmt.Sprintf("MATCH (to {%s:$toId}) MERGE (from {%s:$fromId}) CREATE (from)-[:%s %s]->(to)", PropNodeID, PropNodeID, quoteBacktick(ls.GetNodeID(edge.GetTo())), props), vars)
 		if err != nil {
-			return
+			return err
 		}
+		rec, err := idrec.Single()
+		if err != nil {
+			return err
+		}
+		nd := rec.Values[0].(neo4j.Node)
+		nodeIds[edge.GetFrom()] = nd.Id
 	}
+	// source,target does not exist in db
+	// (newNode) --edge-->(newNode)
+	fromId, err := s.CreateNode(tx, edge.GetFrom())
+	if err != nil {
+		return err
+	}
+	nodeIds[edge.GetFrom()] = fromId
+
+	toId, err := s.CreateNode(tx, edge.GetTo())
+	if err != nil {
+		return err
+	}
+	nodeIds[edge.GetTo()] = toId
+
+	err = s.CreateEdge(tx, edge)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Session) CreateNode(tx neo4j.Transaction, node graph.Node) (int64, error) {
