@@ -16,20 +16,28 @@ var (
 			drv := getNeoDriver(cmd)
 			inputFormat, _ := cmd.Flags().GetString("input")
 			g, err := cmdutil.ReadGraph(args, nil, inputFormat)
-			var nodes []graph.Node
-			for g.GetNodes().Next() {
-				nodes = append(nodes, g.GetNodes().Node())
+			if err != nil {
+				return err
+			}
+			nodeSl := make([]graph.Node, 0, g.NumNodes())
+			for nodes := g.GetNodes(); nodes.Next(); {
+				nodeSl = append(nodeSl, nodes.Node())
 			}
 			if err != nil {
 				return err
 			}
 			session := drv.NewSession()
 			defer session.Close()
-			tx, _ := session.BeginTransaction()
-			_, err = neo.CreateGraph(session, tx, nodes)
+			tx, err := session.BeginTransaction()
 			if err != nil {
 				return err
 			}
+			_, err = neo.CreateGraph(session, tx, nodeSl)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+			tx.Commit()
 			return nil
 		},
 	}

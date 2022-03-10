@@ -218,7 +218,7 @@ func (s *Session) CreateNodePair(tx neo4j.Transaction, edge graph.Edge) (int64, 
 	toLabelsClause := makeLabels(vars, edge.GetTo().GetLabels().Slice())
 	fromPropertiesClause := makeProperties(vars, ls.PropertiesAsMap(edge.GetFrom()), nil)
 	toPropertiesClause := makeProperties(vars, ls.PropertiesAsMap(edge.GetTo()), nil)
-	idrec, err := tx.Run(fmt.Sprintf("CREATE (n %s %s)-[:%s %s]->(m %s %s) RETURN n",
+	idrec, err := tx.Run(fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(m %s %s) RETURN n, m",
 		fromLabelsClause, fromPropertiesClause,
 		makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
 		toLabelsClause, toPropertiesClause), vars)
