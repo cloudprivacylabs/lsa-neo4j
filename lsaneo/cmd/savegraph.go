@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"os"
-
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/spf13/cobra"
@@ -21,7 +19,7 @@ var (
 				return err
 			}
 			session := drv.NewSession()
-			session.SetLogOutput(os.Stdout)
+			//session.SetLogOutput(os.Stdout)
 			defer session.Close()
 			err = neo.SaveGraph(session, g)
 			if err != nil {
