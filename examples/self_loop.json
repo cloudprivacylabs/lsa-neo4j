@@ -1,0 +1,83 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "identity": 0,
+            "labels": [
+                    "Person"
+                ],
+            "properties": {
+                "name": "Joanna"
+            }
+        },
+        {
+            "n":1,
+            "identity":1,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Jacob"
+            }
+        },
+        {
+            "n":2,
+            "identity":2,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "John"
+            }
+        },
+        {
+            "n":3,
+            "identity":3,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Jane"
+            }
+        },
+        {
+            "n":4,
+            "identity":4,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Janice"
+            }
+        },
+        {
+            "n":5,
+            "identity":5,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Jack"
+            }
+        },
+        {
+            "n":6,
+            "identity":6,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Jill"
+            }
+        }
+    ],
+    "edges": [
+        { "from": 0, "to": 0, "label": "self" },
+        { "from": 1, "to": 1, "label": "self" },
+        { "from": 2, "to": 2, "label": "self" },
+        { "from": 3, "to": 3, "label": "self" },
+        { "from": 4, "to": 4, "label": "self" },
+        { "from": 5, "to": 5, "label": "self" },
+        { "from": 6, "to": 6, "label": "self" }
+    ]
+}

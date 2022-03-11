@@ -1,0 +1,82 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "identity": 0,
+            "labels": [
+                    "Person"
+                ],
+            "properties": {
+                "name": "Joanna"
+            }
+        },
+        {
+            "n":1,
+            "identity":1,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Jacob"
+            }
+        },
+        {
+            "n":2,
+            "identity":2,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "John"
+            }
+        },
+        {
+            "n":3,
+            "identity":3,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Jane"
+            }
+        },
+        {
+            "n":4,
+            "identity":4,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Janice"
+            }
+        },
+        {
+            "n":5,
+            "identity":5,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Jack"
+            }
+        },
+        {
+            "n":6,
+            "identity":6,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "name": "Jill"
+            }
+        }
+    ],
+    "edges": [
+        { "from": 0, "to": 1, "label": "friends" },
+        { "from": 1, "to": 2, "label": "friends" },
+        { "from": 2, "to": 3, "label": "friends" },
+        { "from": 3, "to": 4, "label": "friends" },
+        { "from": 4, "to": 5, "label": "friends" },
+        { "from": 5, "to": 6, "label": "co-workers" }
+    ]
+}
