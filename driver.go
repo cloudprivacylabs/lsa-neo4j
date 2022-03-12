@@ -148,11 +148,13 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (in
 			}
 		}
 		if !hasEdges {
-			id, err := session.CreateNode(tx, node)
-			if err != nil {
-				return 0, nil
+			if _, exists := nodeIds[node]; !exists {
+				id, err := session.CreateNode(tx, node)
+				if err != nil {
+					return 0, nil
+				}
+				nodeIds[node] = id
 			}
-			nodeIds[node] = id
 		}
 	}
 	return 0, nil
@@ -172,9 +174,10 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	if contains(edge.GetFrom(), nodeIds) && !contains(edge.GetTo(), nodeIds) {
 		// (match) --edge-->(newNode)
 		vars := make(map[string]interface{})
-		idrec, err := tx.Run(fmt.Sprintf("MATCH (from) WHERE ID(from) = %s CREATE (from)-[%s %s]->(to %s %s) RETURN to",
-			fmt.Sprint(nodeIds[edge.GetFrom()]), makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
-			makeLabels(vars, edge.GetTo().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(edge.GetTo()), nil)), vars)
+		query := fmt.Sprintf("MATCH (from) WHERE ID(from) = %d CREATE (from)-[%s %s]->(to %s %s) RETURN to",
+			nodeIds[edge.GetFrom()], makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
+			makeLabels(vars, edge.GetTo().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(edge.GetTo()), nil))
+		idrec, err := tx.Run(query, vars)
 
 		if err != nil {
 			return err
@@ -191,9 +194,10 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (newNode) --edge-->(match) --edge-->(newNode)
 		vars := make(map[string]interface{})
-		idrec, err := tx.Run(fmt.Sprintf("MATCH (to) WHERE ID(to) = %s CREATE (to)<-[%s %s]-(from %s %s) RETURN from",
-			fmt.Sprint(nodeIds[edge.GetTo()]), makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
-			makeLabels(vars, edge.GetFrom().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(edge.GetFrom()), nil)), vars)
+		query := fmt.Sprintf("MATCH (to) WHERE ID(to) = %d CREATE (to)<-[%s %s]-(from %s %s) RETURN from",
+			nodeIds[edge.GetTo()], makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
+			makeLabels(vars, edge.GetFrom().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(edge.GetFrom()), nil))
+		idrec, err := tx.Run(query, vars)
 		if err != nil {
 			return err
 		}
@@ -225,15 +229,18 @@ func (s *Session) CreateNodePair(tx neo4j.Transaction, edge graph.Edge) (int64, 
 
 	var idrec neo4j.Result
 	var err error
+	var query string
 	if edge.GetFrom() == edge.GetTo() {
-		idrec, err = tx.Run(fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(n) RETURN n",
+		query = fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(n) RETURN n",
 			fromLabelsClause, fromPropertiesClause,
-			makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil)), vars)
+			makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil))
+		idrec, err = tx.Run(query, vars)
 	} else {
-		idrec, err = tx.Run(fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(m %s %s) RETURN n, m",
+		query = fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(m %s %s) RETURN n, m",
 			fromLabelsClause, fromPropertiesClause,
 			makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
-			toLabelsClause, toPropertiesClause), vars)
+			toLabelsClause, toPropertiesClause)
+		idrec, err = tx.Run(query, vars)
 	}
 	if err != nil {
 		return 0, 0, err
@@ -252,7 +259,8 @@ func (s *Session) CreateNode(tx neo4j.Transaction, node graph.Node) (int64, erro
 	nodeVars := make(map[string]interface{})
 	labelsClause := makeLabels(nodeVars, node.GetLabels().Slice())
 	propertiesClause := makeProperties(nodeVars, ls.PropertiesAsMap(node), nil)
-	idrec, err := tx.Run(fmt.Sprintf("CREATE (n %s %s) RETURN n", labelsClause, propertiesClause), nodeVars)
+	query := fmt.Sprintf("CREATE (n %s %s) RETURN n", labelsClause, propertiesClause)
+	idrec, err := tx.Run(query, nodeVars)
 	if err != nil {
 		return 0, err
 	}
@@ -269,8 +277,9 @@ func (s *Session) CreateNode(tx neo4j.Transaction, node graph.Node) (int64, erro
 func (s *Session) CreateEdge(tx neo4j.Transaction, edge graph.Edge, nodeIds map[graph.Node]int64) error {
 	vars := make(map[string]interface{})
 	props := makeProperties(vars, ls.PropertiesAsMap(edge), nil)
-	_, err := tx.Run(fmt.Sprintf("MATCH (f) WITH f MATCH (t) WHERE ID(f)=%v AND ID(t)=%v CREATE (f)-[%s %s]->(t)",
-		nodeIds[edge.GetFrom()], nodeIds[edge.GetTo()], makeLabels(vars, []string{edge.GetLabel()}), props), vars)
+	query := fmt.Sprintf("MATCH (f) WITH f MATCH (t) WHERE ID(f)=%d AND ID(t)=%d CREATE (f)-[%s %s]->(t)",
+		nodeIds[edge.GetFrom()], nodeIds[edge.GetTo()], makeLabels(vars, []string{edge.GetLabel()}), props)
+	_, err := tx.Run(query, vars)
 	// MATCH (from), (to) WHERE ID(from)=%v AND ID(to)=%v CREATE (from)-[:%s %s]->(to)    <--- slow performance
 	if err != nil {
 		return err

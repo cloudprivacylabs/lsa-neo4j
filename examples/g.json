@@ -1,0 +1,17 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "identity": 0,
+            "labels": [
+                    "Person"
+                ],
+            "properties": {
+                "name": "Joanna"
+            }
+        }
+    ],
+    "edges": [
+        
+    ]
+}
