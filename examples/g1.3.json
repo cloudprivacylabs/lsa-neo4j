@@ -1,0 +1,30 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "identity": 0,
+            "labels": [
+                    "Person"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "1",
+                "name": "Joanna"
+            }
+        },
+        {
+            "n":1,
+            "identity":1,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "https://lschema.org/entityId": "3",
+                "name": "John"
+                
+            }
+        }
+    ],
+    "edges": [
+        { "from": 0, "to": 1, "label": "friends" }
+    ]
+}

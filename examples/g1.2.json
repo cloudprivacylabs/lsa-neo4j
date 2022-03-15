@@ -7,7 +7,8 @@
                     "Person"
                 ],
             "properties": {
-                "name": "Joanna"
+                "name": "Joanna",
+                "https://lschema.org/entityId": "1"
             }
         },
         {
@@ -17,7 +18,8 @@
                 "Person"
             ],
             "properties": {
-                "name": "Jacob"
+                "name": "Jacob",
+                "https://lschema.org/entityId": "2"
             }
         }
     ],

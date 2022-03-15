@@ -1,0 +1,29 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "identity": 0,
+            "labels": [
+                    "Person"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "2",
+                "name": "Jacob"
+            }
+        },
+        {
+            "n":1,
+            "identity":1,
+            "labels": [
+                "Person"
+            ],
+            "properties": {
+                "https://lschema.org/entityId": "4",
+                "name": "Julie"
+            }
+        }
+    ],
+    "edges": [
+        { "from": 0, "to": 1, "label": "friends" }
+    ]
+}
