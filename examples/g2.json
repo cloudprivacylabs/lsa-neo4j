@@ -4,23 +4,33 @@
             "n":0,
             "identity": 0,
             "labels": [
-                    "https://lschema.org/entityId",
-                    "Person"
+                    "City"
                 ],
             "properties": {
                 "https://lschema.org/entityId": "0",
-                "https://lschema.org/entitySchema": "Schema for person"
+                "https://lschema.org/entitySchema": "Schema for a city"
             }
         },
         {
             "n":1,
             "identity": 1,
             "labels": [
-                    "Person"
+                    "City"
                 ],
             "properties": {
                 "https://lschema.org/entityId": "1",
-                "name": "Joanna"
+                "name": "San Francisco"
+            }
+        },
+        {
+            "n":1,
+            "identity": 1,
+            "labels": [
+                    "City"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "2",
+                "name": "Denver"
             }
         }
     ],

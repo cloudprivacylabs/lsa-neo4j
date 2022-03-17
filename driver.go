@@ -135,20 +135,49 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (in
 	for _, node := range nodes {
 		allNodes[node] = struct{}{}
 	}
+OUTER:
 	for node := range allNodes {
 		hasEdges := false
-		var root graph.Node
-		var en []graph.Node
+
+		//var en []graph.Node
+		//var entityRootId int64
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-			root = node
-			en = ls.GetEntityIDNodes(root)
-			for _, n := range en {
-				entityNodes[n] = struct{}{}
+			var root graph.Node
+			fmt.Println(session.emptyDB(tx))
+			if _, err := session.existsDB(tx, node); err != nil && !session.emptyDB(tx) {
+				fmt.Println("HERE")
+				// entityNodes[node] = struct{}{}
+				// entityRootId = dbRoot.Id
+				// fmt.Println(dbRoot.Id)
+				// fmt.Println(dbRoot.Props)
+				// nodeIds[node] = id
+
+				root = node
+
+				ls.IterateDescendants(root, func(nd graph.Node, _ []graph.Node) bool {
+					if _, exists := nd.GetProperty(ls.EntityIDTerm); exists {
+						if root != nd {
+							entityNodes[nd] = struct{}{}
+						}
+
+						return true
+					}
+					for _, schemaNode := range ls.InstanceOf(nd) {
+						if _, exists := schemaNode.GetProperty(ls.EntityIDTerm); exists {
+							entityNodes[schemaNode] = struct{}{}
+							return true
+						}
+					}
+					return false
+				}, ls.SkipEdgesToNodeWithType(ls.EntityIDTerm), false)
+				fmt.Println(entityNodes)
+				for ne := range entityNodes {
+					if n, err := session.existsDB(tx, ne); err != nil {
+						nodeIds[ne] = n
+					}
+				}
+				continue OUTER
 			}
-		}
-		if id := session.existsDB(tx, node); id != -1 {
-			// entityNodes[node] = struct{}{}
-			nodeIds[node] = id
 		}
 		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
 			edge := edges.Edge()
@@ -233,48 +262,43 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	return nil
 }
 
-func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node) int64 {
-	if node == nil {
-		return -1
+func (s *Session) emptyDB(tx neo4j.Transaction) bool {
+	idrec, err := tx.Run("MATCH (n) RETURN count(n)", make(map[string]interface{}))
+	if err != nil {
+		return false
 	}
-	// entityRoot := ls.GetEntityRoot(node)
-	// entityNodes := ls.GetEntityIDNodes(entityRoot)
-	// entityNodes := make([]graph.Node, 0)
-	// ls.FollowEdgesToNodeWithType()
-	// ls.IterateDescendants(entityRoot, func(node graph.Node, _ []graph.Node) bool {
-	// 	if _, exists := node.GetProperty(ls.EntityIDTerm); exists {
-	// 		entityNodes = append(entityNodes, node)
-	// 		return true
-	// 	}
-	// 	for _, schemaNode := range ls.InstanceOf(node) {
-	// 		if _, exists := schemaNode.GetProperty(ls.EntityIDTerm); exists {
-	// 			entityNodes = append(entityNodes, node)
-	// 			return true
-	// 		}
-	// 	}
-	// 	return true
-	// }, ls.SkipSchemaNodes, false)
+	rec, err := idrec.Single()
+	if err != nil {
+		return false
+	}
+	nd := rec.Values[0].(int64)
+	if nd == 0 {
+		return true
+	}
+	return false
+}
+
+func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node) (int64, error) {
+	if node == nil {
+		return 0, nil
+	}
 	vars := make(map[string]interface{})
 	labelsClause := makeLabels(vars, node.GetLabels().Slice())
 	propertiesClause := makeProperties(vars, ls.PropertiesAsMap(node), nil)
 	query := fmt.Sprintf("MATCH (n %s %s) return n", labelsClause, propertiesClause)
 	idrec, err := tx.Run(query, vars)
 	if err != nil {
-		return -1
+		return 0, err
 	}
 	rec, err := idrec.Single()
 	if err != nil {
-		return -1
+		return 0, err
 	}
-	if len(rec.Values) == 0 {
-		return -1
-	}
-
-	return rec.Values[0].(neo4j.Node).Id
+	nd := rec.Values[0].(neo4j.Node)
+	return nd.Id, nil
 }
 
 func (s *Session) CreateNodePair(tx neo4j.Transaction, edge graph.Edge) (int64, int64, error) {
-
 	vars := make(map[string]interface{})
 	fromLabelsClause := makeLabels(vars, edge.GetFrom().GetLabels().Slice())
 	toLabelsClause := makeLabels(vars, edge.GetTo().GetLabels().Slice())

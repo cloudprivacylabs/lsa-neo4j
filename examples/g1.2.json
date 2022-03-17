@@ -1,8 +1,20 @@
 {
     "nodes": [
-        {
+       {
             "n":0,
             "identity": 0,
+            "labels": [
+                    "https://lschema.org/entityId",
+                    "Person"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "0",
+                "https://lschema.org/entitySchema": "Schema for person"
+            }
+        },
+        {
+            "n":1,
+            "identity": 1,
             "labels": [
                     "Person"
                 ],
@@ -12,8 +24,8 @@
             }
         },
         {
-            "n":1,
-            "identity":1,
+            "n":2,
+            "identity":2,
             "labels": [
                 "Person"
             ],
@@ -24,6 +36,7 @@
         }
     ],
     "edges": [
-        { "from": 0, "to": 1, "label": "friends" }
+        { "from": 0, "to": 1, "label": " " },
+        { "from": 1, "to": 2, "label": "friends" }
     ]
 }
