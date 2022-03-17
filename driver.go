@@ -135,31 +135,15 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (in
 	for _, node := range nodes {
 		allNodes[node] = struct{}{}
 	}
-OUTER:
 	for node := range allNodes {
 		hasEdges := false
-
-		//var en []graph.Node
-		//var entityRootId int64
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			var root graph.Node
-			fmt.Println(session.emptyDB(tx))
-			if _, err := session.existsDB(tx, node); err != nil && !session.emptyDB(tx) {
-				fmt.Println("HERE")
-				// entityNodes[node] = struct{}{}
-				// entityRootId = dbRoot.Id
-				// fmt.Println(dbRoot.Id)
-				// fmt.Println(dbRoot.Props)
-				// nodeIds[node] = id
-
+			if _, err := session.existsDB(tx, node); err == nil {
 				root = node
-
 				ls.IterateDescendants(root, func(nd graph.Node, _ []graph.Node) bool {
 					if _, exists := nd.GetProperty(ls.EntityIDTerm); exists {
-						if root != nd {
-							entityNodes[nd] = struct{}{}
-						}
-
+						entityNodes[nd] = struct{}{}
 						return true
 					}
 					for _, schemaNode := range ls.InstanceOf(nd) {
@@ -169,22 +153,22 @@ OUTER:
 						}
 					}
 					return false
-				}, ls.SkipEdgesToNodeWithType(ls.EntityIDTerm), false)
-				fmt.Println(entityNodes)
+				}, ls.FollowEdgesToNodeWithType(ls.EntityIDTerm), false)
 				for ne := range entityNodes {
-					if n, err := session.existsDB(tx, ne); err != nil {
-						nodeIds[ne] = n
+					if nid, err := session.existsDB(tx, ne); err == nil {
+						nodeIds[ne] = nid
 					}
 				}
-				continue OUTER
 			}
 		}
 		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
 			edge := edges.Edge()
 			if _, exists := allNodes[edge.GetTo()]; exists {
-				// Triple: edge.GetFrom(), edge, edge.GetTo()
-				if err := session.processTriple(tx, edge, nodeIds); err != nil {
-					return 0, err
+				if _, exists := entityNodes[edge.GetTo()]; !exists {
+					// Triple: edge.GetFrom(), edge, edge.GetTo()
+					if err := session.processTriple(tx, edge, nodeIds); err != nil {
+						return 0, err
+					}
 				}
 				hasEdges = true
 			}
@@ -262,21 +246,20 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	return nil
 }
 
-func (s *Session) emptyDB(tx neo4j.Transaction) bool {
-	idrec, err := tx.Run("MATCH (n) RETURN count(n)", make(map[string]interface{}))
-	if err != nil {
-		return false
-	}
-	rec, err := idrec.Single()
-	if err != nil {
-		return false
-	}
-	nd := rec.Values[0].(int64)
-	if nd == 0 {
-		return true
-	}
-	return false
-}
+// func (s *Session) emptyDB(tx neo4j.Transaction) int64 {
+// 	idrec, err := tx.Run("MATCH (n) RETURN count(n)", make(map[string]interface{}))
+// 	if err != nil {
+// 		return 0
+// 	}
+// 	rec, err := idrec.Single()
+// 	if err != nil {
+// 		return 0
+// 	}
+// 	nd := rec.Values[0]
+// 	fmt.Printf("Length of DB: %d", nd)
+// 	fmt.Println()
+// 	return nd.(int64)
+// }
 
 func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node) (int64, error) {
 	if node == nil {
