@@ -130,13 +130,14 @@ func (s *Session) Logf(format string, a ...interface{}) {
 func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (int64, error) {
 	nodeIds := make(map[graph.Node]int64)
 	allNodes := make(map[graph.Node]struct{})
-	entityNodes := make(map[graph.Node]struct{})
+
 	// Find triples:
 	for _, node := range nodes {
 		allNodes[node] = struct{}{}
 	}
 	for node := range allNodes {
 		hasEdges := false
+		entityNodes := make(map[graph.Node]struct{})
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			var root graph.Node
 			if _, err := session.existsDB(tx, node); err == nil {
@@ -154,22 +155,22 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (in
 					}
 					return false
 				}, ls.FollowEdgesToNodeWithType(ls.EntityIDTerm), false)
-				for ne := range entityNodes {
-					if nid, err := session.existsDB(tx, ne); err == nil {
-						nodeIds[ne] = nid
-					}
-				}
 			}
+		}
+		if nid, err := session.existsDB(tx, node); err == nil {
+			nodeIds[node] = nid
 		}
 		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
 			edge := edges.Edge()
+			if _, exists := entityNodes[node]; exists {
+				continue
+			}
 			if _, exists := allNodes[edge.GetTo()]; exists {
-				if _, exists := entityNodes[edge.GetTo()]; !exists {
-					// Triple: edge.GetFrom(), edge, edge.GetTo()
-					if err := session.processTriple(tx, edge, nodeIds); err != nil {
-						return 0, err
-					}
+				// Triple: edge.GetFrom(), edge, edge.GetTo()
+				if err := session.processTriple(tx, edge, nodeIds); err != nil {
+					return 0, err
 				}
+
 				hasEdges = true
 			}
 		}
@@ -267,7 +268,9 @@ func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node) (int64, error)
 	}
 	vars := make(map[string]interface{})
 	labelsClause := makeLabels(vars, node.GetLabels().Slice())
-	propertiesClause := makeProperties(vars, ls.PropertiesAsMap(node), nil)
+	prop, _ := node.GetProperty(ls.EntityIDTerm)
+	entityProps := map[string]*ls.PropertyValue{ls.EntityIDTerm: prop.(*ls.PropertyValue)}
+	propertiesClause := makeProperties(vars, entityProps, nil)
 	query := fmt.Sprintf("MATCH (n %s %s) return n", labelsClause, propertiesClause)
 	idrec, err := tx.Run(query, vars)
 	if err != nil {
