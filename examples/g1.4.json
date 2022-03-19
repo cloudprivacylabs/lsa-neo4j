@@ -20,7 +20,7 @@
                 ],
             "properties": {
                 "https://lschema.org/entityId": "2",
-                "name": "Jacob"
+                "name": "Jackson"
             }
         },
         {
@@ -31,7 +31,7 @@
             ],
             "properties": {
                 "https://lschema.org/entityId": "4",
-                "name": "Julie"
+                "name": "Jane"
             }
         }
     ],

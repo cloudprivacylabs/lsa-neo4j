@@ -160,17 +160,16 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (in
 		if nid, err := session.existsDB(tx, node); err == nil {
 			nodeIds[node] = nid
 		}
+		if _, exists := entityNodes[node]; exists {
+			continue
+		}
 		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
 			edge := edges.Edge()
-			if _, exists := entityNodes[node]; exists {
-				continue
-			}
 			if _, exists := allNodes[edge.GetTo()]; exists {
 				// Triple: edge.GetFrom(), edge, edge.GetTo()
 				if err := session.processTriple(tx, edge, nodeIds); err != nil {
 					return 0, err
 				}
-
 				hasEdges = true
 			}
 		}
