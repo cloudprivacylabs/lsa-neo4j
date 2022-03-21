@@ -4,7 +4,7 @@
             "n":0,
             "identity": 0,
             "labels": [
-                    "https://lschema.org/entityId",
+                    "https://lschema.org/DocumentNode",
                     "Person"
                 ],
             "properties": {
@@ -16,23 +16,20 @@
             "n":1,
             "identity": 1,
             "labels": [
-                    "Person"
+                "https://lschema.org/DocumentNode"
                 ],
             "properties": {
-                "https://lschema.org/entityId": "1",
-                "name": "Joanna"
+                "value": "Joanna"
             }
         },
         {
             "n":2,
             "identity":2,
             "labels": [
-                "Person"
+                "https://lschema.org/DocumentNode"
             ],
             "properties": {
-                "https://lschema.org/entityId": "3",
-                "name": "John"
-                
+                "value": "John"
             }
         }
     ],

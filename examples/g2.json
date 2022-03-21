@@ -4,7 +4,8 @@
             "n":0,
             "identity": 0,
             "labels": [
-                    "City"
+                    "https://lschema.org/DocumentNode",
+                    "https://lschema.org/DocumentNode"
                 ],
             "properties": {
                 "https://lschema.org/entityId": "0",
@@ -15,22 +16,20 @@
             "n":1,
             "identity": 1,
             "labels": [
-                    "City"
+                    "https://lschema.org/DocumentNode"
                 ],
             "properties": {
-                "https://lschema.org/entityId": "1",
-                "name": "San Francisco"
+                "value": "San Francisco"
             }
         },
         {
             "n":1,
             "identity": 1,
             "labels": [
-                    "City"
+                    "https://lschema.org/DocumentNode"
                 ],
             "properties": {
-                "https://lschema.org/entityId": "2",
-                "name": "Denver"
+                "value": "Denver"
             }
         }
     ],

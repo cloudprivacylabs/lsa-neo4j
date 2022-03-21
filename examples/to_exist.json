@@ -4,67 +4,79 @@
             "n":0,
             "identity": 0,
             "labels": [
+                    "https://lschema.org/DocumentNode",
                     "Person"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "0",
+                "https://lschema.org/entitySchema": "Schema for person"
+            }
+        },
+        {
+            "n":1,
+            "identity": 1,
+            "labels": [
+                    "https://lschema.org/DocumentNode"
                 ],
             "properties": {
                 "name": "Joanna"
             }
         },
         {
-            "n":1,
-            "identity":1,
+            "n":2,
+            "identity":2,
             "labels": [
-                "Person"
+                "https://lschema.org/DocumentNode"
             ],
             "properties": {
                 "name": "Jacob"
             }
         },
         {
-            "n":2,
-            "identity":2,
+            "n":3,
+            "identity":3,
             "labels": [
-                "Person"
+                "https://lschema.org/DocumentNode"
             ],
             "properties": {
                 "name": "John"
             }
         },
         {
-            "n":3,
-            "identity":3,
+            "n":4,
+            "identity":4,
             "labels": [
-                "Person"
+                "https://lschema.org/DocumentNode"
             ],
             "properties": {
                 "name": "Jane"
             }
         },
         {
-            "n":4,
-            "identity":4,
+            "n":5,
+            "identity":5,
             "labels": [
-                "Person"
+                "https://lschema.org/DocumentNode"
             ],
             "properties": {
                 "name": "Janice"
             }
         },
         {
-            "n":5,
-            "identity":5,
+            "n":6,
+            "identity":6,
             "labels": [
-                "Person"
+                "https://lschema.org/DocumentNode"
             ],
             "properties": {
                 "name": "Jack"
             }
         },
         {
-            "n":6,
-            "identity":6,
+            "n":7,
+            "identity":7,
             "labels": [
-                "Person"
+                "https://lschema.org/DocumentNode"
             ],
             "properties": {
                 "name": "Jill"
@@ -72,11 +84,12 @@
         }
     ],
     "edges": [
-        { "from": 1, "to": 0, "label": "friends" },
+        { "from": 1, "to": 0, "label": " " },
         { "from": 2, "to": 1, "label": "friends" },
         { "from": 3, "to": 2, "label": "friends" },
         { "from": 4, "to": 3, "label": "friends" },
         { "from": 5, "to": 4, "label": "friends" },
-        { "from": 6, "to": 5, "label": "co-workers" }
+        { "from": 6, "to": 5, "label": "friends" },
+        { "from": 7, "to": 6, "label": "co-workers" }
     ]
 }

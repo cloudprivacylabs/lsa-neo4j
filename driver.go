@@ -147,10 +147,6 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (in
 				}, ls.FollowEdgesInEntity, false)
 			}
 		}
-		fmt.Println(entityNodes)
-		// if exists, nid, err := session.existsDB(tx, node); exists && err == nil {
-		// 	nodeIds[node] = nid
-		// }
 		if _, exists := entityNodes[node]; exists {
 			continue
 		}

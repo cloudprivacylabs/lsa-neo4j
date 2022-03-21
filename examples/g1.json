@@ -19,7 +19,7 @@
                 "https://lschema.org/DocumentNode"
                 ],
             "properties": {
-                "name": "Joanna"
+                "value": "Joanna"
             }
         }
     ],
