@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/cloudprivacylabs/lsa/pkg/opencypher/graph"
+	"github.com/cloudprivacylabs/opencypher/graph"
 
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
@@ -141,7 +141,7 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (in
 			root := node
 			if exists, nid, err := session.existsDB(tx, node); exists && err == nil {
 				nodeIds[node] = nid
-				ls.IterateDescendants(root, func(nd graph.Node, _ []graph.Node) bool {
+				ls.IterateDescendants(root, func(nd graph.Node) bool {
 					entityNodes[nd] = struct{}{}
 					return true
 				}, ls.FollowEdgesInEntity, false)
