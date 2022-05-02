@@ -1,0 +1,88 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "labels": [
+                    "https://lschema.org/DocumentNode",
+                    "Person"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "0",
+                "https://lschema.org/entitySchema": "Schema for person"
+            }
+        },
+        {
+            "n":1,
+            "labels": [
+                    "https://lschema.org/DocumentNode"
+                ],
+            "properties": {
+                "value": "Joanna"
+            }
+        },
+        {
+            "n":2,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "value": "Jacob"
+            }
+        },
+        {
+            "n":3,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "value": "John"
+            }
+        },
+        {
+            "n":4,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "value": "Jane"
+            }
+        },
+        {
+            "n":5,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "value": "Janice"
+            }
+        },
+        {
+            "n":6,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "value": "Jack"
+            }
+        },
+        {
+            "n":7,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "value": "Jill"
+            }
+        }
+    ],
+    "edges": [
+        { "from": 0, "to": 1, "label": " " },
+        { "from": 1, "to": 1, "label": "self" },
+        { "from": 2, "to": 2, "label": "self" },
+        { "from": 3, "to": 3, "label": "self" },
+        { "from": 4, "to": 4, "label": "self" },
+        { "from": 5, "to": 5, "label": "self" },
+        { "from": 6, "to": 6, "label": "self" },
+        { "from": 7, "to": 7, "label": "self" }
+    ]
+}

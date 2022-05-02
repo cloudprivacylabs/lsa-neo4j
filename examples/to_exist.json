@@ -1,0 +1,87 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "labels": [
+                    "https://lschema.org/DocumentNode",
+                    "Person"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "0",
+                "https://lschema.org/entitySchema": "Schema for person"
+            }
+        },
+        {
+            "n":1,
+            "labels": [
+                    "https://lschema.org/DocumentNode"
+                ],
+            "properties": {
+                "name": "Joanna"
+            }
+        },
+        {
+            "n":2,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "name": "Jacob"
+            }
+        },
+        {
+            "n":3,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "name": "John"
+            }
+        },
+        {
+            "n":4,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "name": "Jane"
+            }
+        },
+        {
+            "n":5,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "name": "Janice"
+            }
+        },
+        {
+            "n":6,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "name": "Jack"
+            }
+        },
+        {
+            "n":7,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "name": "Jill"
+            }
+        }
+    ],
+    "edges": [
+        { "from": 1, "to": 0, "label": " " },
+        { "from": 2, "to": 1, "label": "friends" },
+        { "from": 3, "to": 2, "label": "friends" },
+        { "from": 4, "to": 3, "label": "friends" },
+        { "from": 5, "to": 4, "label": "friends" },
+        { "from": 6, "to": 5, "label": "friends" },
+        { "from": 7, "to": 6, "label": "co-workers" }
+    ]
+}

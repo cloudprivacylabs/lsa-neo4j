@@ -1,0 +1,37 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "labels": [
+                    "https://lschema.org/DocumentNode",
+                    "Person"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "0",
+                "https://lschema.org/entitySchema": "Schema for person"
+            }
+        },
+        {
+            "n":1,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+                ],
+            "properties": {
+                "value": "Joanna"
+            }
+        },
+        {
+            "n":2,
+            "labels": [
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "value": "John"
+            }
+        }
+    ],
+    "edges": [
+        { "from": 0, "to": 1, "label": " " },
+        { "from": 1, "to": 2, "label": "friends" }
+    ]
+}
