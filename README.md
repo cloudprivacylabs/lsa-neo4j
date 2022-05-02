@@ -55,6 +55,7 @@ To build the command line tool, use the Go build system:
 
 ```
 cd lsaneo
+go mod tidy
 go build
 ```
 
