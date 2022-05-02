@@ -2,7 +2,6 @@
     "nodes": [
         {
             "n":0,
-            "identity": 0,
             "labels": [
                     "https://lschema.org/DocumentNode",
                     "Person"
@@ -14,7 +13,6 @@
         },
         {
             "n":1,
-            "identity": 1,
             "labels": [
                 "https://lschema.org/DocumentNode"
                 ],
