@@ -95,7 +95,7 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node) (in
 			if _, exists := nodeIds[node]; !exists {
 				id, err := session.CreateNode(tx, node)
 				if err != nil {
-					return 0, nil
+					return 0, err
 				}
 				nodeIds[node] = id
 			}
