@@ -1,12 +1,11 @@
 termMappings:
-  longToShortTerm:
-    https://lschema.org/AttributeName: ls:attributeName
-    https://lschema.org/AttributeValue: ls:attributeValue
-    https://lschema.org/EntityID: ls:entityId
-    https://lschema.org/NodeID: ls:nodeId
-    https://lschema.org/SchemaNodeID: ls:schemaNodeId
-    https://lschema.org/EdgeLabel: ls:edgeLabel
+  https://lschema.org/AttributeName: ls:attributeName
+  https://lschema.org/AttributeValue: ls:attributeValue
+  https://lschema.org/EntityID: ls:entityId
+  https://lschema.org/NodeID: ls:nodeId
+  https://lschema.org/SchemaNodeID: ls:schemaNodeId
+  https://lschema.org/EdgeLabel: ls:edgeLabel
 
 namespaceMappings:
-  #prefix: shortPrefix
-    https://lschema.org/: ls:
+    https://lschema.org/: ls
+    

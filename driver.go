@@ -178,8 +178,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	if contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (node)--edge-->(node)
 		c := createNodeFromSourceAndTarget{}
-		stmt := c.GetOCStmt()
-		if err := c.Run(stmt); err != nil {
+		if err := c.Run(tx, nodeIds); err != nil {
 			return err
 		}
 	}
@@ -187,8 +186,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	if contains(edge.GetFrom(), nodeIds) && !contains(edge.GetTo(), nodeIds) {
 		// (match) --edge-->(newNode)
 		c := createTargetFromSource{}
-		stmt := c.GetOCStmt()
-		if err := c.Run(stmt); err != nil {
+		if err := c.Run(tx, nodeIds); err != nil {
 			return err
 		}
 	}
@@ -196,8 +194,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (newNode) --edge-->(match) --edge-->(newNode)
 		c := createSourceFromTarget{}
-		stmt := c.GetOCStmt()
-		if err := c.Run(stmt); err != nil {
+		if err := c.Run(tx, nodeIds); err != nil {
 			return err
 		}
 	}

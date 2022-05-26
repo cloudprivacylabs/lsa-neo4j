@@ -5,7 +5,7 @@ import (
 )
 
 type Config struct {
-	shorten map[string]interface{}
+	TermMappings map[string]interface{} `yaml:"termMappings"`
 }
 
 type withProperty interface {
@@ -13,11 +13,11 @@ type withProperty interface {
 }
 
 func (cfg Config) MakeProperties(x withProperty) string {
-	props := makeProperties(cfg.shorten, ls.PropertiesAsMap(x), nil)
+	props := makeProperties(cfg.TermMappings, ls.PropertiesAsMap(x), nil)
 	return props
 }
 
 func (cfg Config) MakeLabels(types []string) string {
-	labels := makeLabels(cfg.shorten, types)
+	labels := makeLabels(cfg.TermMappings, types)
 	return labels
 }
