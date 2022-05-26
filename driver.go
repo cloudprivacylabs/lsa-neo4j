@@ -200,12 +200,10 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	}
 	// source,target does not exist in db
 	// (newNode) --edge-->(newNode)
-	fromId, toId, err := s.CreateNodePair(tx, edge)
-	if err != nil {
+	c := createNodePair{}
+	if err := c.Run(tx, nodeIds); err != nil {
 		return err
 	}
-	nodeIds[edge.GetFrom()] = fromId
-	nodeIds[edge.GetTo()] = toId
 	return nil
 }
 
