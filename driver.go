@@ -41,10 +41,6 @@ type Session struct {
 	neo4j.Session
 }
 
-type Config struct {
-	shorten map[string]interface{}
-}
-
 const (
 	PropNodeID = "neo4j_id"
 )
@@ -74,7 +70,7 @@ func (s *Session) Close() {
 }
 
 func (s *Session) Logf(format string, a ...interface{}) {
-	fmt.Println(fmt.Sprintf(format, a))
+	fmt.Println(fmt.Sprintf(format+":%v", a))
 }
 
 // // LoadNode attempts to load a node with the given ID. The ID is
@@ -182,8 +178,8 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	if contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (node)--edge-->(node)
 		c := createNodeFromSourceAndTarget{}
-		stmt, vars := c.GetOCStmt()
-		if err := c.Run(stmt, vars); err != nil {
+		stmt := c.GetOCStmt()
+		if err := c.Run(stmt); err != nil {
 			return err
 		}
 	}
@@ -191,8 +187,8 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	if contains(edge.GetFrom(), nodeIds) && !contains(edge.GetTo(), nodeIds) {
 		// (match) --edge-->(newNode)
 		c := createTargetFromSource{}
-		stmt, vars := c.GetOCStmt()
-		if err := c.Run(stmt, vars); err != nil {
+		stmt := c.GetOCStmt()
+		if err := c.Run(stmt); err != nil {
 			return err
 		}
 	}
@@ -200,8 +196,8 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (newNode) --edge-->(match) --edge-->(newNode)
 		c := createSourceFromTarget{}
-		stmt, vars := c.GetOCStmt()
-		if err := c.Run(stmt, vars); err != nil {
+		stmt := c.GetOCStmt()
+		if err := c.Run(stmt); err != nil {
 			return err
 		}
 	}

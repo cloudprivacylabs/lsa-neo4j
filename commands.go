@@ -3,10 +3,14 @@ package neo4j
 import (
 	"fmt"
 
-	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
+
+type Command interface {
+	GetOCStmt() (string, map[string]interface{})
+	Run(string, map[string]interface{}) error
+}
 
 type Creation struct {
 	Config
@@ -19,16 +23,17 @@ type createNodeFromSourceAndTarget struct {
 	Creation
 }
 
-func (c createNodeFromSourceAndTarget) GetOCStmt() (string, map[string]interface{}) {
-	vars := make(map[string]interface{})
-	props := makeProperties(vars, ls.PropertiesAsMap(c.edge), nil)
+func (c createNodeFromSourceAndTarget) GetOCStmt() string {
 	query := fmt.Sprintf("MATCH (f) WITH f MATCH (t) WHERE ID(f)=%d AND ID(t)=%d CREATE (f)-[%s %s]->(t)",
-		c.nodeIds[c.edge.GetFrom()], c.nodeIds[c.edge.GetTo()], makeLabels(vars, []string{c.edge.GetLabel()}), props)
-	return query, vars
+		c.nodeIds[c.edge.GetFrom()],
+		c.nodeIds[c.edge.GetTo()],
+		c.MakeLabels([]string{c.edge.GetLabel()}),
+		c.MakeProperties(c.edge))
+	return query
 }
 
-func (c createNodeFromSourceAndTarget) Run(query string, vars map[string]interface{}) error {
-	_, err := c.tx.Run(query, vars)
+func (c createNodeFromSourceAndTarget) Run(query string) error {
+	_, err := c.tx.Run(query, c.shorten)
 	if err != nil {
 		return err
 	}
@@ -39,16 +44,18 @@ type createTargetFromSource struct {
 	Creation
 }
 
-func (c createTargetFromSource) GetOCStmt() (string, map[string]interface{}) {
-	vars := make(map[string]interface{})
+func (c createTargetFromSource) GetOCStmt() string {
 	query := fmt.Sprintf("MATCH (from) WHERE ID(from) = %d CREATE (from)-[%s %s]->(to %s %s) RETURN to",
-		c.nodeIds[c.edge.GetFrom()], makeLabels(vars, []string{c.edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(c.edge), nil),
-		makeLabels(vars, c.edge.GetTo().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(c.edge.GetTo()), nil))
-	return query, vars
+		c.nodeIds[c.edge.GetFrom()],
+		c.MakeLabels([]string{c.edge.GetLabel()}),
+		c.MakeProperties(c.edge),
+		c.MakeLabels(c.edge.GetTo().GetLabels().Slice()),
+		c.MakeProperties(c.edge.GetTo()))
+	return query
 }
 
-func (c createTargetFromSource) Run(query string, vars map[string]interface{}) error {
-	idrec, err := c.tx.Run(query, vars)
+func (c createTargetFromSource) Run(query string) error {
+	idrec, err := c.tx.Run(query, c.shorten)
 	if err != nil {
 		return err
 	}
@@ -65,16 +72,18 @@ type createSourceFromTarget struct {
 	Creation
 }
 
-func (c createSourceFromTarget) GetOCStmt() (string, map[string]interface{}) {
-	vars := make(map[string]interface{})
+func (c createSourceFromTarget) GetOCStmt() string {
 	query := fmt.Sprintf("MATCH (to) WHERE ID(to) = %d CREATE (to)<-[%s %s]-(from %s %s) RETURN from",
-		c.nodeIds[c.edge.GetTo()], makeLabels(vars, []string{c.edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(c.edge), nil),
-		makeLabels(vars, c.edge.GetFrom().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(c.edge.GetFrom()), nil))
-	return query, vars
+		c.nodeIds[c.edge.GetTo()],
+		c.MakeLabels([]string{c.edge.GetLabel()}),
+		c.MakeProperties(c.edge),
+		c.MakeLabels(c.edge.GetFrom().GetLabels().Slice()),
+		c.MakeProperties(c.edge.GetFrom()))
+	return query
 }
 
-func (c createSourceFromTarget) Run(query string, vars map[string]interface{}) error {
-	idrec, err := c.tx.Run(query, vars)
+func (c createSourceFromTarget) Run(query string) error {
+	idrec, err := c.tx.Run(query, c.shorten)
 	if err != nil {
 		return err
 	}
