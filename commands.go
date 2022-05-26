@@ -9,21 +9,44 @@ import (
 )
 
 type Command interface {
-	GetOCStmt() (string, map[string]interface{})
-	Run(string, map[string]interface{}) error
+	execute()
 }
 
 type Creation struct {
 	Config
-	Command
+	command Command
 	edge    graph.Edge
 	tx      neo4j.Transaction
 	nodeIds map[graph.Node]int64
 }
 
+type neo4jAction interface {
+	GetOCStmt() (string, map[string]interface{})
+	Run(string, map[string]interface{}) error
+}
+
+func (c Creation) Create() {
+	c.command.execute()
+}
+
+type GetQueryCommand struct {
+	neo neo4jAction
+}
+
+func (c GetQueryCommand) execute() {
+	c.neo.GetOCStmt()
+}
+
+type RunQueryCommand struct {
+	neo neo4jAction
+}
+
+func (c RunQueryCommand) execute() {
+	c.neo.Run(c.neo.GetOCStmt())
+}
+
 type createNodeFromSourceAndTarget struct {
 	Creation
-	Command
 }
 
 func (c createNodeFromSourceAndTarget) GetOCStmt() (string, map[string]interface{}) {
@@ -33,6 +56,7 @@ func (c createNodeFromSourceAndTarget) GetOCStmt() (string, map[string]interface
 		c.nodeIds[c.edge.GetFrom()], c.nodeIds[c.edge.GetTo()], makeLabels(vars, []string{c.edge.GetLabel()}), props)
 	return query, vars
 }
+
 func (c createNodeFromSourceAndTarget) Run(query string, vars map[string]interface{}) error {
 	_, err := c.tx.Run(query, vars)
 	if err != nil {
@@ -43,7 +67,6 @@ func (c createNodeFromSourceAndTarget) Run(query string, vars map[string]interfa
 
 type createTargetFromSource struct {
 	Creation
-	Command
 }
 
 func (c createTargetFromSource) GetOCStmt() (string, map[string]interface{}) {
@@ -53,6 +76,7 @@ func (c createTargetFromSource) GetOCStmt() (string, map[string]interface{}) {
 		makeLabels(vars, c.edge.GetTo().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(c.edge.GetTo()), nil))
 	return query, vars
 }
+
 func (c createTargetFromSource) Run(query string, vars map[string]interface{}) error {
 	idrec, err := c.tx.Run(query, vars)
 	if err != nil {
@@ -69,7 +93,6 @@ func (c createTargetFromSource) Run(query string, vars map[string]interface{}) e
 
 type createSourceFromTarget struct {
 	Creation
-	Command
 }
 
 func (c createSourceFromTarget) GetOCStmt() (string, map[string]interface{}) {

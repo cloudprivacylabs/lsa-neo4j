@@ -168,7 +168,7 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, con
 			if _, exists := nodeIds[node]; !exists {
 				id, err := session.CreateNode(tx, node)
 				if err != nil {
-					return 0, nil
+					return 0, err
 				}
 				nodeIds[node] = id
 			}
@@ -179,73 +179,31 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, con
 
 func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds map[graph.Node]int64, cfg Config) error {
 	// Contains both node and target nodes
-	create := Creation{
-		Config:  cfg,
-		tx:      tx,
-		edge:    edge,
-		nodeIds: nodeIds,
-	}
 	if contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (node)--edge-->(node)
-		c := createNodeFromSourceAndTarget{Creation: create}
+		c := createNodeFromSourceAndTarget{}
 		stmt, vars := c.GetOCStmt()
 		if err := c.Run(stmt, vars); err != nil {
 			return err
 		}
-		// err := s.CreateEdge(tx, edge, nodeIds)
-		// if err != nil {
-		// 	return err
-		// }
-		// return nil
 	}
 	// contains only source node
 	if contains(edge.GetFrom(), nodeIds) && !contains(edge.GetTo(), nodeIds) {
 		// (match) --edge-->(newNode)
-		c := createTargetFromSource{Creation: create}
+		c := createTargetFromSource{}
 		stmt, vars := c.GetOCStmt()
 		if err := c.Run(stmt, vars); err != nil {
 			return err
 		}
-		// vars := make(map[string]interface{})
-		// query := fmt.Sprintf("MATCH (from) WHERE ID(from) = %d CREATE (from)-[%s %s]->(to %s %s) RETURN to",
-		// 	nodeIds[edge.GetFrom()], makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
-		// 	makeLabels(vars, edge.GetTo().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(edge.GetTo()), nil))
-		// idrec, err := tx.Run(query, vars)
-
-		// if err != nil {
-		// 	return err
-		// }
-		// rec, err := idrec.Single()
-		// if err != nil {
-		// 	return err
-		// }
-		// nd := rec.Values[0].(neo4j.Node)
-		// nodeIds[edge.GetTo()] = nd.Id
-		// return nil
 	}
 	// contains only target node
 	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (newNode) --edge-->(match) --edge-->(newNode)
-		c := createSourceFromTarget{Creation: create}
+		c := createSourceFromTarget{}
 		stmt, vars := c.GetOCStmt()
 		if err := c.Run(stmt, vars); err != nil {
 			return err
 		}
-		// vars := make(map[string]interface{})
-		// query := fmt.Sprintf("MATCH (to) WHERE ID(to) = %d CREATE (to)<-[%s %s]-(from %s %s) RETURN from",
-		// 	nodeIds[edge.GetTo()], makeLabels(vars, []string{edge.GetLabel()}), makeProperties(vars, ls.PropertiesAsMap(edge), nil),
-		// 	makeLabels(vars, edge.GetFrom().GetLabels().Slice()), makeProperties(vars, ls.PropertiesAsMap(edge.GetFrom()), nil))
-		// idrec, err := tx.Run(query, vars)
-		// if err != nil {
-		// 	return err
-		// }
-		// rec, err := idrec.Single()
-		// if err != nil {
-		// 	return err
-		// }
-		// nd := rec.Values[0].(neo4j.Node)
-		// nodeIds[edge.GetFrom()] = nd.Id
-		// return nil
 	}
 	// source,target does not exist in db
 	// (newNode) --edge-->(newNode)
