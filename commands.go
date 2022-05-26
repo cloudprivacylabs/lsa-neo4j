@@ -8,41 +8,11 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
-type Command interface {
-	execute()
-}
-
 type Creation struct {
 	Config
-	command Command
 	edge    graph.Edge
 	tx      neo4j.Transaction
 	nodeIds map[graph.Node]int64
-}
-
-type neo4jAction interface {
-	GetOCStmt() (string, map[string]interface{})
-	Run(string, map[string]interface{}) error
-}
-
-func (c Creation) Create() {
-	c.command.execute()
-}
-
-type GetQueryCommand struct {
-	neo neo4jAction
-}
-
-func (c GetQueryCommand) execute() {
-	c.neo.GetOCStmt()
-}
-
-type RunQueryCommand struct {
-	neo neo4jAction
-}
-
-func (c RunQueryCommand) execute() {
-	c.neo.Run(c.neo.GetOCStmt())
 }
 
 type createNodeFromSourceAndTarget struct {
