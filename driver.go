@@ -177,7 +177,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	// Contains both node and target nodes
 	if contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (node)--edge-->(node)
-		c := createNodeFromSourceAndTarget{}
+		c := createEdgeToSourceAndTarget{}
 		if err := c.Run(tx, nodeIds); err != nil {
 			return err
 		}

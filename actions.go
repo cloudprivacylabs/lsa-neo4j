@@ -7,12 +7,12 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
-type createNodeFromSourceAndTarget struct {
+type createEdgeToSourceAndTarget struct {
 	Config
 	edge graph.Edge
 }
 
-func (c createNodeFromSourceAndTarget) GetOCStmt(nodeIds map[graph.Node]int64) string {
+func (c createEdgeToSourceAndTarget) GetOCStmt(nodeIds map[graph.Node]int64) string {
 	query := fmt.Sprintf("MATCH (f) WITH f MATCH (t) WHERE ID(f)=%d AND ID(t)=%d CREATE (f)-[%s %s]->(t)",
 		nodeIds[c.edge.GetFrom()],
 		nodeIds[c.edge.GetTo()],
@@ -21,7 +21,7 @@ func (c createNodeFromSourceAndTarget) GetOCStmt(nodeIds map[graph.Node]int64) s
 	return query
 }
 
-func (c createNodeFromSourceAndTarget) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
+func (c createEdgeToSourceAndTarget) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
 	query := c.GetOCStmt(nodeIds)
 	_, err := tx.Run(query, c.TermMappings)
 	if err != nil {
