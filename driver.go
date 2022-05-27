@@ -177,7 +177,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	// Contains both node and target nodes
 	if contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (node)--edge-->(node)
-		c := createEdgeToSourceAndTarget{}
+		c := createEdgeToSourceAndTarget{Config: cfg, edge: edge}
 		if err := c.Run(tx, nodeIds); err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	// contains only source node
 	if contains(edge.GetFrom(), nodeIds) && !contains(edge.GetTo(), nodeIds) {
 		// (match) --edge-->(newNode)
-		c := createTargetFromSource{}
+		c := createTargetFromSource{Config: cfg, edge: edge}
 		if err := c.Run(tx, nodeIds); err != nil {
 			return err
 		}
@@ -193,14 +193,14 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	// contains only target node
 	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
 		// (newNode) --edge-->(match) --edge-->(newNode)
-		c := createSourceFromTarget{}
+		c := createSourceFromTarget{Config: cfg, edge: edge}
 		if err := c.Run(tx, nodeIds); err != nil {
 			return err
 		}
 	}
 	// source,target does not exist in db
 	// (newNode) --edge-->(newNode)
-	c := createNodePair{}
+	c := createNodePair{Config: cfg, edge: edge}
 	if err := c.Run(tx, nodeIds); err != nil {
 		return err
 	}
