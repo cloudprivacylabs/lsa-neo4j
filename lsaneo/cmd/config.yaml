@@ -6,6 +6,17 @@ termMappings:
   https://lschema.org/SchemaNodeID: ls:schemaNodeId
   https://lschema.org/EdgeLabel: ls:edgeLabel
 
+termExpansion:
+  ls:attributeName: https://lschema.org/AttributeName
+  ls:attributeValue: https://lschema.org/AttributeValue
+  ls:entityId: https://lschema.org/EntityID
+  ls:nodeId: https://lschema.org/NodeID
+  ls:schemaNodeId: https://lschema.org/SchemaNodeID
+  ls:edgeLabel: https://lschema.org/EdgeLabel
+
 namespaceMappings:
-    https://lschema.org/: ls
+  https://lschema.org/: ls
+  https://lschema.org/Y: ls:Y
+  https://lschema.org/vs: lsv
+  https://lschema.org/vs/X: lsv:X
     
