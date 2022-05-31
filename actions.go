@@ -17,7 +17,7 @@ func (c createEdgeToSourceAndTarget) GetOCStmt(nodeIds map[graph.Node]int64) str
 	query := fmt.Sprintf("MATCH (f) WITH f MATCH (t) WHERE ID(f)=%d AND ID(t)=%d CREATE (f)-[%s %s]->(t)",
 		nodeIds[c.edge.GetFrom()],
 		nodeIds[c.edge.GetTo()],
-		c.MakeLabels(c.edge.GetLabel()),
+		c.MakeLabels([]string{c.edge.GetLabel()}),
 		c.MakeProperties(c.edge, c.txVars))
 	return query
 }
@@ -40,9 +40,9 @@ type createTargetFromSource struct {
 func (c createTargetFromSource) GetOCStmt(nodeIds map[graph.Node]int64) string {
 	query := fmt.Sprintf("MATCH (from) WHERE ID(from) = %d CREATE (from)-[%s %s]->(to %s %s) RETURN to",
 		nodeIds[c.edge.GetFrom()],
-		c.MakeLabels(c.edge.GetLabel()),
+		c.MakeLabels([]string{c.edge.GetLabel()}),
 		c.MakeProperties(c.edge, c.txVars),
-		c.MakeLabels(c.edge.GetTo().GetLabels().String()),
+		c.MakeLabels(c.edge.GetTo().GetLabels().Slice()),
 		c.MakeProperties(c.edge.GetTo(), c.txVars))
 	return query
 }
@@ -71,9 +71,9 @@ type createSourceFromTarget struct {
 func (c createSourceFromTarget) GetOCStmt(nodeIds map[graph.Node]int64) string {
 	query := fmt.Sprintf("MATCH (to) WHERE ID(to) = %d CREATE (to)<-[%s %s]-(from %s %s) RETURN from",
 		nodeIds[c.edge.GetTo()],
-		c.MakeLabels(c.edge.GetLabel()),
+		c.MakeLabels([]string{c.edge.GetLabel()}),
 		c.MakeProperties(c.edge, c.txVars),
-		c.MakeLabels(c.edge.GetFrom().GetLabels().String()),
+		c.MakeLabels(c.edge.GetFrom().GetLabels().Slice()),
 		c.MakeProperties(c.edge.GetFrom(), c.txVars))
 	return query
 }
@@ -100,8 +100,8 @@ type createNodePair struct {
 }
 
 func (c createNodePair) GetOCStmt(nodeIds map[graph.Node]int64) string {
-	fromLabelsClause := c.MakeLabels(c.edge.GetFrom().GetLabels().String())
-	toLabelsClause := c.MakeLabels(c.edge.GetTo().GetLabels().String())
+	fromLabelsClause := c.MakeLabels(c.edge.GetFrom().GetLabels().Slice())
+	toLabelsClause := c.MakeLabels(c.edge.GetTo().GetLabels().Slice())
 	fromPropertiesClause := c.MakeProperties(c.edge.GetFrom(), c.txVars)
 	toPropertiesClause := c.MakeProperties(c.edge.GetTo(), c.txVars)
 
@@ -109,12 +109,12 @@ func (c createNodePair) GetOCStmt(nodeIds map[graph.Node]int64) string {
 	if c.edge.GetFrom() == c.edge.GetTo() {
 		query = fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(n) RETURN n",
 			fromLabelsClause, fromPropertiesClause,
-			c.MakeLabels(c.edge.GetLabel()),
+			c.MakeLabels([]string{c.edge.GetLabel()}),
 			c.MakeProperties(c.edge, c.txVars))
 	} else {
 		query = fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(m %s %s) RETURN n, m",
 			fromLabelsClause, fromPropertiesClause,
-			c.MakeLabels(c.edge.GetLabel()),
+			c.MakeLabels([]string{c.edge.GetLabel()}),
 			c.MakeProperties(c.edge, c.txVars),
 			toLabelsClause, toPropertiesClause)
 	}

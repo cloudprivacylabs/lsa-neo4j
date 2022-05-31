@@ -1,6 +1,8 @@
 package neo4j
 
 import (
+	"strings"
+
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 )
 
@@ -20,8 +22,8 @@ func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) 
 	return props
 }
 
-func (cfg Config) MakeLabels(types string) string {
-	mapped := cfg.Map(types)
+func (cfg Config) MakeLabels(types []string) string {
+	mapped := cfg.Map(strings.Join(types, " "))
 	labels := makeLabels(nil, []string{mapped})
 	return labels
 }
@@ -35,9 +37,6 @@ func (cfg Config) Map(fullName string) string {
 		shortName := alias + ":" + fullName[len(prefix):]
 		return shortName
 	}
-	// if _, exists := cfg.NamespaceMappings[fullName]; exists {
-	// 	return cfg.NamespaceMappings[fullName]
-	// }
 	return fullName
 }
 
