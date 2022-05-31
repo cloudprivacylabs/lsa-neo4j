@@ -1,15 +1,15 @@
 package neo4j
 
-import "sort"
-
-// AlphabetSize is the number of possible characters in the trie
-const AlphabetSize = 26
+import (
+	"fmt"
+	"sort"
+)
 
 // Node represents each node in the trie
 type TrieNode struct {
-	// children [AlphabetSize]*TrieNode
-	children map[string]*TrieNode
-	isWord   bool
+	children     map[rune]*TrieNode
+	isWord       bool
+	namespaceMap map[string]string
 }
 
 // Trie represents a trie and has a pointer to the root node
@@ -19,51 +19,53 @@ type Trie struct {
 
 // InitTrie will create a new Trie
 func InitTrie() *Trie {
-	result := &Trie{root: &TrieNode{children: make(map[string]*TrieNode)}}
+	result := &Trie{root: &TrieNode{
+		children: make(map[rune]*TrieNode),
+	}}
 	return result
 }
 
 // Insert will take in a word and add it to the trie
-func (t *Trie) Insert(word string) {
+func (t *Trie) Insert(word, mapping string) {
 	currentNode := t.root
 	for _, ch := range word {
-		if _, exists := currentNode.children[string(ch)]; !exists {
-			newChild := &TrieNode{children: make(map[string]*TrieNode)}
-			currentNode.children[string(ch)] = newChild
+		if _, exists := currentNode.children[ch]; !exists {
+			newChild := &TrieNode{children: make(map[rune]*TrieNode), namespaceMap: map[string]string{}}
+			currentNode.children[ch] = newChild
 			currentNode = newChild
 		} else {
-			currentNode = currentNode.children[string(ch)]
+			currentNode = currentNode.children[ch]
 		}
 	}
+	currentNode.namespaceMap[word] = mapping
 	currentNode.isWord = true
 }
 
 // Returns if there is any word in the trie that starts with the given prefix.
 func (t *Trie) PrefixStart(prefix string) bool {
-	node := t.root
-	for i := 0; i < len(prefix); i++ {
-		var c byte = prefix[i]
-		if node.children[string(c)] == nil {
+	currentNode := t.root
+	for _, ch := range prefix {
+		if _, ok := currentNode.children[ch]; !ok {
 			return false
 		}
-		node = node.children[string(c)]
+		currentNode = currentNode.children[ch]
 	}
 	return true
 }
 
 // Search will search if a word is in the trie
-func (t *Trie) Search(word string) bool {
+func (t *Trie) Search(word string) (string, string, bool) {
 	currentNode := t.root
 	for _, ch := range word {
-		if _, ok := currentNode.children[string(ch)]; !ok {
-			return false
+		if _, ok := currentNode.children[ch]; !ok {
+			return word, fmt.Sprintf("No matching value for %s", word), false
 		}
-		currentNode = currentNode.children[string(ch)]
+		currentNode = currentNode.children[ch]
 	}
 	if currentNode.isWord == true {
-		return true
+		return word, currentNode.namespaceMap[word], true
 	}
-	return false
+	return word, fmt.Sprintf("No matching value for %s", word), false
 }
 
 // Returns a list of all words that share a common prefix
@@ -77,13 +79,13 @@ func (t *Trie) AllWordsFromPrefix(prefix string) []string {
 			return
 		}
 		for ch := range node.children {
-			wordsFromPrefix(prefix+ch, node.children[ch], words)
+			wordsFromPrefix(prefix+string(ch), node.children[ch], words)
 		}
 	}
 	words := make([]string, 0)
 	current := t.root
 	for _, ch := range prefix {
-		next := current.children[string(ch)]
+		next := current.children[ch]
 		if next == nil {
 			return words
 		}
