@@ -32,10 +32,11 @@ func (cfg Config) Map(fullName string) string {
 	if _, exists := cfg.TermMappings[fullName]; exists {
 		return cfg.TermMappings[fullName]
 	}
-	prefix, alias, found := cfg.Trie.Search(fullName)
-	if found {
-		shortName := alias + ":" + fullName[len(prefix):]
-		return shortName
+	if _, exists := cfg.NamespaceMappings[fullName]; exists {
+		if fullName[len(fullName)-1] == '/' {
+			return cfg.NamespaceMappings[fullName] + ":"
+		}
+		return cfg.NamespaceMappings[fullName]
 	}
 	return fullName
 }
