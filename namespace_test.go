@@ -1,7 +1,7 @@
 package neo4j
 
 import (
-	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -19,13 +19,24 @@ func TestNamespace(t *testing.T) {
 	for _, w := range toAdd {
 		myTrie.Insert(w)
 	}
-	fmt.Println(myTrie.Search("orc"))
-	fmt.Println(myTrie.Search("orcs"))
-	fmt.Println(myTrie.Search("orca"))
-	fmt.Println(myTrie.Search("orchard"))
-	fmt.Println(myTrie.Search("okra"))
-	fmt.Println(myTrie.Search("orchards"))
-	y := myTrie.AllWordsFromPrefix("or")
-	fmt.Println(y)
-	t.Fail()
+	table := []struct {
+		search string
+	}{
+		{"orc"},
+		{"orca"},
+		{"orchard"},
+		{"orcharac"},
+		{"ocular"},
+		{"orcharx"},
+		{"okra"},
+	}
+	for _, tt := range table {
+		if !myTrie.Search(tt.search) {
+			t.Errorf("Got %v, expected %v for %v", false, true, tt.search)
+		}
+	}
+	expected := []string{"orcharac", "orchard", "orcharx", "orca", "orc"}
+	if !reflect.DeepEqual(myTrie.AllWordsFromPrefix("or"), expected) {
+		t.Errorf("Got %v, expected %v", myTrie.AllWordsFromPrefix("or"), expected)
+	}
 }
