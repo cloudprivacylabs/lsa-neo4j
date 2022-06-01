@@ -1,8 +1,6 @@
 package neo4j
 
 import (
-	"strings"
-
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 )
 
@@ -23,8 +21,11 @@ func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) 
 }
 
 func (cfg Config) MakeLabels(types []string) string {
-	mapped := cfg.Map(strings.Join(types, " "))
-	labels := makeLabels(nil, []string{mapped})
+	var mapped []string
+	for _, t := range types {
+		mapped = append(mapped, cfg.Map(t))
+	}
+	labels := makeLabels(nil, mapped)
 	return labels
 }
 

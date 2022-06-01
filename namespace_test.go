@@ -15,19 +15,23 @@ func TestNamespace(t *testing.T) {
 	myTrie := InitNamespaceTrie(cfg)
 	cfg.Trie = myTrie
 	table := []struct {
-		pre string
-		exp []string
+		pre    string
+		exp    []string
+		mapped string
 	}{
-		{"https://lschema.org/Y/a", []string{"https://lschema.org/Y/a", "lsy:a"}},
+		{"https://lschema.org/A/b", []string{"https://lschema.org/A/", "lsa"}, "lsa:b"},
+		{"https://lschema.org/Y/z", []string{"https://lschema.org/Y/", "lsy"}, "lsy:z"},
 	}
 	for _, tt := range table {
-		x, _, ok := myTrie.Search(tt.pre)
+		x, y, ok := myTrie.Search(tt.pre)
 		if !ok {
 			t.Errorf("Word not found")
 		}
-		//fmt.Println(cfg.Map(x))
-		if !reflect.DeepEqual([]string{x, cfg.Map(x)}, tt.exp) {
-			t.Errorf("Got %v, expected %v", []string{x, cfg.Map(x)}, tt.exp)
+		if !reflect.DeepEqual([]string{x, y}, tt.exp) {
+			t.Errorf("Got %v, expected %v", []string{x, y}, tt.exp)
+		}
+		if !reflect.DeepEqual(cfg.Map(tt.pre), tt.mapped) {
+			t.Errorf("Got %v, expected %v", cfg.Map(tt.pre), tt.mapped)
 		}
 	}
 }

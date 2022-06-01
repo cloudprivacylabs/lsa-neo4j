@@ -8,7 +8,5 @@ termMappings:
 
 namespaceMappings:
   https://lschema.org/: ls
-  https://lschema.org/A: ls:A
-  https://lschema.org/Y: ls:Y
+  https://lschema.org/A/: lsa
   https://lschema.org/Y/: lsy
-  https://lschema.org/Y/a: lsy:a
