@@ -13,7 +13,6 @@ func TestNamespace(t *testing.T) {
 		t.Errorf("Could not read file: %s", "lsaneo/cmd/config.yaml")
 	}
 	config := InitConfig(cfg)
-	config.trie = InitNamespaceTrie(&cfg)
 	table := []struct {
 		pre    string
 		exp    []string
@@ -32,8 +31,8 @@ func TestNamespace(t *testing.T) {
 		if !reflect.DeepEqual([]string{x, y}, tt.exp) {
 			t.Errorf("Got %v, expected %v", []string{x, y}, tt.exp)
 		}
-		if !reflect.DeepEqual(cfg.Map(tt.pre), tt.mapped) {
-			t.Errorf("Got %v, expected %v", cfg.Map(tt.pre), tt.mapped)
+		if !reflect.DeepEqual(config.Map(tt.pre), tt.mapped) {
+			t.Errorf("Got %v, expected %v", config.Map(tt.pre), tt.mapped)
 		}
 	}
 }

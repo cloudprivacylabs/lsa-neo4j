@@ -30,6 +30,7 @@ func InitConfig(cfg Config) Config {
 		termExpansion:      termExpanded,
 		NamespaceMappings:  cfg.NamespaceMappings,
 		namespaceExpansion: cfg.namespaceExpansion,
+		trie:               InitNamespaceTrie(&cfg),
 	}
 }
 
@@ -42,7 +43,6 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 		}
 		root.Insert(k, v)
 	}
-	cfg.trie = root
 	return root
 }
 
