@@ -1,6 +1,8 @@
 package neo4j
 
-import "strings"
+import (
+	"strings"
+)
 
 // Node represents each node in the trie
 type TrieNode struct {

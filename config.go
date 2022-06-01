@@ -2,7 +2,6 @@ package neo4j
 
 import (
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/cloudprivacylabs/opencypher/graph"
 )
 
 type Config struct {
@@ -17,20 +16,11 @@ type withProperty interface {
 }
 
 func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) string {
-	// var mapped []string
-	x.ForEachProperty(func(key string, value interface{}) bool {
-		switch x.(type) {
-		case graph.Node:
-			x.(graph.Node).SetProperty(key, cfg.Map(ls.AsPropertyValue(value, true).AsString()))
-		case graph.Edge:
-			// if prop, exists := x.(graph.Edge).GetProperty(key); exists {
-			// mapped = append(mapped, cfg.Map(ls.AsPropertyValue(prop, true).AsString()))
-			x.(graph.Edge).SetProperty(key, cfg.Map(ls.AsPropertyValue(value, true).AsString()))
-			// }
-		}
-		return true
-	})
-	props := makeProperties(txVars, ls.PropertiesAsMap(x), nil)
+	propMap := ls.PropertiesAsMap(x)
+	for k, v := range propMap {
+		propMap[cfg.Map(k)] = v
+	}
+	props := makeProperties(txVars, propMap, nil)
 	return props
 }
 
