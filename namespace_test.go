@@ -12,8 +12,8 @@ func TestNamespace(t *testing.T) {
 	if err := cmdutil.ReadJSONOrYAML("lsaneo/cmd/config.yaml", &cfg); err != nil {
 		t.Errorf("Could not read file: %s", "lsaneo/cmd/config.yaml")
 	}
-	myTrie := InitNamespaceTrie(cfg)
-	cfg.Trie = myTrie
+	config := InitConfig(cfg)
+	config.trie = InitNamespaceTrie(&cfg)
 	table := []struct {
 		pre    string
 		exp    []string
@@ -24,7 +24,7 @@ func TestNamespace(t *testing.T) {
 		{"https://lschema.org/Y/", []string{"https://lschema.org/Y/", "lsy"}, "lsy:"},
 	}
 	for _, tt := range table {
-		x, y, ok := myTrie.Search(tt.pre)
+		x, y, ok := config.trie.Search(tt.pre)
 		if !ok {
 			t.Errorf("Word not found")
 		}

@@ -6,8 +6,9 @@ import (
 
 // Node represents each node in the trie
 type TrieNode struct {
-	children map[rune]*TrieNode
-	mapping  string
+	children   map[rune]*TrieNode
+	isTerminal bool
+	mapping    string
 }
 
 // Trie represents a trie and has a pointer to the root node
@@ -36,20 +37,25 @@ func (t *Trie) Insert(word, mapping string) {
 		}
 	}
 	currentNode.mapping = mapping
+	currentNode.isTerminal = true
 }
 
 // Search will search if a word is in the trie
 func (t *Trie) Search(word string) (string, string, bool) {
 	currentNode := t.root
 	prefix := strings.Builder{}
-	var lastPrefixMatch string
+	var lastPrefixMapping string
+	var lastPrefix string
 	for _, ch := range word {
 		if _, ok := currentNode.children[ch]; !ok {
-			return prefix.String(), lastPrefixMatch, true
+			return lastPrefix, lastPrefixMapping, true
 		}
-		prefix.WriteRune(ch)
 		currentNode = currentNode.children[ch]
-		lastPrefixMatch = currentNode.mapping
+		prefix.WriteRune(ch)
+		if currentNode.isTerminal {
+			lastPrefix = prefix.String()
+		}
+		lastPrefixMapping = currentNode.mapping
 	}
 	if len(currentNode.mapping) > 0 {
 		return word, currentNode.mapping, true

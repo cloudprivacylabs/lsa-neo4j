@@ -5,14 +5,45 @@ import (
 )
 
 type Config struct {
-	TermMappings      map[string]string `yaml:"termMappings"`
-	termExpansion     map[string]string
-	NamespaceMappings map[string]string `yaml:"namespaceMappings"`
-	Trie              *Trie
+	TermMappings       map[string]string `yaml:"termMappings"`
+	termExpansion      map[string]string
+	NamespaceMappings  map[string]string `yaml:"namespaceMappings"`
+	namespaceExpansion map[string]string
+	trie               *Trie
 }
 
 type withProperty interface {
 	ForEachProperty(func(string, interface{}) bool) bool
+}
+
+func InitConfig(cfg Config) Config {
+	termExpanded := make(map[string]string)
+	termMap := make(map[string]string)
+	for k, v := range cfg.TermMappings {
+		if v != "" {
+			termMap[k] = v
+			termExpanded[v] = k
+		}
+	}
+	return Config{
+		TermMappings:       termMap,
+		termExpansion:      termExpanded,
+		NamespaceMappings:  cfg.NamespaceMappings,
+		namespaceExpansion: cfg.namespaceExpansion,
+	}
+}
+
+func InitNamespaceTrie(cfg *Config) *Trie {
+	root := InitTrie()
+	cfg.namespaceExpansion = make(map[string]string)
+	for k, v := range cfg.NamespaceMappings {
+		if v != "" {
+			cfg.namespaceExpansion[v] = k
+		}
+		root.Insert(k, v)
+	}
+	cfg.trie = root
+	return root
 }
 
 func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) string {
@@ -37,7 +68,7 @@ func (cfg Config) Map(fullName string) string {
 	if _, exists := cfg.TermMappings[fullName]; exists {
 		return cfg.TermMappings[fullName]
 	}
-	prefix, alias, found := cfg.Trie.Search(fullName)
+	prefix, alias, found := cfg.trie.Search(fullName)
 	if found {
 		shortName := alias + ":" + fullName[len(prefix):]
 		return shortName
@@ -49,15 +80,10 @@ func (cfg Config) Expand(short string) string {
 	if _, exists := cfg.termExpansion[short]; exists {
 		return cfg.termExpansion[short]
 	}
-	return short
-}
-
-func InitNamespaceTrie(cfg Config) *Trie {
-	root := InitTrie()
-	for k, v := range cfg.NamespaceMappings {
-		root.Insert(k, v)
+	if _, exists := cfg.namespaceExpansion[short]; exists {
+		return cfg.namespaceExpansion[short]
 	}
-	return root
+	return short
 }
 
 // func (cfg Config) MapNamespaces(exact string) string {
