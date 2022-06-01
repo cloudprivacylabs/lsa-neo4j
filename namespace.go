@@ -40,12 +40,14 @@ func (t *Trie) Insert(word, mapping string) {
 func (t *Trie) Search(word string) (string, string, bool) {
 	currentNode := t.root
 	prefix := strings.Builder{}
+	var lastPrefixMatch string
 	for _, ch := range word {
 		if _, ok := currentNode.children[ch]; !ok {
-			return prefix.String(), currentNode.mapping, true
+			return prefix.String(), lastPrefixMatch, true
 		}
 		prefix.WriteRune(ch)
 		currentNode = currentNode.children[ch]
+		lastPrefixMatch = currentNode.mapping
 	}
 	if len(currentNode.mapping) > 0 {
 		return word, currentNode.mapping, true
