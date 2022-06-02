@@ -1,6 +1,8 @@
 package neo4j
 
 import (
+	"strings"
+
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 )
 
@@ -23,6 +25,7 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 		cfg.namespaceExpansion[v] = k
 		root.Insert(k, v)
 	}
+	cfg.trie = root
 	return root
 }
 
@@ -55,7 +58,7 @@ func (cfg Config) Map(fullName string) string {
 		return cfg.TermMappings[fullName]
 	}
 	prefix, alias, found := cfg.trie.Search(fullName)
-	if found {
+	if found && (prefix != "" && alias != "") {
 		shortName := alias + ":" + fullName[len(prefix):]
 		return shortName
 	}
@@ -69,7 +72,10 @@ func (cfg Config) Expand(short string) string {
 	if _, exists := cfg.namespaceExpansion[short]; exists {
 		return cfg.namespaceExpansion[short]
 	}
-	return short
+	col := strings.Index(short, ":")
+	prefix := cfg.namespaceExpansion[short[:col]]
+	suffix := short[col+1:]
+	return prefix + suffix
 }
 
 // func (cfg Config) MapNamespaces(exact string) string {

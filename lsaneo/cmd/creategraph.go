@@ -20,6 +20,7 @@ var (
 			if err := cmdutil.ReadJSONOrYAML(file, &cfg); err != nil {
 				return err
 			}
+			neo.InitNamespaceTrie(&cfg)
 			g, err := cmdutil.ReadGraph(args, nil, inputFormat)
 			if err != nil {
 				return err

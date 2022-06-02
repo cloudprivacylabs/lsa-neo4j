@@ -5,9 +5,10 @@ termMappings:
   https://lschema.org/NodeID: ls:nodeId
   https://lschema.org/SchemaNodeID: ls:schemaNodeId
   https://lschema.org/EdgeLabel: ls:edgeLabel
+  https://lschema.org/DocumentNode: ls:documentNode
+  https://lschema.org/EntitySchema: ls:entitySchema
 
 namespaceMappings:
   https://lschema.org/: ls
   https://lschema.org/A/: lsa
   https://lschema.org/Y/: lsy
-  https://lschema.org/X: ls:X

@@ -12,19 +12,19 @@ type createEdgeToSourceAndTarget struct {
 	edge graph.Edge
 }
 
-func (c createEdgeToSourceAndTarget) GetOCStmt(nodeIds map[graph.Node]int64) string {
+func (c createEdgeToSourceAndTarget) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
 	vars := make(map[string]interface{})
 	query := fmt.Sprintf("MATCH (f) WITH f MATCH (t) WHERE ID(f)=%d AND ID(t)=%d CREATE (f)-[%s %s]->(t)",
 		nodeIds[c.edge.GetFrom()],
 		nodeIds[c.edge.GetTo()],
 		c.MakeLabels([]string{c.edge.GetLabel()}),
 		c.MakeProperties(c.edge, vars))
-	return query
+	return query, vars
 }
 
 func (c createEdgeToSourceAndTarget) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query := c.GetOCStmt(nodeIds)
-	_, err := tx.Run(query, make(map[string]interface{}))
+	query, vars := c.GetOCStmt(nodeIds)
+	_, err := tx.Run(query, vars)
 	if err != nil {
 		return err
 	}
@@ -36,7 +36,7 @@ type createTargetFromSource struct {
 	edge graph.Edge
 }
 
-func (c createTargetFromSource) GetOCStmt(nodeIds map[graph.Node]int64) string {
+func (c createTargetFromSource) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
 	vars := make(map[string]interface{})
 	query := fmt.Sprintf("MATCH (from) WHERE ID(from) = %d CREATE (from)-[%s %s]->(to %s %s) RETURN to",
 		nodeIds[c.edge.GetFrom()],
@@ -44,12 +44,12 @@ func (c createTargetFromSource) GetOCStmt(nodeIds map[graph.Node]int64) string {
 		c.MakeProperties(c.edge, vars),
 		c.MakeLabels(c.edge.GetTo().GetLabels().Slice()),
 		c.MakeProperties(c.edge.GetTo(), vars))
-	return query
+	return query, vars
 }
 
 func (c createTargetFromSource) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query := c.GetOCStmt(nodeIds)
-	idrec, err := tx.Run(query, make(map[string]interface{}))
+	query, vars := c.GetOCStmt(nodeIds)
+	idrec, err := tx.Run(query, vars)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ type createSourceFromTarget struct {
 	edge graph.Edge
 }
 
-func (c createSourceFromTarget) GetOCStmt(nodeIds map[graph.Node]int64) string {
+func (c createSourceFromTarget) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
 	vars := make(map[string]interface{})
 	query := fmt.Sprintf("MATCH (to) WHERE ID(to) = %d CREATE (to)<-[%s %s]-(from %s %s) RETURN from",
 		nodeIds[c.edge.GetTo()],
@@ -75,12 +75,12 @@ func (c createSourceFromTarget) GetOCStmt(nodeIds map[graph.Node]int64) string {
 		c.MakeProperties(c.edge, vars),
 		c.MakeLabels(c.edge.GetFrom().GetLabels().Slice()),
 		c.MakeProperties(c.edge.GetFrom(), vars))
-	return query
+	return query, vars
 }
 
 func (c createSourceFromTarget) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query := c.GetOCStmt(nodeIds)
-	idrec, err := tx.Run(query, make(map[string]interface{}))
+	query, vars := c.GetOCStmt(nodeIds)
+	idrec, err := tx.Run(query, vars)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ type createNodePair struct {
 	edge graph.Edge
 }
 
-func (c createNodePair) GetOCStmt(nodeIds map[graph.Node]int64) string {
+func (c createNodePair) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
 	vars := make(map[string]interface{})
 	fromLabelsClause := c.MakeLabels(c.edge.GetFrom().GetLabels().Slice())
 	toLabelsClause := c.MakeLabels(c.edge.GetTo().GetLabels().Slice())
@@ -118,12 +118,14 @@ func (c createNodePair) GetOCStmt(nodeIds map[graph.Node]int64) string {
 			c.MakeProperties(c.edge, vars),
 			toLabelsClause, toPropertiesClause)
 	}
-	return query
+	return query, vars
 }
 
+// "CREATE (n :`Person`:`ls:documentNode` {`ls:entityId`:$p0,`ls:entitySchema`:$p1,`https://lschema.org/entityId`:$p2,`https://lschema.org/entitySchema`:$p3})-[:` ` ]->(m :`ls:documentNode` {`value`:$p4}) RETURN n, m"
+
 func (c createNodePair) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query := c.GetOCStmt(nodeIds)
-	idrec, err := tx.Run(query, make(map[string]interface{}))
+	query, vars := c.GetOCStmt(nodeIds)
+	idrec, err := tx.Run(query, vars)
 	if err != nil {
 		return err
 	}
@@ -138,5 +140,33 @@ func (c createNodePair) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) 
 	}
 	nodeIds[c.edge.GetFrom()] = rec.Values[0].(neo4j.Node).Id
 	nodeIds[c.edge.GetTo()] = rec.Values[0].(neo4j.Node).Id
+	return nil
+}
+
+type createNode struct {
+	Config
+	node graph.Node
+}
+
+func (c createNode) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
+	nodeVars := make(map[string]interface{})
+	labelsClause := c.MakeLabels(c.node.GetLabels().Slice())
+	propertiesClause := c.MakeProperties(c.node, nodeVars)
+	query := fmt.Sprintf("CREATE (n %s %s) RETURN n", labelsClause, propertiesClause)
+	return query, nodeVars
+}
+
+func (c createNode) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
+	query, vars := c.GetOCStmt(nodeIds)
+	idrec, err := tx.Run(query, vars)
+	if err != nil {
+		return err
+	}
+	rec, err := idrec.Single()
+	if err != nil {
+		return err
+	}
+	nd := rec.Values[0].(neo4j.Node)
+	nodeIds[c.node] = nd.Id
 	return nil
 }
