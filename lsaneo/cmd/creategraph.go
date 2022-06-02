@@ -20,7 +20,6 @@ var (
 			if err := cmdutil.ReadJSONOrYAML(file, &cfg); err != nil {
 				return err
 			}
-			config := neo.InitConfig(cfg)
 			g, err := cmdutil.ReadGraph(args, nil, inputFormat)
 			if err != nil {
 				return err
@@ -38,7 +37,7 @@ var (
 			if err != nil {
 				return err
 			}
-			_, err = neo.CreateGraph(session, tx, nodeSl, config)
+			_, err = neo.CreateGraph(session, tx, nodeSl, cfg)
 			if err != nil {
 				tx.Rollback()
 				return err

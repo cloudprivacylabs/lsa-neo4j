@@ -16,31 +16,11 @@ type withProperty interface {
 	ForEachProperty(func(string, interface{}) bool) bool
 }
 
-func InitConfig(cfg Config) Config {
-	termExpanded := make(map[string]string)
-	termMap := make(map[string]string)
-	for k, v := range cfg.TermMappings {
-		if v != "" {
-			termMap[k] = v
-			termExpanded[v] = k
-		}
-	}
-	return Config{
-		TermMappings:       termMap,
-		termExpansion:      termExpanded,
-		NamespaceMappings:  cfg.NamespaceMappings,
-		namespaceExpansion: cfg.namespaceExpansion,
-		trie:               InitNamespaceTrie(&cfg),
-	}
-}
-
 func InitNamespaceTrie(cfg *Config) *Trie {
 	root := InitTrie()
 	cfg.namespaceExpansion = make(map[string]string)
 	for k, v := range cfg.NamespaceMappings {
-		if v != "" {
-			cfg.namespaceExpansion[v] = k
-		}
+		cfg.namespaceExpansion[v] = k
 		root.Insert(k, v)
 	}
 	return root
@@ -49,7 +29,10 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) string {
 	propMap := ls.PropertiesAsMap(x)
 	for k, v := range propMap {
-		propMap[cfg.Map(k)] = v
+		short := cfg.Map(k)
+		if short != "" {
+			propMap[short] = v
+		}
 	}
 	props := makeProperties(txVars, propMap, nil)
 	return props
@@ -58,7 +41,10 @@ func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) 
 func (cfg Config) MakeLabels(types []string) string {
 	var mapped []string
 	for _, t := range types {
-		mapped = append(mapped, cfg.Map(t))
+		short := cfg.Map(t)
+		if short != "" {
+			mapped = append(mapped, short)
+		}
 	}
 	labels := makeLabels(nil, mapped)
 	return labels

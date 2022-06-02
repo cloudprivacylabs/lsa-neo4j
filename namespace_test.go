@@ -12,7 +12,9 @@ func TestNamespace(t *testing.T) {
 	if err := cmdutil.ReadJSONOrYAML("lsaneo/cmd/config.yaml", &cfg); err != nil {
 		t.Errorf("Could not read file: %s", "lsaneo/cmd/config.yaml")
 	}
-	config := InitConfig(cfg)
+
+	myTrie := InitNamespaceTrie(&cfg)
+	cfg.trie = myTrie
 	table := []struct {
 		pre    string
 		exp    []string
@@ -21,9 +23,10 @@ func TestNamespace(t *testing.T) {
 		{"https://lschema.org/A/b", []string{"https://lschema.org/A/", "lsa"}, "lsa:b"},
 		{"https://lschema.org/Y/z", []string{"https://lschema.org/Y/", "lsy"}, "lsy:z"},
 		{"https://lschema.org/Y/", []string{"https://lschema.org/Y/", "lsy"}, "lsy:"},
+		{"https://lschema.org/X", []string{"https://lschema.org/X", "ls:X"}, "ls:X:"},
 	}
 	for _, tt := range table {
-		x, y, ok := config.trie.Search(tt.pre)
+		x, y, ok := myTrie.Search(tt.pre)
 		if !ok {
 			t.Errorf("Word not found")
 		}
@@ -31,8 +34,8 @@ func TestNamespace(t *testing.T) {
 		if !reflect.DeepEqual([]string{x, y}, tt.exp) {
 			t.Errorf("Got %v, expected %v", []string{x, y}, tt.exp)
 		}
-		if !reflect.DeepEqual(config.Map(tt.pre), tt.mapped) {
-			t.Errorf("Got %v, expected %v", config.Map(tt.pre), tt.mapped)
+		if !reflect.DeepEqual(cfg.Map(tt.pre), tt.mapped) {
+			t.Errorf("Got %v, expected %v", cfg.Map(tt.pre), tt.mapped)
 		}
 	}
 }
