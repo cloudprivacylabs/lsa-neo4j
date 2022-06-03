@@ -1,24 +1,8 @@
 // Package neo4j is the graph storage driver using Neo4J database.
 //
-// This driver treats node IDs as unique identifiers in the underlying
-// database. Thus if you attempt to store a node with an ID that is
-// already in the database, that node is updated with the given node.
+// The input graph node IDs are stored in `neo4j_id` property. All
+// other properties and labels are stored verbatim.
 //
-// The storage mapping is as follows:
-//
-// Node IDs are stored as the neo4j node property "neo4j_id".
-//
-// Node values are stored as the neo4j node property "neo4j_value"`.
-//
-// All node properties are stores as neo4j node properties.
-//
-// All node types are stored as neo4j node labels.
-//
-// All edge IDs are stored as the neo4j edge property "@id".
-//
-// Edge labels are stored as neo4j edge labels.
-//
-// Edge properties are stored as neo4j edge properties.
 //
 package neo4j
 

@@ -2,7 +2,6 @@
     "nodes": [
         {
             "n":0,
-            "identity": 0,
             "labels": [
                     "https://lschema.org/DocumentNode",
                     "Person"
@@ -14,7 +13,6 @@
         },
         {
             "n":1,
-            "identity": 1,
             "labels": [
                     "https://lschema.org/DocumentNode"
                 ],
@@ -24,7 +22,6 @@
         },
         {
             "n":2,
-            "identity":2,
             "labels": [
                 "https://lschema.org/DocumentNode"
             ],
@@ -34,7 +31,6 @@
         },
         {
             "n":3,
-            "identity":3,
             "labels": [
                 "https://lschema.org/DocumentNode"
             ],
@@ -44,7 +40,6 @@
         },
         {
             "n":4,
-            "identity":4,
             "labels": [
                 "https://lschema.org/DocumentNode"
             ],
@@ -54,7 +49,6 @@
         },
         {
             "n":5,
-            "identity":5,
             "labels": [
                 "https://lschema.org/DocumentNode"
             ],
@@ -64,7 +58,6 @@
         },
         {
             "n":6,
-            "identity":6,
             "labels": [
                 "https://lschema.org/DocumentNode"
             ],
@@ -74,7 +67,6 @@
         },
         {
             "n":7,
-            "identity":7,
             "labels": [
                 "https://lschema.org/DocumentNode"
             ],

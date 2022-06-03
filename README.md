@@ -11,14 +11,13 @@ store in a Neo4J database.
 ## Graph Mapping
 
 The data ingested using layered schemas is represented as a labeled
-property graph. There are some differences between the Neo4J graph
-representation and a more generic labeled property graph used by
+property graph. There are some minor differences between the Neo4J
+graph representation and a more generic labeled property graph used by
 labeled schemas, so a mapping is necessary. This section describes how
 that mapping is done.
 
  * Every node of a data graph is stored as a Neo4J node.
    * The data graph node id is stored as the string property neo4j_id
-   * If the data graph node has a value, it is stored as the string property neo4j_value
    * All node properties of the data graph are stored as Neo4j node
      properties, with string or []string values
    * The types associated with a data graph node are stored as Neo4j node labels.
@@ -32,7 +31,7 @@ As an example:
 ```
 Data Graph:
 +----------------------------+                                  +---------------------------+
-|  @id = node_1 @value= a    |                                  |  @id = node_2             |
+|  @id = node_1              |                                  |  @id = node_2             |
 +----------------------------+                                  +---------------------------+
 |  @type = [ type1, type2 ]  |-------- edgeLabel      --------->|  @type = [ type3, type4 ] |
 |  property = value          |         edgeProperty = value     |  property2 = value2       +
@@ -44,7 +43,7 @@ Neo4J:
 |  :type1 :type2      |                                      |     :type3 :type4         |
 +-------------------- +                                      +---------------------------+
 |  neo4j_id = node_1  |----------- :edgeLabel -------------->|   neo4j_id = node_2       |
-|  neo4j_value = a    |             edgeProperty = value     |   property2 = value2      |
+|                     |             edgeProperty = value     |   property2 = value2      |
 |  property = value   |                                      +---------------------------+
 +---------------------+
 
@@ -56,6 +55,7 @@ To build the command line tool, use the Go build system:
 
 ```
 cd lsaneo
+go mod tidy
 go build
 ```
 
@@ -64,14 +64,13 @@ That should build the `lsaneo` binary for your platform
 You can pair `lsaneo` with the `layers` tool to ingest data and store graphs:
 
 ```
-layers ingest csv --schema myschema.json inputdata.csv | lsaneo save --user userName --pwd password --uri dburi
+layers ingest csv --schema myschema.json inputdata.csv | lsaneo create --user userName --pwd password --uri dburi
 ```
 
 You can also store saved graph files (in JSON-LD flattened format):
 
 ```
-lsaneo save --user userNAme --pwd password --uri dbUri <fileName>
+lsaneo create --user userName --pwd password --uri dbUri <fileName>
 ```
 
-Save operation will update nodes by their ID, and insert nodes that are new.
 
