@@ -79,14 +79,3 @@ func (cfg Config) Expand(short string) string {
 	}
 	return short
 }
-
-// func (cfg Config) MapNamespaces(exact string) string {
-// 	if _, exists := cfg.NamespaceMappings[exact]; exists {
-// 		return cfg.NamespaceMappings[exact]
-// 	}
-// 	return exact
-// }
-
-// func (cfg Config) MapLongestPrefix(prefix string) string {
-// 	return cfg.Trie.AllWordsFromPrefix(prefix)[0]
-// }

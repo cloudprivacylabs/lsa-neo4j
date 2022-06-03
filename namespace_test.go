@@ -29,8 +29,7 @@ func TestNamespace(t *testing.T) {
 		expand string
 	}{
 		{"ls:X", "https://lschema.org/X"},
-		{"lsx", "https://lschema.org/X/"},
-		{"lsy", "https://lschema.org/Y/"},
+		{"lsy:", "https://lschema.org/Y/"},
 	}
 	for _, tt := range table {
 		x, y, ok := myTrie.Search(tt.pre)
