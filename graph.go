@@ -1,7 +1,7 @@
 package neo4j
 
 import (
-	"github.com/cloudprivacylabs/lsa/pkg/opencypher/graph"
+	"github.com/cloudprivacylabs/opencypher/graph"
 )
 
 // SaveGraph saves all the nodes and edges of a graph in a

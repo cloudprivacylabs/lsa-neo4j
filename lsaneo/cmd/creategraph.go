@@ -3,7 +3,7 @@ package cmd
 import (
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
-	"github.com/cloudprivacylabs/lsa/pkg/opencypher/graph"
+	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +15,12 @@ var (
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
 			inputFormat, _ := cmd.Flags().GetString("input")
+			file, _ := cmd.Flags().GetString("cfg")
+			var cfg neo.Config
+			if err := cmdutil.ReadJSONOrYAML(file, &cfg); err != nil {
+				return err
+			}
+			neo.InitNamespaceTrie(&cfg)
 			g, err := cmdutil.ReadGraph(args, nil, inputFormat)
 			if err != nil {
 				return err
@@ -32,7 +38,7 @@ var (
 			if err != nil {
 				return err
 			}
-			_, err = neo.CreateGraph(session, tx, nodeSl)
+			_, err = neo.CreateGraph(session, tx, nodeSl, cfg)
 			if err != nil {
 				tx.Rollback()
 				return err
@@ -46,4 +52,5 @@ var (
 func init() {
 	rootCmd.AddCommand(createGraphCmd)
 	createGraphCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
+	createGraphCmd.Flags().String("cfg", "config.yaml", "configuration spec for node properties and labels")
 }

@@ -1,0 +1,36 @@
+{
+    "nodes": [
+        {
+            "n":0,
+            "labels": [
+                    "https://lschema.org/DocumentNode"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "0",
+                "https://lschema.org/entitySchema": "Schema for a city"
+            }
+        },
+        {
+            "n":1,
+            "labels": [
+                    "https://lschema.org/DocumentNode"
+                ],
+            "properties": {
+                "value": "San Francisco"
+            }
+        },
+        {
+            "n":2,
+            "identity": 2,
+            "labels": [
+                    "https://lschema.org/DocumentNode"
+                ],
+            "properties": {
+                "value": "Denver"
+            }
+        }
+    ],
+    "edges": [
+        { "from": 0, "to": 1, "label": " " }
+    ]
+}
