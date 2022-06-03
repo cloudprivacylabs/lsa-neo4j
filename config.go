@@ -69,13 +69,15 @@ func (cfg Config) Expand(short string) string {
 	if _, exists := cfg.termExpansion[short]; exists {
 		return cfg.termExpansion[short]
 	}
-	if _, exists := cfg.namespaceExpansion[short]; exists {
-		return cfg.namespaceExpansion[short]
-	}
 	col := strings.Index(short, ":")
-	prefix := cfg.namespaceExpansion[short[:col]]
-	suffix := short[col+1:]
-	return prefix + suffix
+	if col == -1 {
+		return short
+	}
+	if prefix, exists := cfg.namespaceExpansion[short[:col]]; exists {
+		suffix := short[col+1:]
+		return prefix + suffix
+	}
+	return short
 }
 
 // func (cfg Config) MapNamespaces(exact string) string {

@@ -46,21 +46,20 @@ func (t *Trie) Search(word string) (string, string, bool) {
 	prefix := strings.Builder{}
 	var lastPrefixMapping string
 	var lastPrefix string
+	var lastPrefixFlag bool
 	for _, ch := range word {
 		if _, ok := currentNode.children[ch]; !ok {
-			return lastPrefix, lastPrefixMapping, true
+			return lastPrefix, lastPrefixMapping, lastPrefixFlag
 		}
 		currentNode = currentNode.children[ch]
 		prefix.WriteRune(ch)
 		if currentNode.isTerminal {
 			lastPrefix = prefix.String()
+			lastPrefixMapping = currentNode.mapping
+			lastPrefixFlag = true
 		}
-		lastPrefixMapping = currentNode.mapping
 	}
-	if len(currentNode.mapping) > 0 {
-		return word, currentNode.mapping, true
-	}
-	return word, "", false
+	return lastPrefix, lastPrefixMapping, lastPrefixFlag
 }
 
 // // Returns a list of all words that share a common prefix
