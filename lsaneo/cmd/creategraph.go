@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"errors"
+	"os"
+
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/cloudprivacylabs/opencypher/graph"
@@ -15,10 +18,17 @@ var (
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
 			inputFormat, _ := cmd.Flags().GetString("input")
-			file, _ := cmd.Flags().GetString("cfg")
 			var cfg neo.Config
-			if err := cmdutil.ReadJSONOrYAML(file, &cfg); err != nil {
-				return err
+
+			if cfgfile, _ := cmd.Flags().GetString("cfg"); len(cfgfile) == 0 {
+				err := cmdutil.ReadJSONOrYAML("lsaneo.config.yaml", &cfg)
+				if !errors.Is(err, os.ErrNotExist) {
+					return err
+				}
+			} else {
+				if err := cmdutil.ReadJSONOrYAML(cfgfile, &cfg); err != nil {
+					return err
+				}
 			}
 			neo.InitNamespaceTrie(&cfg)
 			g, err := cmdutil.ReadGraph(args, nil, inputFormat)
@@ -52,5 +62,5 @@ var (
 func init() {
 	rootCmd.AddCommand(createGraphCmd)
 	createGraphCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
-	createGraphCmd.Flags().String("cfg", "config.yaml", "configuration spec for node properties and labels")
+	createGraphCmd.Flags().String("cfg", "", "configuration spec for node properties and labels (default: lsaneo.config.yaml)")
 }
