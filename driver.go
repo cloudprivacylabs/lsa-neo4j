@@ -61,26 +61,22 @@ func (s *Session) Logf(format string, a ...interface{}) {
 func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, config Config) (int64, error) {
 	nodeIds := make(map[graph.Node]int64)
 	allNodes := make(map[graph.Node]struct{})
-	entityNodes := make(map[graph.Node]struct{})
+	//entityNodes := make(map[graph.Node]struct{})
 	// Find triples:
 	for _, node := range nodes {
 		allNodes[node] = struct{}{}
 	}
 	for node := range allNodes {
-		hasEdges := false
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-			root := node
+			// TODO: Load entity nodes here
 			if exists, nid, err := session.existsDB(tx, node, config); exists && err == nil {
 				nodeIds[node] = nid
-				ls.IterateDescendants(root, func(nd graph.Node) bool {
-					entityNodes[nd] = struct{}{}
-					return true
-				}, ls.FollowEdgesInEntity, false)
 			}
 		}
-		if _, exists := entityNodes[node]; exists {
-			continue
-		}
+	}
+
+	for node := range allNodes {
+		hasEdges := false
 		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
 			edge := edges.Edge()
 			if _, exists := allNodes[edge.GetTo()]; exists {
@@ -103,35 +99,33 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, con
 	return 0, nil
 }
 
+type action interface {
+	Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error
+}
+
 func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds map[graph.Node]int64, cfg Config) error {
-	// Contains both node and target nodes
-	if contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
+	var a action
+	hasFrom := contains(edge.GetFrom(), nodeIds)
+	hasTo := contains(edge.GetTo(), nodeIds)
+	switch {
+	case hasFrom && hasTo:
+		// Contains both node and target nodes
 		// (node)--edge-->(node)
-		c := createEdgeToSourceAndTarget{Config: cfg, edge: edge}
-		if err := c.Run(tx, nodeIds); err != nil {
-			return err
-		}
-	}
-	// contains only source node
-	if contains(edge.GetFrom(), nodeIds) && !contains(edge.GetTo(), nodeIds) {
+		a = createEdgeToSourceAndTarget{Config: cfg, edge: edge}
+	case hasFrom && !hasTo:
+		// contains only source node
 		// (match) --edge-->(newNode)
-		c := createTargetFromSource{Config: cfg, edge: edge}
-		if err := c.Run(tx, nodeIds); err != nil {
-			return err
-		}
-	}
-	// contains only target node
-	if !contains(edge.GetFrom(), nodeIds) && contains(edge.GetTo(), nodeIds) {
+		a = createTargetFromSource{Config: cfg, edge: edge}
+	case !hasFrom && hasTo:
+		// contains only target node
 		// (newNode) --edge-->(match) --edge-->(newNode)
-		c := createSourceFromTarget{Config: cfg, edge: edge}
-		if err := c.Run(tx, nodeIds); err != nil {
-			return err
-		}
+		a = createSourceFromTarget{Config: cfg, edge: edge}
+	default:
+		// source,target does not exist in db
+		// (newNode) --edge-->(newNode)
+		a = createNodePair{Config: cfg, edge: edge}
 	}
-	// source,target does not exist in db
-	// (newNode) --edge-->(newNode)
-	c := createNodePair{Config: cfg, edge: edge}
-	if err := c.Run(tx, nodeIds); err != nil {
+	if err := a.Run(tx, nodeIds); err != nil {
 		return err
 	}
 	return nil
