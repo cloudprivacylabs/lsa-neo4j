@@ -30,8 +30,8 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 }
 
 func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) string {
-	propMap := ls.PropertiesAsMap(x)
-	for k, v := range propMap {
+	propMap := make(map[string]*ls.PropertyValue)
+	for k, v := range ls.PropertiesAsMap(x) {
 		short := cfg.Map(k)
 		if short != "" {
 			propMap[short] = v
