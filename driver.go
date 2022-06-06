@@ -14,6 +14,7 @@ import (
 	"github.com/cloudprivacylabs/opencypher/graph"
 
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j/dbtype"
 )
 
 type Driver struct {
@@ -23,6 +24,19 @@ type Driver struct {
 
 type Session struct {
 	neo4j.Session
+}
+
+type Neo4jRepo interface {
+	LoadEntityNodes(tx neo4j.Transaction, rootIds []int64) (graph.Graph, error)
+}
+
+type TestSession struct {
+	neo4j.Session
+}
+
+func NewNeo4jRepo(driver *Driver) Neo4jRepo {
+	s := driver.drv.NewSession(neo4j.SessionConfig{DatabaseName: driver.dbName})
+	return &TestSession{s}
 }
 
 const (
@@ -135,6 +149,73 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 		return err
 	}
 	return nil
+}
+
+func (ts *TestSession) LoadEntityNodes(tx neo4j.Transaction, rootIds []int64) (graph.Graph, error) {
+	return ls.NewDocumentGraph(), nil
+}
+
+func (s *Session) LoadEntityNodes(tx neo4j.Transaction, rootIds []int64) (graph.Graph, error) {
+	return loadEntityNodes(tx, rootIds, findNeighbors)
+}
+
+// there may be more than one record returned
+func findNeighbors(tx neo4j.Transaction, ids int64) (neo4j.Node, []neo4j.Node, []neo4j.Relationship, error) {
+	var source neo4j.Node
+	var targets []neo4j.Node
+	var edges []neo4j.Relationship
+	query := fmt.Sprintf("MATCH (n)-[e]->(m) where id(n) in [%d] return n,m,e", ids)
+	idrec, err := tx.Run(query, map[string]interface{}{})
+	if err != nil {
+		return source, targets, edges, err
+	}
+	for idrec.Next() {
+		record := idrec.Record()
+		source = record.Values[0].(neo4j.Node)
+		targets = append(targets, record.Values[1].(neo4j.Node))
+		edges = append(edges, record.Values[2].(neo4j.Relationship))
+	}
+	return source, targets, edges, nil
+}
+
+func loadEntityNodes(tx neo4j.Transaction, rootIds []int64, loadNeighbors func(tx neo4j.Transaction, id int64) (neo4j.Node, []neo4j.Node, []neo4j.Relationship, error)) (graph.Graph, error) {
+	grph := ls.NewDocumentGraph()
+	if len(rootIds) == 0 {
+		return grph, nil
+	}
+
+	// neo4j IDs
+	visited := make(map[int64]struct{})
+	queue := make([]int64, 0, len(rootIds))
+	for _, id := range rootIds {
+		queue = append(queue, id)
+	}
+	adjList := make(map[int64][]dbtype.Node)
+	// shortest path to all nodes within entity boundaries
+	for len(queue) > 0 {
+		rootId := queue[0]
+		queue = queue[1:]
+		if _, seen := visited[rootId]; !seen && rootId != 0 {
+			visited[rootId] = struct{}{}
+			srcNode, targetNodes, relationships, err := findNeighbors(tx, rootId)
+			if err != nil {
+				return grph, nil
+			}
+			for ix, targetNode := range append(adjList[srcNode.Id], targetNodes...) {
+				// if target node not entity node
+				if _, ok := targetNode.Props[ls.EntitySchemaTerm]; !ok {
+					src := grph.NewNode(srcNode.Labels, srcNode.Props)
+					target := grph.NewNode(targetNode.Labels, targetNode.Props)
+					// number of edges equal number of nodes, not inlcuding source node
+					grph.NewEdge(src, target, relationships[ix].Type, relationships[ix].Props)
+					if _, seen := visited[targetNode.Id]; !seen {
+						queue = append(queue, targetNode.Id)
+					}
+				}
+			}
+		}
+	}
+	return grph, nil
 }
 
 func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config) (bool, int64, error) {
