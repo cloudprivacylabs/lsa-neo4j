@@ -5,12 +5,16 @@ go 1.17
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220425020114-d80b527266f1
-	github.com/cloudprivacylabs/opencypher v0.0.0-20220425015321-8d5a8ad954eb
+	github.com/cloudprivacylabs/opencypher v1.0.0-beta-3
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/spf13/cobra v1.1.3
 )
 
-require gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+require (
+	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210803070921-b358b509191a // indirect
+	github.com/neo4j/neo4j-go-driver v1.8.3 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+)
 
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
