@@ -131,8 +131,8 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 	return nil
 }
 
-func (s *Session) LoadEntityNodes(tx neo4j.Transaction, rootIds []int64, config Config) (graph.Graph, error) {
-	return loadEntityNodes(tx, rootIds, config, findNeighbors)
+func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, config Config) (graph.Graph, error) {
+	return loadEntityNodes(tx, grph, rootIds, config, findNeighbors)
 }
 
 type neo4jNode struct {
@@ -190,10 +190,6 @@ func findNeighbors(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode,
 	return sources, targets, edges, nil
 }
 
-const (
-	shortEntitySchemaTerm = "ls:entitySchema"
-)
-
 func MakeProperties(input map[string]interface{}) map[string]*ls.PropertyValue {
 	ret := make(map[string]*ls.PropertyValue)
 	for k, v := range input {
@@ -201,14 +197,18 @@ func MakeProperties(input map[string]interface{}) map[string]*ls.PropertyValue {
 		case string:
 			ret[k] = ls.StringPropertyValue(v.(string))
 		case []interface{}:
-			ret[k] = ls.StringSlicePropertyValue(v.([]string))
+			isl := v.([]interface{})
+			sl := make([]string, 0, len(isl))
+			for _, val := range isl {
+				sl = append(sl, val.(string))
+			}
+			ret[k] = ls.StringSlicePropertyValue(sl)
 		}
 	}
 	return ret
 }
 
-func loadEntityNodes(tx neo4j.Transaction, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error)) (graph.Graph, error) {
-	grph := ls.NewDocumentGraph()
+func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error)) (graph.Graph, error) {
 	if len(rootIds) == 0 {
 		return grph, nil
 	}
@@ -220,31 +220,42 @@ func loadEntityNodes(tx neo4j.Transaction, rootIds []int64, config Config, loadN
 	}
 	for len(queue) > 0 {
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
-		if err != nil || len(srcNodes) == 0 {
-			return grph, nil
+		if err != nil {
+			return grph, err
 		}
+		// if len(srcNodes) == 0 {
+		// 	break
+		// }
 		for _, srcNode := range srcNodes {
 			if _, seen := visitedNode[srcNode.Id]; !seen {
-				props := make(map[string]interface{})
+				src := grph.NewNode(srcNode.Labels, srcNode.Props)
+				labels := make([]string, 0, len(srcNode.Labels))
+				for _, lbl := range srcNode.Labels {
+					labels = append(labels, config.Expand(lbl))
+				}
+				src.SetLabels(graph.NewStringSet(labels...))
 				tmp := MakeProperties(srcNode.Props)
 				for k, v := range tmp {
-					props[config.Expand(k)] = v
+					src.SetProperty(config.Expand(k), v)
 				}
-				src := grph.NewNode(srcNode.Labels, props)
 				visitedNode[srcNode.Id] = src
 			}
 		}
 		for _, node := range adjNodes {
 			if _, seen := visitedNode[node.Id]; !seen {
-				props := make(map[string]interface{})
+				nd := grph.NewNode(node.Labels, node.Props)
+				labels := make([]string, 0, len(node.Labels))
+				for _, lbl := range node.Labels {
+					labels = append(labels, config.Expand(lbl))
+				}
+				nd.SetLabels(graph.NewStringSet(labels...))
 				tmp := MakeProperties(node.Props)
 				for k, v := range tmp {
-					props[config.Expand(k)] = v
+					nd.SetProperty(config.Expand(k), v)
 				}
-				nd := grph.NewNode(node.Labels, props)
 				visitedNode[node.Id] = nd
 			}
-			if _, ok := node.Props[shortEntitySchemaTerm]; !ok {
+			if _, ok := node.Props[config.Map(ls.EntitySchemaTerm)]; !ok {
 				queue = append(queue, node.Id)
 			}
 		}

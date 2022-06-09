@@ -10,17 +10,16 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
-var seq int = -1
+type expectedStruct struct {
+	sources []neo4jNode
+	targets []neo4jNode
+	edges   []neo4jEdge
+}
 
-var expected = []struct {
-	sources       []neo4jNode
-	targets       []neo4jNode
-	edges         []neo4jEdge
-	expectedGraph graph.Graph
-}{
+var expected = []expectedStruct{
 	{
 		sources: []neo4jNode{
-			{Id: 60, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{shortEntitySchemaTerm: "Schema for a city"}},
+			{Id: 60, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"ls:entitySchema": "Schema for a city"}},
 		},
 		targets: []neo4jNode{
 			{Id: 61, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "San Francisco"}},
@@ -33,27 +32,16 @@ var expected = []struct {
 	},
 }
 
-func mockFindNeighbor(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
-	seq++
-	if seq < len(expected) {
+func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
+	seq := -1
+	return func(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
+		seq++
 		x := expected[seq]
 		return x.sources, x.targets, x.edges, nil
 	}
-	return nil, nil, nil, nil
 }
 
-const (
-	dsn      = "neo4j://34.213.163.7:7687"
-	user     = "neo4j"
-	password = "password"
-)
-
-type transaction struct {
-	run      error
-	commit   error
-	rollback error
-	close    error
-}
+type transaction struct{}
 
 func (transaction) Run(cypher string, params map[string]interface{}) (neo4j.Result, error) {
 	return nil, nil
@@ -73,7 +61,7 @@ func TestLoadEntityNodes(t *testing.T) {
 	for _, node := range expected[0].sources {
 		roots = append(roots, node.Id)
 	}
-	grph, _ := loadEntityNodes(tx, roots, cfg, mockFindNeighbor)
+	grph, _ := loadEntityNodes(tx, ls.NewDocumentGraph(), roots, cfg, getMockFindNeighbor(expected))
 	ectx := opencypher.NewEvalContext(grph)
 	v, err := opencypher.ParseAndEvaluate("MATCH (n)-[e]->(m) return n,m,e", ectx)
 	if err != nil {
@@ -95,8 +83,6 @@ func TestLoadEntityNodes(t *testing.T) {
 	n := expectedGraph.NewNode(y.GetLabels().Slice(), ls.CloneProperties(b))
 	expectedGraph.NewEdge(src, n, edge[0].GetLabel(), ls.CloneProperties(e[0]))
 
-	seq--
-
 	gotSources := make([]graph.Node, 0)
 	expectedSources := make([]graph.Node, 0)
 	for nodeItr := grph.GetNodes(); nodeItr.Next(); {
@@ -117,13 +103,6 @@ func TestLoadEntityNodes(t *testing.T) {
 					return false
 				}
 				if n2 == expectedSources[e] {
-					return false
-				}
-				t.Logf("Cmp: %+v %+v\n", n1, n2)
-				s1, _ := ls.GetRawNodeValue(n1)
-				s2, _ := ls.GetRawNodeValue(n2)
-				if s1 != s2 {
-					t.Logf("Wrong value: %s %s", s1, s2)
 					return false
 				}
 				// Expected properties must be a subset
