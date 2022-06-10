@@ -69,8 +69,11 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, con
 	for node := range allNodes {
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			// TODO: Load entity nodes here
-			if exists, nid, err := session.existsDB(tx, node, config); exists && err == nil {
-				nodeIds[node] = nid
+			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
+			if len(id) > 0 {
+				if exists, nid, err := session.existsDB(tx, node, config); exists && err == nil {
+					nodeIds[node] = nid
+				}
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"os"
 
@@ -22,7 +23,7 @@ var (
 
 			if cfgfile, _ := cmd.Flags().GetString("cfg"); len(cfgfile) == 0 {
 				err := cmdutil.ReadJSONOrYAML("lsaneo.config.yaml", &cfg)
-				if !errors.Is(err, os.ErrNotExist) {
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
 					return err
 				}
 			} else {
@@ -30,30 +31,38 @@ var (
 					return err
 				}
 			}
-			neo.InitNamespaceTrie(&cfg)
-			g, err := cmdutil.ReadGraph(args, nil, inputFormat)
+			gch, err := cmdutil.StreamGraph(context.Background(), args, nil, inputFormat)
 			if err != nil {
 				return err
 			}
-			nodeSl := make([]graph.Node, 0, g.NumNodes())
-			for nodes := g.GetNodes(); nodes.Next(); {
-				nodeSl = append(nodeSl, nodes.Node())
+			for gr := range gch {
+				if gr.Err != nil {
+					return err
+				}
+				g := gr.G
+
+				neo.InitNamespaceTrie(&cfg)
+				nodeSl := make([]graph.Node, 0, g.NumNodes())
+				for nodes := g.GetNodes(); nodes.Next(); {
+					nodeSl = append(nodeSl, nodes.Node())
+				}
+				if err != nil {
+					return err
+				}
+				session := drv.NewSession()
+				defer session.Close()
+				tx, err := session.BeginTransaction()
+				if err != nil {
+					return err
+				}
+				_, err = neo.CreateGraph(session, tx, nodeSl, cfg)
+				if err != nil {
+					tx.Rollback()
+					return err
+				}
+
+				tx.Commit()
 			}
-			if err != nil {
-				return err
-			}
-			session := drv.NewSession()
-			defer session.Close()
-			tx, err := session.BeginTransaction()
-			if err != nil {
-				return err
-			}
-			_, err = neo.CreateGraph(session, tx, nodeSl, cfg)
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-			tx.Commit()
 			return nil
 		},
 	}
