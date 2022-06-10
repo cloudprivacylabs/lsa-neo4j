@@ -19,15 +19,21 @@ type expectedStruct struct {
 var expected = []expectedStruct{
 	{
 		sources: []neo4jNode{
-			{Id: 60, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"ls:entitySchema": "Schema for a city"}},
+			{id: 60, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"ls:entitySchema": "Schema for a city"}},
 		},
 		targets: []neo4jNode{
-			{Id: 61, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "San Francisco"}},
-			{Id: 62, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "Denver"}},
+			{id: 61, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "San Francisco"}},
+			{id: 62, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "Denver"}},
 		},
 		edges: []neo4jEdge{
-			{Id: 28, Props: map[string]interface{}{"type": "city"}, StartId: 60, EndId: 61},
-			{Id: 29, Props: map[string]interface{}{"type": "city"}, StartId: 60, EndId: 62},
+			{id: 28, props: map[string]interface{}{"type": "city"}, startId: 60, endId: 61},
+			{id: 29, props: map[string]interface{}{"type": "city"}, startId: 60, endId: 62},
+		},
+	},
+	{
+		sources: []neo4jNode{
+			{id: 61, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "San Francisco"}},
+			{id: 62, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "Denver"}},
 		},
 	},
 }
@@ -39,6 +45,10 @@ func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, i
 		x := expected[seq]
 		return x.sources, x.targets, x.edges, nil
 	}
+}
+
+func selectEntity(node graph.Node) bool {
+	return true
 }
 
 type transaction struct{}
@@ -59,9 +69,10 @@ func TestLoadEntityNodes(t *testing.T) {
 	tx := transaction{}
 	roots := make([]int64, 0, len(expected[0].sources))
 	for _, node := range expected[0].sources {
-		roots = append(roots, node.Id)
+		roots = append(roots, node.id)
 	}
-	grph, _ := loadEntityNodes(tx, ls.NewDocumentGraph(), roots, cfg, getMockFindNeighbor(expected))
+	grph := ls.NewDocumentGraph()
+	err := loadEntityNodes(tx, grph, roots, cfg, getMockFindNeighbor(expected), selectEntity)
 	ectx := opencypher.NewEvalContext(grph)
 	v, err := opencypher.ParseAndEvaluate("MATCH (n)-[e]->(m) return n,m,e", ectx)
 	if err != nil {
