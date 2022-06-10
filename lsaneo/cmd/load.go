@@ -1,12 +1,9 @@
 package cmd
 
 import (
-	"errors"
-	"os"
 	"strconv"
 
-	neo "github.com/cloudprivacylabs/lsa-neo4j"
-	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
+	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/spf13/cobra"
 )
@@ -18,24 +15,6 @@ var (
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
-			inputFormat, _ := cmd.Flags().GetString("input")
-			var cfg neo.Config
-
-			if cfgfile, _ := cmd.Flags().GetString("cfg"); len(cfgfile) == 0 {
-				err := cmdutil.ReadJSONOrYAML("lsaneo.config.yaml", &cfg)
-				if !errors.Is(err, os.ErrNotExist) {
-					return err
-				}
-			} else {
-				if err := cmdutil.ReadJSONOrYAML(cfgfile, &cfg); err != nil {
-					return err
-				}
-			}
-			neo.InitNamespaceTrie(&cfg)
-			grph, err := cmdutil.ReadGraph(args, nil, inputFormat)
-			if err != nil {
-				return err
-			}
 			session := drv.NewSession()
 			defer session.Close()
 			tx, err := session.BeginTransaction()
@@ -50,15 +29,22 @@ var (
 				}
 				rootIds = append(rootIds, id)
 			}
-			if allNodes, _ := cmd.Flags().GetString("allNodes"); len(allNodes) > 0 {
+			cfg, err := loadConfig(cmd)
+			if err != nil {
+				return err
+			}
+			grph := ls.NewDocumentGraph()
+			if allNodes, _ := cmd.Flags().GetBool("allNodes"); allNodes {
 				err = session.LoadEntityNodes(tx, grph, rootIds, cfg, func(graph.Node) bool {
 					return true
 				})
 			} else {
-				if schema, _ := cmd.Flags().GetString("schema"); len(schema) > 0 {
+				if schema, _ := cmd.Flags().GetStringSlice("schema"); len(schema) > 0 {
 					err = session.LoadEntityNodes(tx, grph, rootIds, cfg, func(nd graph.Node) bool {
-						if _, ok := nd.GetProperty(schema); ok {
-							return true
+						for ix := range schema {
+							if ls.AsPropertyValue(nd.GetProperty(ls.EntitySchemaTerm)).AsString() == schema[ix] {
+								return true
+							}
 						}
 						return false
 					})
@@ -71,7 +57,6 @@ var (
 
 func init() {
 	rootCmd.AddCommand(loadEntityNodesCmd)
-	loadEntityNodesCmd.Flags().String("allNodes", "", "load all nodes from database")
-	loadEntityNodesCmd.Flags().String("schema", "", "load all nodes within schema from database")
-	loadEntityNodesCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
+	loadEntityNodesCmd.Flags().Bool("allNodes", false, "load all nodes from database")
+	loadEntityNodesCmd.Flags().StringSlice("schema", []string{}, "load all nodes within schema from database")
 }
