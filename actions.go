@@ -7,6 +7,22 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
+type neo4jAction interface {
+	action() error
+}
+
+var neo4jActions = map[string]neo4jAction{
+	"Address": update{},
+}
+
+type update struct{}
+
+func (update) action() error { return nil }
+
+type insert struct{}
+
+func (insert) action() error { return nil }
+
 type createEdgeToSourceAndTarget struct {
 	Config
 	edge graph.Edge

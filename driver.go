@@ -9,6 +9,7 @@ package neo4j
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/opencypher/graph"
@@ -58,47 +59,115 @@ func (s *Session) Logf(format string, a ...interface{}) {
 }
 
 // CreateGraph creates a graph and returns the neo4j ID of the root node
+// func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, config Config) (int64, error) {
+// 	nodeIds := make(map[graph.Node]int64)
+// 	allNodes := make(map[graph.Node]struct{})
+// 	//entityNodes := make(map[graph.Node]struct{})
+// 	// Find triples:
+// 	for _, node := range nodes {
+// 		allNodes[node] = struct{}{}
+// 	}
+// 	start := time.Now()
+// 	for node := range allNodes {
+
+// 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
+// 			// TODO: Load entity nodes here
+// 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
+// 			if len(id) > 0 {
+// 				if exists, nid, err := session.existsDB(tx, node, config); exists && err == nil {
+// 					nodeIds[node] = nid
+// 				}
+// 			}
+// 		}
+
+// 	}
+// 	duration := time.Since(start)
+// 	fmt.Println(fmt.Sprintf("time elapsed for existsDB: %v", duration))
+
+// 	start = time.Now()
+// 	for node := range allNodes {
+// 		hasEdges := false
+// 		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
+// 			edge := edges.Edge()
+// 			if _, exists := allNodes[edge.GetTo()]; exists {
+// 				// Triple: edge.GetFrom(), edge, edge.GetTo()
+// 				if err := session.processTriple(tx, edge, nodeIds, config); err != nil {
+// 					return 0, err
+// 				}
+// 				hasEdges = true
+// 			}
+// 		}
+// 		if !hasEdges {
+// 			if _, exists := nodeIds[node]; !exists {
+// 				c := createNode{Config: config, node: node}
+// 				if err := c.Run(tx, nodeIds); err != nil {
+// 					return 0, err
+// 				}
+// 			}
+// 		}
+
+// 	}
+// 	duration = time.Since(start)
+// 	fmt.Println(fmt.Sprintf("time elapsed for processTriple: %v", duration))
+// 	return 0, nil
+// }
+
+// CreateGraph creates a graph and returns the neo4j ID of the root node
 func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, config Config) (int64, error) {
-	nodeIds := make(map[graph.Node]int64)
+	mappedEntities := make(map[graph.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
 	allNodes := make(map[graph.Node]struct{})
-	//entityNodes := make(map[graph.Node]struct{})
-	// Find triples:
+	nonemptyEntityNodeIds := make([]string, 0, len(nodes))
 	for _, node := range nodes {
 		allNodes[node] = struct{}{}
 	}
+	start := time.Now()
 	for node := range allNodes {
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-			// TODO: Load entity nodes here
 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
 			if len(id) > 0 {
-				if exists, nid, err := session.existsDB(tx, node, config); exists && err == nil {
-					nodeIds[node] = nid
-				}
+				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, id)
 			}
 		}
 	}
-
+	entityDBIds, entityIds, err := session.entityDBIds(tx, nonemptyEntityNodeIds, config)
+	if err != nil {
+		return 0, err
+	}
+	// map DB ids
 	for node := range allNodes {
-		hasEdges := false
-		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
-			edge := edges.Edge()
-			if _, exists := allNodes[edge.GetTo()]; exists {
-				// Triple: edge.GetFrom(), edge, edge.GetTo()
-				if err := session.processTriple(tx, edge, nodeIds, config); err != nil {
-					return 0, err
-				}
-				hasEdges = true
-			}
-		}
-		if !hasEdges {
-			if _, exists := nodeIds[node]; !exists {
-				c := createNode{Config: config, node: node}
-				if err := c.Run(tx, nodeIds); err != nil {
-					return 0, err
+		for ix := 0; ix < len(entityDBIds); ix++ {
+			if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
+				id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
+				if len(id) > 0 {
+					if entityIds[ix] == id {
+						mappedEntities[node] = entityDBIds[ix]
+					}
 				}
 			}
 		}
 	}
+	// grph := nodes[0].GetGraph()
+	// err = session.LoadEntityNodes(tx, grph, entityDBIds, config, nil)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	for entity, dbId := range mappedEntities {
+		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
+		op := neo4jActions[id]
+		if op == nil {
+			return 0, nil
+		}
+		var a neo4jAction
+		switch op.(type) {
+		case recreate:
+			a = recreate{Config: config}
+		case insert:
+			a = insert{Config: config}
+		}
+		a.action(tx, mappedEntities)
+	}
+	duration := time.Since(start)
+	fmt.Println(fmt.Sprintf("time elapsed for graph creation: %v", duration))
 	return 0, nil
 }
 
@@ -291,6 +360,31 @@ func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config)
 	}
 	nd := rec.Values[0].(neo4j.Node)
 	return true, nd.Id, nil
+}
+
+func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config) ([]int64, []string, error) {
+	var entityDBIds []int64 = make([]int64, 0, len(ids))
+	var entityIds []string = make([]string, 0, len(ids))
+	if len(ids) == 0 {
+		return entityDBIds, entityIds, nil
+	}
+	idrec, err := tx.Run("MATCH (n) WHERE  n.`ls:entityId` OR n.`https://lschema.org/entityId` IN $id return ID(n), n.`https://lschema.org/entityId`, n.`ls:entityId`",
+		map[string]interface{}{"id": ids})
+	if err != nil {
+		return entityDBIds, entityIds, err
+	}
+	for idrec.Next() {
+		record := idrec.Record()
+		val, ok := record.Values[1].(string)
+		if ok {
+			entityIds = append(entityIds, val)
+		} else {
+			entityIds = append(entityIds, record.Values[2].(string))
+		}
+		entityDBIds = append(entityDBIds, record.Values[0].(neo4j.Node).Id)
+
+	}
+	return entityDBIds, entityIds, nil
 }
 
 func contains(node graph.Node, hm map[graph.Node]int64) bool {
