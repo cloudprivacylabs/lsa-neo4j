@@ -55,7 +55,7 @@ var (
 				if err != nil {
 					return err
 				}
-				_, err = neo.CreateGraph(session, tx, nodeSl, cfg)
+				_, err = neo.SaveGraph(session, tx, nodeSl, cfg)
 				if err != nil {
 					tx.Rollback()
 					return err
