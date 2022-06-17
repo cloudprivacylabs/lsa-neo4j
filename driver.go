@@ -113,28 +113,27 @@ func (s *Session) Logf(format string, a ...interface{}) {
 // }
 
 // CreateGraph creates a graph and returns the neo4j ID of the root node
-func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, config Config) (int64, error) {
+func SaveGraph(session *Session, tx neo4j.Transaction, rootNodes []graph.Node, config Config) (int64, error) {
 	mappedEntities := make(map[graph.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
-	allNodes := make(map[graph.Node]struct{})
-	nonemptyEntityNodeIds := make([]string, 0, len(nodes))
-	for _, node := range nodes {
-		allNodes[node] = struct{}{}
-	}
+	nonemptyEntityNodeIds := make(map[graph.Node]string)
+
 	start := time.Now()
-	for node := range allNodes {
+	grph := rootNodes[0].GetGraph()
+
+	for nodeItr := grph.GetNodesWithProperty(ls.EntityIDTerm); nodeItr.Next(); {
+		node := nodeItr.Node()
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
-			if len(id) > 0 {
-				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, id)
-			}
+			nonemptyEntityNodeIds[node] = id
 		}
 	}
+
 	entityDBIds, entityIds, err := session.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
 		return 0, err
 	}
 	// map DB ids
-	for node := range allNodes {
+	for _, node := range rootNodes {
 		for ix := 0; ix < len(entityDBIds); ix++ {
 			if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 				id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
@@ -146,12 +145,7 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, con
 			}
 		}
 	}
-	// grph := nodes[0].GetGraph()
-	// err = session.LoadEntityNodes(tx, grph, entityDBIds, config, nil)
-	// if err != nil {
-	// 	return 0, err
-	// }
-	for entity, dbId := range mappedEntities {
+	for entity, entityId := range mappedEntities {
 		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
 		op := neo4jActions[id]
 		if op == nil {
@@ -160,11 +154,11 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, con
 		var a neo4jAction
 		switch op.(type) {
 		case recreate:
-			a = recreate{Config: config}
+			a = recreate{Config: config, Graph: grph, Node: entity, entityId: entityId}
 		case insert:
-			a = insert{Config: config}
+			a = insert{Config: config, Node: entity, entityId: entityId}
 		}
-		a.action(tx, mappedEntities)
+		a.Run(tx, mappedEntities)
 	}
 	duration := time.Since(start)
 	fmt.Println(fmt.Sprintf("time elapsed for graph creation: %v", duration))
@@ -362,14 +356,14 @@ func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config)
 	return true, nd.Id, nil
 }
 
-func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config) ([]int64, []string, error) {
+func (s *Session) entityDBIds(tx neo4j.Transaction, ids map[graph.Node]string, config Config) ([]int64, []string, error) {
 	var entityDBIds []int64 = make([]int64, 0, len(ids))
 	var entityIds []string = make([]string, 0, len(ids))
 	if len(ids) == 0 {
 		return entityDBIds, entityIds, nil
 	}
-	idrec, err := tx.Run("MATCH (n) WHERE  n.`ls:entityId` OR n.`https://lschema.org/entityId` IN $id return ID(n), n.`https://lschema.org/entityId`, n.`ls:entityId`",
-		map[string]interface{}{"id": ids})
+	idrec, err := tx.Run("MATCH (n) WHERE  n.$propName IN $id return ID(n), n.$propName",
+		map[string]interface{}{"id": ids, "propName": config.Map(ls.EntityIDTerm)})
 	if err != nil {
 		return entityDBIds, entityIds, err
 	}

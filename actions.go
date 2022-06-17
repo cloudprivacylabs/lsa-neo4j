@@ -3,25 +3,122 @@ package neo4j
 import (
 	"fmt"
 
+	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
 type neo4jAction interface {
-	action() error
+	Run(neo4j.Transaction, map[graph.Node]int64) error
 }
 
 var neo4jActions = map[string]neo4jAction{
-	"Address": update{},
+	"Address":     recreate{},
+	"Observation": insert{},
 }
 
-type update struct{}
+type recreate struct {
+	Config
+	graph.Graph
+	graph.Node
+	entityId int64
+}
 
-func (update) action() error { return nil }
+func (r recreate) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
+	err := loadEntityNodes(tx, r.Graph, []int64{r.entityId}, r.Config, findNeighbors, nil)
+	if err != nil {
+		return err
+	}
+	// delete entity and all nodes reachable from this entity,
+	_, err = tx.Run("MATCH (m)-[*]->(n) WHERE ID(m)=$id DETACH DELETE m,n", map[string]interface{}{"id": r.entityId})
+	if err != nil {
+		return err
+	}
+	// TODO: recreate, find all reachable nodes from this node
+	// create entity
+	vars := make(map[string]interface{})
+	query := fmt.Sprintf("CREATE (m %s %s), return m",
+		r.MakeLabels(r.Node.GetLabels().Slice()),
+		r.MakeProperties(r.Node, vars))
+	idrec, err := tx.Run(query, vars)
+	if err != nil {
+		return err
+	}
+	rec, err := idrec.Single()
+	if err != nil {
+		return err
+	}
+	eid := rec.Values[0].(neo4j.Node).Id
 
-type insert struct{}
+	boundNodes := make(map[graph.Node][]map[string]interface{})
+	batch := make(map[string]graph.Node)
+	queue := make([]graph.Node, 1)
+	queue[0] = r.Node
+	visited := make(map[graph.Node]struct{})
+	for len(queue) > 0 {
+		curr := queue[0]
+		curr.ForEachProperty(func(s string, in interface{}) bool {
+			if _, ok := boundNodes[curr]; ok {
+				boundNodes[curr] = append(boundNodes[curr], map[string]interface{}{r.Config.Map(s): in})
+			} else {
+				boundNodes[curr] = make([]map[string]interface{}, 0)
+			}
+			return true
+		})
+		queue = queue[1:]
+		if _, seen := visited[curr]; !seen {
+			visited[curr] = struct{}{}
+			for edgeItr := curr.GetEdges(graph.OutgoingEdge); edgeItr.Next(); {
+				edge := edgeItr.Edge()
+				if _, seen := visited[edge.GetTo()]; !seen {
+					if _, exists := edge.GetTo().GetProperty(ls.EntitySchemaTerm); !exists {
+						queue = append(queue, edge.GetTo())
+					}
+				}
+			}
+		}
+	}
 
-func (insert) action() error { return nil }
+	query = fmt.Sprintf(`
+		UNWIND $batch as item MATCH (m) where ID(m)=$eid MATCH (n) WHERE 
+		n.$propName IN item CREATE (m)-[%s *]->(n) SET n += item`,
+		r.GetNodes().Node().GetEdges(graph.EdgeDir(graph.OutgoingEdge)).Edge())
+	_, err = tx.Run(query, map[string]interface{}{"batch": batch, "eid": eid, "propName": boundNodes})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type insert struct {
+	Config
+	graph.Node
+	entityId   int64
+	addedNodes []neo4jNode
+}
+
+// insert entity nodes in the db
+// Insert should keep the nodes/edges to be inserted in a list
+func (i insert) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
+	vars := make(map[string]interface{})
+	edge := i.GetGraph().GetNodes().Node().GetEdges(graph.EdgeDir(graph.OutgoingEdge)).Edge()
+	query := fmt.Sprintf("MATCH (n) WHERE ID(n) = %d CREATE (n)-[%s %s]->(to %s %s) RETURN to",
+		i.entityId,
+		i.MakeLabels([]string{edge.GetLabel()}),
+		i.MakeProperties(edge, vars),
+		i.MakeLabels(edge.GetTo().GetLabels().Slice()),
+		i.MakeProperties(edge.GetTo(), vars))
+	idrec, err := tx.Run(query, vars)
+	if err != nil {
+		return err
+	}
+	rec, err := idrec.Single()
+	if err != nil {
+		return err
+	}
+	i.addedNodes = append(i.addedNodes, newNode(rec.Values[0].(neo4j.Node)))
+	return nil
+}
 
 type createEdgeToSourceAndTarget struct {
 	Config
