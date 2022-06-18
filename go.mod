@@ -22,6 +22,7 @@ require (
 	github.com/bserdar/jsonom v0.0.0-20211005020717-9af6d87a0e9f // indirect
 	github.com/bserdar/jsonstream v0.0.0-20190428032403-9f1769267072 // indirect
 	github.com/emirpasic/gods v1.18.0 // indirect
+	github.com/fatih/structs v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect

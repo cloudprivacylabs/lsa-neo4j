@@ -7,7 +7,6 @@ import (
 
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
-	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/spf13/cobra"
 )
 
@@ -42,10 +41,7 @@ var (
 				g := gr.G
 
 				neo.InitNamespaceTrie(&cfg)
-				nodeSl := make([]graph.Node, 0, g.NumNodes())
-				for nodes := g.GetNodes(); nodes.Next(); {
-					nodeSl = append(nodeSl, nodes.Node())
-				}
+
 				if err != nil {
 					return err
 				}
@@ -55,7 +51,7 @@ var (
 				if err != nil {
 					return err
 				}
-				_, err = neo.SaveGraph(session, tx, nodeSl, cfg)
+				_, err = neo.SaveGraph(session, tx, g, cfg)
 				if err != nil {
 					tx.Rollback()
 					return err

@@ -113,18 +113,19 @@ func (s *Session) Logf(format string, a ...interface{}) {
 // }
 
 // CreateGraph creates a graph and returns the neo4j ID of the root node
-func SaveGraph(session *Session, tx neo4j.Transaction, rootNodes []graph.Node, config Config) (int64, error) {
+func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config) (int64, error) {
 	mappedEntities := make(map[graph.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make(map[graph.Node]string)
 
 	start := time.Now()
-	grph := rootNodes[0].GetGraph()
 
 	for nodeItr := grph.GetNodesWithProperty(ls.EntityIDTerm); nodeItr.Next(); {
 		node := nodeItr.Node()
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
-			nonemptyEntityNodeIds[node] = id
+			if id != "" {
+				nonemptyEntityNodeIds[node] = id
+			}
 		}
 	}
 
@@ -132,8 +133,10 @@ func SaveGraph(session *Session, tx neo4j.Transaction, rootNodes []graph.Node, c
 	if err != nil {
 		return 0, err
 	}
+
 	// map DB ids
-	for _, node := range rootNodes {
+	for nodeItr := grph.GetNodes(); nodeItr.Next(); {
+		node := nodeItr.Node()
 		for ix := 0; ix < len(entityDBIds); ix++ {
 			if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 				id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
@@ -153,12 +156,15 @@ func SaveGraph(session *Session, tx neo4j.Transaction, rootNodes []graph.Node, c
 		}
 		var a neo4jAction
 		switch op.(type) {
-		case recreate:
-			a = recreate{Config: config, Graph: grph, Node: entity, entityId: entityId}
+		case recreateEntity:
+			a = recreateEntity{
+				de: deleteEntity{Config: config, Graph: grph, entityId: entityId},
+				ce: createEntity{Config: config, Graph: grph, Node: entity},
+			}
 		case insert:
 			a = insert{Config: config, Node: entity, entityId: entityId}
 		}
-		a.Run(tx, mappedEntities)
+		a.Run(tx)
 	}
 	duration := time.Since(start)
 	fmt.Println(fmt.Sprintf("time elapsed for graph creation: %v", duration))

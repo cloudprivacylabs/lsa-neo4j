@@ -5,41 +5,77 @@ import (
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/opencypher/graph"
+	"github.com/fatih/structs"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
 type neo4jAction interface {
-	Run(neo4j.Transaction, map[graph.Node]int64) error
+	Run(neo4j.Transaction) error
 }
 
 var neo4jActions = map[string]neo4jAction{
-	"Address":     recreate{},
+	"Address":     recreateEntity{},
 	"Observation": insert{},
 }
 
-type recreate struct {
+type deleteEntity struct {
 	Config
 	graph.Graph
-	graph.Node
 	entityId int64
 }
 
-func (r recreate) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	err := loadEntityNodes(tx, r.Graph, []int64{r.entityId}, r.Config, findNeighbors, nil)
+type createEntity struct {
+	Config
+	graph.Graph
+	graph.Node
+}
+
+type recreateEntity struct {
+	ce createEntity
+	de deleteEntity
+}
+
+func (r recreateEntity) Run(tx neo4j.Transaction) error {
+	err := r.de.delete(tx)
+	if err != nil {
+		return err
+	}
+	err = r.ce.create(tx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d deleteEntity) delete(tx neo4j.Transaction) error {
+	err := loadEntityNodes(tx, d.Graph, []int64{d.entityId}, d.Config, findNeighbors, nil)
 	if err != nil {
 		return err
 	}
 	// delete entity and all nodes reachable from this entity,
-	_, err = tx.Run("MATCH (m)-[*]->(n) WHERE ID(m)=$id DETACH DELETE m,n", map[string]interface{}{"id": r.entityId})
+	_, err = tx.Run("MATCH (m)-[*]->(n) WHERE ID(m)=$id DETACH DELETE m,n", map[string]interface{}{"id": d.entityId})
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// used for query
+func mapNodes(nodes []neo4jNode) []map[string]interface{} {
+	var result = make([]map[string]interface{}, len(nodes))
+	for index, item := range nodes {
+		result[index] = structs.Map(item)
+	}
+	return result
+}
+
+func (c createEntity) create(tx neo4j.Transaction) error {
 	// TODO: recreate, find all reachable nodes from this node
 	// create entity
 	vars := make(map[string]interface{})
 	query := fmt.Sprintf("CREATE (m %s %s), return m",
-		r.MakeLabels(r.Node.GetLabels().Slice()),
-		r.MakeProperties(r.Node, vars))
+		c.MakeLabels(c.Node.GetLabels().Slice()),
+		c.MakeProperties(c.Node, vars))
 	idrec, err := tx.Run(query, vars)
 	if err != nil {
 		return err
@@ -50,21 +86,58 @@ func (r recreate) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error 
 	}
 	eid := rec.Values[0].(neo4j.Node).Id
 
-	boundNodes := make(map[graph.Node][]map[string]interface{})
-	batch := make(map[string]graph.Node)
+	connectedComponents := findConnectedComponents(c.Graph, c.Node, c.Config)
+	query = fmt.Sprintf(`
+		UNWIND $batch as item MATCH (m) where ID(m)=$eid CREATE (m)-[%s *]->(n) SET n = item`,
+		c.GetNodes().Node().GetEdges(graph.EdgeDir(graph.OutgoingEdge)).Edge())
+	_, err = tx.Run(query, map[string]interface{}{"batch": mapNodes(connectedComponents), "eid": eid})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type insert struct {
+	Config
+	graph.Graph
+	graph.Node
+	entityId   int64
+	addedNodes []neo4jNode
+}
+
+// insert entity nodes in the db
+// Insert should keep the nodes/edges to be inserted in a list
+func (i insert) Run(tx neo4j.Transaction) error {
+	connectedComponents := findConnectedComponents(i.Graph, i.Node, i.Config)
+	query := fmt.Sprintf(`
+		UNWIND $batch as item MATCH (m) where ID(m)=$eid CREATE (m)-[%s *]->(n) SET n = item`,
+		i.GetNodes().Node().GetEdges(graph.EdgeDir(graph.OutgoingEdge)).Edge())
+	_, err := tx.Run(query, map[string]interface{}{"batch": mapNodes(connectedComponents), "eid": i.entityId})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func findConnectedComponents(grph graph.Graph, node graph.Node, cfg Config) []neo4jNode {
 	queue := make([]graph.Node, 1)
-	queue[0] = r.Node
+	allConnectedNodes := make([]neo4jNode, 0, grph.NumNodes())
+	queue[0] = node
 	visited := make(map[graph.Node]struct{})
 	for len(queue) > 0 {
 		curr := queue[0]
+		props := make(map[string]interface{})
+		vars := make(map[string]interface{})
 		curr.ForEachProperty(func(s string, in interface{}) bool {
-			if _, ok := boundNodes[curr]; ok {
-				boundNodes[curr] = append(boundNodes[curr], map[string]interface{}{r.Config.Map(s): in})
-			} else {
-				boundNodes[curr] = make([]map[string]interface{}, 0)
-			}
+			prop := cfg.MakeProperties(curr, vars)
+			props[s] = prop
 			return true
 		})
+		node := neo4jNode{
+			labels: []string{cfg.MakeLabels(curr.GetLabels().Slice())},
+			props:  props,
+		}
+		allConnectedNodes = append(allConnectedNodes, node)
 		queue = queue[1:]
 		if _, seen := visited[curr]; !seen {
 			visited[curr] = struct{}{}
@@ -78,46 +151,7 @@ func (r recreate) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error 
 			}
 		}
 	}
-
-	query = fmt.Sprintf(`
-		UNWIND $batch as item MATCH (m) where ID(m)=$eid MATCH (n) WHERE 
-		n.$propName IN item CREATE (m)-[%s *]->(n) SET n += item`,
-		r.GetNodes().Node().GetEdges(graph.EdgeDir(graph.OutgoingEdge)).Edge())
-	_, err = tx.Run(query, map[string]interface{}{"batch": batch, "eid": eid, "propName": boundNodes})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type insert struct {
-	Config
-	graph.Node
-	entityId   int64
-	addedNodes []neo4jNode
-}
-
-// insert entity nodes in the db
-// Insert should keep the nodes/edges to be inserted in a list
-func (i insert) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	vars := make(map[string]interface{})
-	edge := i.GetGraph().GetNodes().Node().GetEdges(graph.EdgeDir(graph.OutgoingEdge)).Edge()
-	query := fmt.Sprintf("MATCH (n) WHERE ID(n) = %d CREATE (n)-[%s %s]->(to %s %s) RETURN to",
-		i.entityId,
-		i.MakeLabels([]string{edge.GetLabel()}),
-		i.MakeProperties(edge, vars),
-		i.MakeLabels(edge.GetTo().GetLabels().Slice()),
-		i.MakeProperties(edge.GetTo(), vars))
-	idrec, err := tx.Run(query, vars)
-	if err != nil {
-		return err
-	}
-	rec, err := idrec.Single()
-	if err != nil {
-		return err
-	}
-	i.addedNodes = append(i.addedNodes, newNode(rec.Values[0].(neo4j.Node)))
-	return nil
+	return allConnectedNodes
 }
 
 type createEdgeToSourceAndTarget struct {
