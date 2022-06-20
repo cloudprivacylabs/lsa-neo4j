@@ -72,7 +72,7 @@ func TestLoadEntityNodes(t *testing.T) {
 		roots = append(roots, node.id)
 	}
 	grph := ls.NewDocumentGraph()
-	err := loadEntityNodes(tx, grph, roots, cfg, getMockFindNeighbor(expected), selectEntity)
+	err, _ := loadEntityNodes(tx, grph, roots, cfg, getMockFindNeighbor(expected), selectEntity)
 	ectx := opencypher.NewEvalContext(grph)
 	v, err := opencypher.ParseAndEvaluate("MATCH (n)-[e]->(m) return n,m,e", ectx)
 	if err != nil {

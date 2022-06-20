@@ -204,7 +204,8 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 }
 
 func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, config Config, selectEntity func(graph.Node) bool) error {
-	return loadEntityNodes(tx, grph, rootIds, config, findNeighbors, selectEntity)
+	err, _ := loadEntityNodes(tx, grph, rootIds, config, findNeighbors, selectEntity)
+	return err
 }
 
 type neo4jNode struct {
@@ -278,9 +279,9 @@ func MakeProperties(input map[string]interface{}) map[string]*ls.PropertyValue {
 	return ret
 }
 
-func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(graph.Node) bool) error {
+func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(graph.Node) bool) (error, []int64) {
 	if len(rootIds) == 0 {
-		return fmt.Errorf("Empty entity schema nodes")
+		return fmt.Errorf("Empty entity schema nodes"), nil
 	}
 	// neo4j IDs
 	visitedNode := make(map[int64]graph.Node)
@@ -291,7 +292,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 	for len(queue) > 0 {
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
 		if err != nil {
-			return err
+			return err, nil
 		}
 		if len(srcNodes) == 0 || (len(adjNodes) == 0 && len(adjRelationships) == 0) {
 			break
@@ -339,7 +340,11 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 		}
 		queue = queue[len(srcNodes):]
 	}
-	return nil
+	dbIds := make([]int64, len(visitedNode))
+	for id := range visitedNode {
+		dbIds = append(dbIds, id)
+	}
+	return nil, dbIds
 }
 
 func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config) (bool, int64, error) {
