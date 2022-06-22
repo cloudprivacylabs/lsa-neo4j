@@ -168,22 +168,18 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 			if err := d.Queue(tx, jobs); err != nil {
 				return 0, err
 			}
-			if err := d.Run(tx); err != nil {
-				return 0, err
-			}
 			c := &CreateEntity{}
 			if err := c.Queue(tx, jobs); err != nil {
-				return 0, err
-			}
-			if err := c.Run(tx); err != nil {
 				return 0, err
 			}
 		} else if _, exists = creates[id]; exists {
 			c := &CreateEntity{}
 			c.Queue(tx, jobs)
-			if err := c.Run(tx); err != nil {
-				return 0, err
-			}
+		}
+	}
+	for _, job := range jobs.actions {
+		if err := job.Run(tx); err != nil {
+			return 0, err
 		}
 	}
 	duration := time.Since(start)
