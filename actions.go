@@ -10,8 +10,11 @@ import (
 )
 
 type neo4jAction interface {
-	Queue(neo4j.Transaction) error
 	Run(neo4j.Transaction) error
+}
+
+type neo4jQueue interface {
+	Queue(neo4j.Transaction, *JobQueue) error
 }
 
 type JobQueue struct {
@@ -23,8 +26,17 @@ type JobQueue struct {
 // 	return nil
 // }
 
-// func (JobQueue) Run(tx neo4j.Transaction) error {
-// 	return nil
+// // func (q *JobQueue) Run(tx neo4j.Transaction) error {
+// // 	// for _, act := range q.actions {
+// // 	//     if err := act.Run(tx); err != nil {
+// // 	//         return err
+// // 	//     }
+// // 	// }
+// // 	if err := q.actions[q.ix].Run(tx); err != nil {
+// // 		return err
+// // 	}
+// // 	q.ix++
+// // 	return nil
 // }
 
 // var neo4jActions = map[string]neo4jAction{
@@ -64,12 +76,13 @@ type CreateEntity struct {
 // 	return nil
 // }
 
-func (d *DeleteEntity) Queue(tx neo4j.Transaction) error {
+func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	err, ids := loadEntityNodes(tx, d.Graph, []int64{d.entityId}, d.Config, findNeighbors, nil)
 	if err != nil {
 		return err
 	}
 	d.dbIds = ids
+	q.actions = append(q.actions, d)
 	return nil
 	// // delete entity and all nodes reachable from this entity,
 	// _, err = tx.Run("MATCH (m) where WHERE ID(m) in $ids DETACH DELETE m,n", map[string]interface{}{"ids": ids})
@@ -81,11 +94,11 @@ func (d *DeleteEntity) Queue(tx neo4j.Transaction) error {
 
 func (d *DeleteEntity) Run(tx neo4j.Transaction) error {
 	// delete entity and all nodes reachable from this entity,
-	err := d.Queue(tx)
+	err := d.Queue(tx, nil)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Run("MATCH (m) where WHERE ID(m) in $ids DETACH DELETE m,n", map[string]interface{}{"ids": d.dbIds})
+	_, err = tx.Run("MATCH (m) where WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": d.dbIds})
 	if err != nil {
 		return err
 	}
@@ -109,7 +122,7 @@ func mapNeo4jEdges(edges []neo4jEdge) []map[string]interface{} {
 	return result
 }
 
-func (c *CreateEntity) Queue(tx neo4j.Transaction) error {
+func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	n4jNodes := make([]neo4jNode, 0, c.NumNodes())
 	n4jEdges := make([]neo4jEdge, 0, c.NumEdges())
 	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
@@ -143,11 +156,12 @@ func (c *CreateEntity) Queue(tx neo4j.Transaction) error {
 	}, false)
 	c.n4jNodes = n4jNodes
 	c.n4jEdges = n4jEdges
+	q.actions = append(q.actions, c)
 	return nil
 }
 
 func (c *CreateEntity) Run(tx neo4j.Transaction) error {
-	if err := c.Queue(tx); err != nil {
+	if err := c.Queue(tx, nil); err != nil {
 		return err
 	}
 	vars := make(map[string]interface{})

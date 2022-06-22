@@ -115,7 +115,7 @@ func (s *Session) Logf(format string, a ...interface{}) {
 // CreateGraph creates a graph and returns the neo4j ID of the root node
 func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config) (int64, error) {
 	mappedEntities := make(map[graph.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
-	nonemptyEntityNodeIds := make(map[graph.Node]string)
+	nonemptyEntityNodeIds := make([]string, 0)
 
 	start := time.Now()
 
@@ -124,7 +124,7 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
 			if id != "" {
-				nonemptyEntityNodeIds[node] = id
+				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, id)
 			}
 		}
 	}
@@ -148,23 +148,43 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 			}
 		}
 	}
-	for entity, entityId := range mappedEntities {
+
+	updates := make(map[string]struct{})
+	creates := make(map[string]struct{})
+	for _, id := range entityIds {
+		updates[id] = struct{}{}
+	}
+	for _, id := range nonemptyEntityNodeIds {
+		if _, exists := updates[id]; !exists {
+			creates[id] = struct{}{}
+		}
+	}
+
+	jobs := &JobQueue{actions: make([]neo4jAction, 0)}
+	for entity := range mappedEntities {
 		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
-		op := neo4jActions[id]
-		if op == nil {
-			return 0, nil
-		}
-		var a neo4jAction
-		switch op.(type) {
-		case recreateEntity:
-			a = recreateEntity{
-				de: deleteEntity{Config: config, Graph: grph, entityId: entityId},
-				ce: createEntity{Config: config, Graph: grph, Node: entity},
+		if _, exists := updates[id]; exists {
+			d := &DeleteEntity{}
+			if err := d.Queue(tx, jobs); err != nil {
+				return 0, err
 			}
-		case insert:
-			a = insert{Config: config, Node: entity, entityId: entityId}
+			if err := d.Run(tx); err != nil {
+				return 0, err
+			}
+			c := &CreateEntity{}
+			if err := c.Queue(tx, jobs); err != nil {
+				return 0, err
+			}
+			if err := c.Run(tx); err != nil {
+				return 0, err
+			}
+		} else if _, exists = creates[id]; exists {
+			c := &CreateEntity{}
+			c.Queue(tx, jobs)
+			if err := c.Run(tx); err != nil {
+				return 0, err
+			}
 		}
-		a.Run(tx)
 	}
 	duration := time.Since(start)
 	fmt.Println(fmt.Sprintf("time elapsed for graph creation: %v", duration))
@@ -367,7 +387,7 @@ func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config)
 	return true, nd.Id, nil
 }
 
-func (s *Session) entityDBIds(tx neo4j.Transaction, ids map[graph.Node]string, config Config) ([]int64, []string, error) {
+func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config) ([]int64, []string, error) {
 	var entityDBIds []int64 = make([]int64, 0, len(ids))
 	var entityIds []string = make([]string, 0, len(ids))
 	if len(ids) == 0 {
