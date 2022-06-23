@@ -11,36 +11,36 @@ import (
 )
 
 type expectedStruct struct {
-	sources []neo4jNode
-	targets []neo4jNode
-	edges   []neo4jEdge
+	sources []Neo4jNode
+	targets []Neo4jNode
+	edges   []Neo4jEdge
 }
 
 var expected = []expectedStruct{
 	{
-		sources: []neo4jNode{
-			{id: 60, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"ls:entitySchema": "Schema for a city"}},
+		sources: []Neo4jNode{
+			{Id: 60, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"ls:entitySchema": "Schema for a city"}},
 		},
-		targets: []neo4jNode{
-			{id: 61, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "San Francisco"}},
-			{id: 62, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "Denver"}},
+		targets: []Neo4jNode{
+			{Id: 61, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "San Francisco"}},
+			{Id: 62, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "Denver"}},
 		},
-		edges: []neo4jEdge{
-			{id: 28, props: map[string]interface{}{"type": "city"}, startId: 60, endId: 61},
-			{id: 29, props: map[string]interface{}{"type": "city"}, startId: 60, endId: 62},
+		edges: []Neo4jEdge{
+			{Id: 28, Props: map[string]interface{}{"type": "city"}, StartId: 60, EndId: 61},
+			{Id: 29, Props: map[string]interface{}{"type": "city"}, StartId: 60, EndId: 62},
 		},
 	},
 	{
-		sources: []neo4jNode{
-			{id: 61, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "San Francisco"}},
-			{id: 62, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "Denver"}},
+		sources: []Neo4jNode{
+			{Id: 61, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "San Francisco"}},
+			{Id: 62, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "Denver"}},
 		},
 	},
 }
 
-func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
+func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, ids []int64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
 	seq := -1
-	return func(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
+	return func(tx neo4j.Transaction, ids []int64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
 		seq++
 		x := expected[seq]
 		return x.sources, x.targets, x.edges, nil
@@ -69,7 +69,7 @@ func TestLoadEntityNodes(t *testing.T) {
 	tx := transaction{}
 	roots := make([]int64, 0, len(expected[0].sources))
 	for _, node := range expected[0].sources {
-		roots = append(roots, node.id)
+		roots = append(roots, node.Id)
 	}
 	grph := ls.NewDocumentGraph()
 	err, _ := loadEntityNodes(tx, grph, roots, cfg, getMockFindNeighbor(expected), selectEntity)

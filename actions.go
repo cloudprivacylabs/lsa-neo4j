@@ -198,13 +198,19 @@ func (c *CreateEntity) Run(tx neo4j.Transaction) error {
 	// "Property values can only be of primitive types or arrays thereof. Encountered: Map{https://lschema.org/entitySchema -> String(\"{`ls:xml/ns`:$p49,
 	// "Expected value to be a map, but it was :`List{String(\":`ls:documentNode`:`ls:Object`:`ClinicalDocument`\")}
 	// Exactly one relationship type must be specified for CREATE. Did you forget to prefix your relationship type with a ':'?
+	// (Invalid input for function 'properties()': Expected a node, a relationship or a literal map but got List{String(":`ls:Object`:`ClinicalDocument`:`ls:documentNode`")})
 	// TODO: fix query
 	query = `
 		UNWIND $nodeBatch AS node 
+		UNWIND properties(node) AS val
+		WITH val,
+		[k in KEYS(val) | val[k]] AS values
+		UNWIND values AS value
+		UNWIND properties(value) AS prop
 		UNWIND $edgeBatch AS edge 
 		MATCH (m) WHERE ID(m) = $eid 
-		CREATE (m)-[e]->(n) 
-		SET n = (n {properties: "fake"} )
+		CREATE (m)-[:test]->(n) 
+		SET n.props = prop
 	`
 	// query = "UNWIND $nodeBatch as node UNWIND $edgeBatch as edge MATCH (m) where ID(m)=$eid CREATE (m)-[e]->(n) SET n = node SET e = edge"
 	_, err = tx.Run(query, map[string]interface{}{"nodeBatch": mapNeo4jNodes(c.n4jNodes), "edgeBatch": mapNeo4jEdges(c.n4jEdges), "eid": eid})
