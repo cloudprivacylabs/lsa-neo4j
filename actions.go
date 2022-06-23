@@ -197,12 +197,13 @@ func (c *CreateEntity) Run(tx neo4j.Transaction) error {
 
 	// "Property values can only be of primitive types or arrays thereof. Encountered: Map{https://lschema.org/entitySchema -> String(\"{`ls:xml/ns`:$p49,
 	// "Expected value to be a map, but it was :`List{String(\":`ls:documentNode`:`ls:Object`:`ClinicalDocument`\")}
+	// Exactly one relationship type must be specified for CREATE. Did you forget to prefix your relationship type with a ':'?
 	// TODO: fix query
 	query = `
 		UNWIND $nodeBatch AS node 
 		UNWIND $edgeBatch AS edge 
 		MATCH (m) WHERE ID(m) = $eid 
-		CREATE (m)-[:e]->(n) 
+		CREATE (m)-[e]->(n) 
 		SET n = (n {properties: "fake"} )
 	`
 	// query = "UNWIND $nodeBatch as node UNWIND $edgeBatch as edge MATCH (m) where ID(m)=$eid CREATE (m)-[e]->(n) SET n = node SET e = edge"
