@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/cloudprivacylabs/lsa v1.0.0-beta9
+	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220703202731-ca72fa16a4aa
 	github.com/cloudprivacylabs/opencypher v1.0.0-beta-3
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/spf13/cobra v1.1.3

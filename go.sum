@@ -39,6 +39,8 @@ github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghf
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cloudprivacylabs/lsa v1.0.0-beta9 h1:ZbhArOIDA6SGzMsJRJAm5UWXGootRDFtJOvhhrCIOnI=
 github.com/cloudprivacylabs/lsa v1.0.0-beta9/go.mod h1:JWl9vIi7NXV3ZHnzntVK4YhdldEHWfE70gUHuPKMtGw=
+github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220703202731-ca72fa16a4aa h1:s+fNjtW1MV7KEx80LTMyEzpayOzDkUCxoALXsLE9x2M=
+github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220703202731-ca72fa16a4aa/go.mod h1:DpnkE/k+3XkycBOZMHRJ8X2xZF1f2FAIf9L2jFZAtJg=
 github.com/cloudprivacylabs/opencypher v1.0.0-beta-3 h1:p5SPj+4DPvGsZzPzvq2QpoYKS25dFf11Jd9rjzzzt1w=
 github.com/cloudprivacylabs/opencypher v1.0.0-beta-3/go.mod h1:qEWSpb/GEgFzHqSMI2RD3OxruB4upIbWJcXrI60PFKI=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
