@@ -185,7 +185,6 @@ func linkEntities(tx neo4j.Transaction, config Config, entityRoot graph.Node, sp
 		} else {
 			query = fmt.Sprintf(`match (source %s %s) with source match (target) where ID(target)=%d create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, nodeMap[linkToNode], config.MakeLabels([]string{spec.label}))
 		}
-		fmt.Printf("%s %v", query, params)
 		_, err := tx.Run(query, params)
 		if err != nil {
 			return err
