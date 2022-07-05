@@ -119,6 +119,7 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	mappedEntities := make(map[graph.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]graph.Node, 0)
+	allNodes := make(map[graph.Node]struct{})
 
 	start := time.Now()
 
@@ -142,6 +143,7 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	// map DB ids
 	for nodeItr := grph.GetNodes(); nodeItr.Next(); {
 		node := nodeItr.Node()
+		allNodes[node] = struct{}{}
 		for ix := 0; ix < len(entityDBIds); ix++ {
 			if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 				id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
@@ -195,6 +197,18 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	// }
 	duration := time.Since(start)
 	fmt.Println(fmt.Sprintf("time elapsed for graph creation: %v", duration))
+
+	// Link nodes
+	for node := range allNodes {
+		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
+			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
+			if len(id) > 0 {
+				if err := LinkNodesForNewEntity(tx, config, node, mappedEntities); err != nil {
+					return 0, err
+				}
+			}
+		}
+	}
 	return 0, nil
 }
 
