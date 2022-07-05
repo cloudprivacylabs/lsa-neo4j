@@ -127,6 +127,11 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		node := nodeItr.Node()
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
+			ids := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsStringSlice()
+			if len(ids) > 0 {
+				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, ids...)
+				entities = append(entities, node)
+			}
 			if id != "" {
 				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, id)
 				entities = append(entities, node)
@@ -170,20 +175,23 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	jobs := &JobQueue{actions: make([]neo4jAction, 0)}
 	for ix, entity := range entities {
 		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
+		if id == "" {
+			continue
+		}
 		if _, exists := updates[id]; exists {
 			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity], dbIds: entityDBIds}
-			if err := d.Queue(tx, jobs); err != nil {
-				return 0, err
-			}
+			// if err := d.Queue(tx, jobs); err != nil {
+			// 	return 0, err
+			// }
 			jobs.actions = append(jobs.actions, d)
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
-			if err := c.Queue(tx, jobs); err != nil {
-				return 0, err
-			}
+			// if err := c.Queue(tx, jobs); err != nil {
+			// 	return 0, err
+			// }
 			jobs.actions = append(jobs.actions, c)
 		} else if _, exists = creates[id]; exists {
-			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
-			c.Queue(tx, jobs)
+			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{}), batch: 10}
+			// c.Queue(tx, jobs)
 			jobs.actions = append(jobs.actions, c)
 		}
 		if err := jobs.actions[ix].Run(tx); err != nil {

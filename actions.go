@@ -60,6 +60,7 @@ type CreateEntity struct {
 	n4jNodes []Neo4jNode
 	n4jEdges []Neo4jEdge
 	vars     map[string]interface{}
+	batch    int
 }
 
 // type recreateEntity struct {
@@ -175,11 +176,11 @@ func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	// }
 	// n4jNodes = append(n4jNodes, entity)
 	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
-		n.ForEachProperty(func(s string, in interface{}) bool {
-			prop := c.MakeProperties(n, make(map[string]interface{}))
-			n.SetProperty(s, prop)
-			return true
-		})
+		// n.ForEachProperty(func(s string, in interface{}) bool {
+		// 	_ = c.MakeProperties(n, make(map[string]interface{}))
+		// 	// n.SetProperty(s, prop)
+		// 	return true
+		// })
 		// node := Neo4jNode{
 		// 	Labels: []string{c.MakeLabels(n.GetLabels().Slice())},
 		// 	Props:  props,
@@ -242,18 +243,24 @@ func (c *CreateEntity) Run(tx neo4j.Transaction) error {
 	// query = "UNWIND $nodeBatch as node UNWIND $edgeBatch as edge MATCH (m) where ID(m)=$eid CREATE (m)-[e]->(n) SET n = node SET e = edge"
 	nodes := make([]graph.Node, 0, c.Graph.NumNodes())
 	edges := make([]graph.Edge, 0, c.Graph.NumEdges())
-	for nodeItr := c.Graph.GetNodes(); nodeItr.Next(); {
-		nodes = append(nodes, nodeItr.Node())
-	}
+	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
+		nodes = append(nodes, n)
+		return true
+	}, func(e graph.Edge) ls.EdgeFuncResult {
+		return 0
+	}, false)
+	// for nodeItr := c.Graph.GetNodes(); nodeItr.Next(); {
+	// 	nodes = append(nodes, nodeItr.Node())
+	// }
 	for edgeItr := c.Graph.GetEdges(); edgeItr.Next(); {
 		edges = append(edges, edgeItr.Edge())
 	}
-	createQuery := c.buildCreateQuery(nodes)
+	createQuery := c.buildCreateQuery(nodes, c.batch)
 	idrec, err := tx.Run(createQuery, c.vars)
 	if err != nil {
 		return err
 	}
-	records, err := idrec.Collect()
+	records, err := idrec.Single()
 	if err != nil {
 		return err
 	}
@@ -303,45 +310,49 @@ func (c *CreateEntity) Run(tx neo4j.Transaction) error {
 	// 		}
 	// 	}
 	// }
-	for ix, rec := range records[0].Values {
+	for ix, rec := range records.Values {
 		hm[nodes[ix]] = rec.(int64)
 	}
-	connectQuery := c.buildConnectQuery(edges, hm)
+	connectQuery := c.buildConnectQuery(edges, hm, c.batch)
 	_, err = tx.Run(connectQuery, c.vars)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
-func (c *CreateEntity) buildCreateQuery(nodes []graph.Node) string {
+func (c *CreateEntity) buildCreateQuery(nodes []graph.Node, batch int) string {
 	// first create
 	sb := strings.Builder{}
 	for ix, node := range nodes {
 		prop := c.MakeProperties(node, c.vars)
 		labels := c.MakeLabels(node.GetLabels().Slice())
 		if ix < len(nodes)-1 {
-			sb.WriteString(fmt.Sprintf("(n%d%s %s),", ix, labels, prop))
+			sb.WriteString(fmt.Sprintf("MERGE (n%d%s %s) ", ix, labels, prop))
 		} else {
-			sb.WriteString(fmt.Sprintf("(n%d%s %s)", ix, labels, prop))
+			sb.WriteString(fmt.Sprintf("MERGE (n%d%s %s) ", ix, labels, prop))
+		}
+		if ix == batch {
+			break
 		}
 	}
-	var create string
+
 	builder := strings.Builder{}
 	for ix := range nodes {
-		if ix < len(nodes)-1 {
+		if ix < batch {
 			builder.WriteString(fmt.Sprintf("ID(n%d),", ix))
 		} else {
 			builder.WriteString(fmt.Sprintf("ID(n%d)", ix))
 		}
-
+		if ix == batch {
+			break
+		}
 	}
-	create = fmt.Sprintf("CREATE %s RETURN %s", sb.String(), builder.String())
-	return create
+	query := fmt.Sprintf("%s RETURN %s", sb.String(), builder.String())
+	return query
 }
 
-func (c *CreateEntity) buildConnectQuery(edges []graph.Edge, hm map[graph.Node]int64) string {
+func (c *CreateEntity) buildConnectQuery(edges []graph.Edge, hm map[graph.Node]int64, batch int) string {
 	// connect
 	// CREATE (n1)-[lbl props]->(n2), (n3)-[lbl props]->(n4) where n1.id=$id1 n2.id=$id2…
 	// MATCH (n1), (n2), …..  where ID(n1)=id1, ID(n2)=id2…. CREATE (n1) -[...]->(n2),
@@ -357,14 +368,17 @@ func (c *CreateEntity) buildConnectQuery(edges []graph.Edge, hm map[graph.Node]i
 		from := hm[edge.GetFrom()]
 		to := hm[edge.GetTo()]
 		label := c.MakeLabels([]string{edge.GetLabel()})
-		if ix < len(edges)-1 {
-			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d CREATE (n%d)-[%s]->(m%d) UNION ", ix, ix, ix, from, ix, to, ix, label, ix))
+		if ix < batch {
+			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d MERGE (n%d)-[%s]->(m%d) UNION ", ix, ix, ix, from, ix, to, ix, label, ix))
 			// sb.WriteString(fmt.Sprintf("(m)-[%s]->(n),", edge.Type))
 			// builder.WriteString(fmt.Sprintf("WHERE ID(m%d)=%d,", ix, ids[ix]))
 		} else {
-			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d CREATE (n%d)-[%s]->(m%d)", ix, ix, ix, from, ix, to, ix, label, ix))
+			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d MERGE (n%d)-[%s]->(m%d)", ix, ix, ix, from, ix, to, ix, label, ix))
 			// sb.WriteString(fmt.Sprintf("(m)-[%s]->(n)", edge.Type))
 			// builder.WriteString(fmt.Sprintf("WHERE ID(m%d)=%d", ix, ids[ix]))
+		}
+		if ix == batch {
+			break
 		}
 	}
 	// connect = fmt.Sprintf("CREATE %s", sb.String())
