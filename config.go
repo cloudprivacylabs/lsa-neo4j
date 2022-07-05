@@ -18,6 +18,17 @@ type withProperty interface {
 	ForEachProperty(func(string, interface{}) bool) bool
 }
 
+type mapWithProperty map[string]interface{}
+
+func (m mapWithProperty) ForEachProperty(f func(string, interface{}) bool) bool {
+	for k, v := range m {
+		if !f(k, v) {
+			return false
+		}
+	}
+	return true
+}
+
 func InitNamespaceTrie(cfg *Config) *Trie {
 	root := InitTrie()
 	cfg.namespaceExpansion = make(map[string]string)
