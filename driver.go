@@ -190,7 +190,7 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 			// }
 			jobs.actions = append(jobs.actions, c)
 		} else if _, exists = creates[id]; exists {
-			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{}), batch: 10}
+			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
 			// c.Queue(tx, jobs)
 			jobs.actions = append(jobs.actions, c)
 		}
