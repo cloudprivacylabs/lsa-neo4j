@@ -59,7 +59,7 @@ func (s *Session) Logf(format string, a ...interface{}) {
 }
 
 // CreateGraph creates a graph and returns the neo4j ID of the root node
-// func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, config Config) (int64, error) {
+// func SaveGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, config Config) (int64, error) {
 // 	nodeIds := make(map[graph.Node]int64)
 // 	allNodes := make(map[graph.Node]struct{})
 // 	//entityNodes := make(map[graph.Node]struct{})
@@ -113,6 +113,8 @@ func (s *Session) Logf(format string, a ...interface{}) {
 // }
 
 // CreateGraph creates a graph and returns the neo4j ID of the root node
+// previous: 6.226258831s ~ 6.951803475
+// now: 783.724655ms ~ 793.762209ms
 func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config) (int64, error) {
 	mappedEntities := make(map[graph.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
@@ -131,6 +133,7 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		}
 	}
 
+	// TODO: After creation, check if function works
 	entityDBIds, entityIds, err := session.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
 		return 0, err
@@ -163,27 +166,33 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	}
 
 	jobs := &JobQueue{actions: make([]neo4jAction, 0)}
-	for _, entity := range entities {
+	for ix, entity := range entities {
 		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
 		if _, exists := updates[id]; exists {
 			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity], dbIds: entityDBIds}
 			if err := d.Queue(tx, jobs); err != nil {
 				return 0, err
 			}
+			jobs.actions = append(jobs.actions, d)
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
 			if err := c.Queue(tx, jobs); err != nil {
 				return 0, err
 			}
+			jobs.actions = append(jobs.actions, c)
 		} else if _, exists = creates[id]; exists {
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
 			c.Queue(tx, jobs)
+			jobs.actions = append(jobs.actions, c)
 		}
-	}
-	for _, job := range jobs.actions {
-		if err := job.Run(tx); err != nil {
+		if err := jobs.actions[ix].Run(tx); err != nil {
 			return 0, err
 		}
 	}
+	// for _, job := range jobs.actions {
+	// 	if err := job.Run(tx); err != nil {
+	// 		return 0, err
+	// 	}
+	// }
 	duration := time.Since(start)
 	fmt.Println(fmt.Sprintf("time elapsed for graph creation: %v", duration))
 	return 0, nil
