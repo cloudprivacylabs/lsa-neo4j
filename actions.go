@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
@@ -57,10 +58,10 @@ type CreateEntity struct {
 	Config
 	graph.Graph
 	graph.Node
-	n4jNodes []Neo4jNode
-	n4jEdges []Neo4jEdge
-	vars     map[string]interface{}
-	batch    int
+	seen      map[graph.Node]int64
+	vars      map[string]interface{}
+	edgeBatch int
+	nodeBatch int
 }
 
 // type recreateEntity struct {
@@ -175,32 +176,22 @@ func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	// 	props:  props,
 	// }
 	// n4jNodes = append(n4jNodes, entity)
-	// ls.IterateDescendants(c.Node, func(n graph.Node) bool {
-	// 	// n.ForEachProperty(func(s string, in interface{}) bool {
-	// 	// 	_ = c.MakeProperties(n, make(map[string]interface{}))
-	// 	// 	// n.SetProperty(s, prop)
-	// 	// 	return true
-	// 	// })
-	// 	// node := Neo4jNode{
-	// 	// 	Labels: []string{c.MakeLabels(n.GetLabels().Slice())},
-	// 	// 	Props:  props,
-	// 	// }
-	// 	// n4jNodes = append(n4jNodes, node)
-	// 	return true
-	// }, func(e graph.Edge) ls.EdgeFuncResult {
-	// 	// props := make(map[string]interface{})
-	// 	e.ForEachProperty(func(s string, in interface{}) bool {
-	// 		prop := c.MakeProperties(e, make(map[string]interface{}))
-	// 		e.SetProperty(s, prop)
-	// 		return true
-	// 	})
-	// 	// edge := Neo4jEdge{
-	// 	// 	Type:  c.MakeLabels([]string{e.GetLabel()}),
-	// 	// 	Props: props,
-	// 	// }
-	// 	// n4jEdges = append(n4jEdges, edge)
-	// 	return 0
-	// }, false)
+	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
+		n.ForEachProperty(func(s string, in interface{}) bool {
+			prop := c.MakeProperties(n, c.vars)
+			n.SetProperty(s, prop)
+			return true
+		})
+		return true
+	}, func(e graph.Edge) ls.EdgeFuncResult {
+		// props := make(map[string]interface{})
+		e.ForEachProperty(func(s string, in interface{}) bool {
+			prop := c.MakeProperties(e, c.vars)
+			e.SetProperty(s, prop)
+			return true
+		})
+		return 0
+	}, false)
 	// c.n4jNodes = n4jNodes
 	// c.n4jEdges = n4jEdges
 	// q.actions = append(q.actions, c)
@@ -208,18 +199,21 @@ func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 }
 
 func (c *CreateEntity) Run(tx neo4j.Transaction) error {
-	// query := fmt.Sprintf("CREATE (m %s %s) RETURN m",
+	// vars := make(map[string]interface{})
+	// q := fmt.Sprintf("MERGE (m %s %s) RETURN m",
 	// 	c.MakeLabels(c.Node.GetLabels().Slice()),
-	// 	c.MakeProperties(c.Node, c.vars))
-	// idrec, err := tx.Run(query, c.vars)
+	// 	c.MakeProperties(c.Node, vars))
+	// irec, err := tx.Run(q, vars)
 	// if err != nil {
 	// 	return err
 	// }
-	// _, err = idrec.Single()
+	// rec, err := irec.Single()
 	// if err != nil {
 	// 	return err
 	// }
+	hm := make(map[graph.Node]int64)
 	// eid := rec.Values[0].(neo4j.Node).Id
+	// hm[c.Node] = eid
 	// t1 := mapNeo4jNodes(c.n4jNodes)
 	// t2 := mapNeo4jEdges(c.n4jEdges)
 	// fmt.Println(t1)
@@ -244,7 +238,9 @@ func (c *CreateEntity) Run(tx neo4j.Transaction) error {
 	nodes := make([]graph.Node, 0, c.Graph.NumNodes())
 	edges := make([]graph.Edge, 0, c.Graph.NumEdges())
 	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
+		// if _, seen := c.seen[n]; !seen {
 		nodes = append(nodes, n)
+		// }
 		return true
 	}, func(e graph.Edge) ls.EdgeFuncResult {
 		edges = append(edges, e)
@@ -253,9 +249,9 @@ func (c *CreateEntity) Run(tx neo4j.Transaction) error {
 	// for nodeItr := c.Graph.GetNodes(); nodeItr.Next(); {
 	// 	nodes = append(nodes, nodeItr.Node())
 	// }
-	for edgeItr := c.Graph.GetEdges(); edgeItr.Next(); {
-		edges = append(edges, edgeItr.Edge())
-	}
+	// for edgeItr := c.Graph.GetEdges(); edgeItr.Next(); {
+	// 	edges = append(edges, edgeItr.Edge())
+	// }
 	createQuery := c.buildCreateQuery(nodes)
 	idrec, err := tx.Run(createQuery, c.vars)
 	if err != nil {
@@ -265,10 +261,10 @@ func (c *CreateEntity) Run(tx neo4j.Transaction) error {
 	if err != nil {
 		return err
 	}
-	hm := make(map[graph.Node]int64)
 
 	for ix, rec := range records.Values {
 		hm[nodes[ix]] = rec.(int64)
+		// c.seen[nodes[ix]] = rec.(int64)
 	}
 	connectQuery := c.buildConnectQuery(edges, hm)
 	_, err = tx.Run(connectQuery, c.vars)
@@ -278,33 +274,61 @@ func (c *CreateEntity) Run(tx neo4j.Transaction) error {
 	return nil
 }
 
+var re = regexp.MustCompile(`\[([^\[\]]*)\]`)
+
 func (c *CreateEntity) buildCreateQuery(nodes []graph.Node) string {
 	// first create
-	if c.batch == 0 {
-		c.batch = len(nodes)
+	if c.nodeBatch == 0 {
+		c.nodeBatch = len(nodes)
 	}
 	sb := strings.Builder{}
+	// {`ls:attributeName`:$p28,`ls:entityId`:$p29}{`ls:entityId`:$p30}
 	for ix, node := range nodes {
-		prop := c.MakeProperties(node, c.vars)
+		var prop string
+		prop = c.MakeProperties(node, c.vars)
+		// node.ForEachProperty(func(s string, i interface{}) bool {
+		// 	// p, _ := node.GetProperty(s)
+		// 	// x, ok := p.(*ls.PropertyValue)
+		// 	// if !ok {
+		// 	// 	y, ok := p.(string)
+		// 	// 	if !ok {
+		// 	// 		return false
+		// 	// 	}
+		// 	// 	prop += y
+		// 	// } else {
+		// 	// 	prop += x.String()
+		// 	// }
+		// 	p, ok := i.(string)
+		// 	if ok {
+		// 		prop = p
+		// 	} else {
+		// 		prop = i.(*ls.PropertyValue).String()
+		// 	}
+		// 	return true
+		// })
+		// prop = strings.ReplaceAll(prop, "{", "")
+		// prop = strings.ReplaceAll(prop, "}", ",")
+		// props := "{" + prop + "}"
+		// fmt.Println(props)
 		labels := c.MakeLabels(node.GetLabels().Slice())
-		if ix < c.batch-1 {
+		if ix < c.nodeBatch-1 || ix == 0 {
 			sb.WriteString(fmt.Sprintf("(n%d%s %s),", ix, labels, prop))
 		} else {
 			sb.WriteString(fmt.Sprintf("(n%d%s %s) ", ix, labels, prop))
 		}
-		if ix == c.batch {
+		if ix == c.nodeBatch {
 			break
 		}
 	}
 
 	builder := strings.Builder{}
 	for ix := range nodes {
-		if ix < c.batch-1 {
+		if ix < c.nodeBatch-1 {
 			builder.WriteString(fmt.Sprintf("ID(n%d),", ix))
 		} else {
 			builder.WriteString(fmt.Sprintf("ID(n%d)", ix))
 		}
-		if ix == c.batch {
+		if ix == c.nodeBatch {
 			break
 		}
 	}
@@ -313,8 +337,8 @@ func (c *CreateEntity) buildCreateQuery(nodes []graph.Node) string {
 }
 
 func (c *CreateEntity) buildConnectQuery(edges []graph.Edge, hm map[graph.Node]int64) string {
-	if c.batch == 0 {
-		c.batch = len(edges)
+	if c.edgeBatch == 0 {
+		c.edgeBatch = len(edges)
 	}
 	// connect
 	// CREATE (n1)-[lbl props]->(n2), (n3)-[lbl props]->(n4) where n1.id=$id1 n2.id=$id2…
@@ -331,16 +355,16 @@ func (c *CreateEntity) buildConnectQuery(edges []graph.Edge, hm map[graph.Node]i
 		from := hm[edge.GetFrom()]
 		to := hm[edge.GetTo()]
 		label := c.MakeLabels([]string{edge.GetLabel()})
-		if ix < c.batch {
-			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d MERGE (n%d)-[%s]->(m%d) UNION ", ix, ix, ix, from, ix, to, ix, label, ix))
+		if ix < c.edgeBatch-1 {
+			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d CREATE (n%d)-[%s]->(m%d) UNION ", ix, ix, ix, from, ix, to, ix, label, ix))
 			// sb.WriteString(fmt.Sprintf("(m)-[%s]->(n),", edge.Type))
 			// builder.WriteString(fmt.Sprintf("WHERE ID(m%d)=%d,", ix, ids[ix]))
 		} else {
-			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d MERGE (n%d)-[%s]->(m%d) ", ix, ix, ix, from, ix, to, ix, label, ix))
+			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d CREATE (n%d)-[%s]->(m%d) ", ix, ix, ix, from, ix, to, ix, label, ix))
 			// sb.WriteString(fmt.Sprintf("(m)-[%s]->(n)", edge.Type))
 			// builder.WriteString(fmt.Sprintf("WHERE ID(m%d)=%d", ix, ids[ix]))
 		}
-		if ix == c.batch {
+		if ix == c.edgeBatch {
 			break
 		}
 	}

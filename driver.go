@@ -180,18 +180,20 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		}
 		if _, exists := updates[id]; exists {
 			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity], dbIds: entityDBIds}
-			// if err := d.Queue(tx, jobs); err != nil {
-			// 	return 0, err
-			// }
+			if err := d.Queue(tx, jobs); err != nil {
+				return 0, err
+			}
 			jobs.actions = append(jobs.actions, d)
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
-			// if err := c.Queue(tx, jobs); err != nil {
-			// 	return 0, err
-			// }
+			if err := c.Queue(tx, jobs); err != nil {
+				return 0, err
+			}
 			jobs.actions = append(jobs.actions, c)
 		} else if _, exists = creates[id]; exists {
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
-			// c.Queue(tx, jobs)
+			if err := c.Queue(tx, jobs); err != nil {
+				return 0, err
+			}
 			jobs.actions = append(jobs.actions, c)
 		}
 		if err := jobs.actions[ix].Run(tx); err != nil {
