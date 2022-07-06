@@ -87,29 +87,27 @@ func (d *DeleteEntity) Run(tx neo4j.Transaction, q *JobQueue) error {
 }
 
 func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
-	if q.nodeBatch == 0 {
-		q.nodeBatch = int64(c.GetGraph().NumNodes())
-	}
-	if q.edgeBatch == 0 {
-		q.edgeBatch = int64(c.GetGraph().NumEdges())
-	}
 	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
-		if len(q.queueNodes.nodes) < int(q.nodeBatch) {
-			q.queueNodes.nodes = append(q.queueNodes.nodes, n)
-		}
+		q.queueNodes.nodes = append(q.queueNodes.nodes, n)
 		return true
 	}, func(e graph.Edge) ls.EdgeFuncResult {
-		if len(q.queueEdges.edges) < int(q.edgeBatch) {
-			q.queueEdges.edges = append(q.queueEdges.edges, e)
-		}
+		q.queueEdges.edges = append(q.queueEdges.edges, e)
 		return 0
 	}, false)
 	return nil
 }
 
 func (c *CreateEntity) Run(tx neo4j.Transaction, q *JobQueue) error {
+	if q.edgeBatch == 0 {
+		q.edgeBatch = int64(c.Graph.NumEdges())
+	}
+	if q.nodeBatch == 0 {
+		q.nodeBatch = int64(c.Graph.NumNodes())
+	}
 	hm := make(map[graph.Node]int64)
-	createQuery := c.buildCreateQuery(q.queueNodes.nodes)
+	nodes := q.queueNodes.nodes[:q.nodeBatch]
+	q.queueNodes.nodes = q.queueNodes.nodes[:q.nodeBatch]
+	createQuery := c.buildCreateQuery(nodes)
 	idrec, err := tx.Run(createQuery, c.vars)
 	if err != nil {
 		return err
@@ -122,7 +120,9 @@ func (c *CreateEntity) Run(tx neo4j.Transaction, q *JobQueue) error {
 	for ix, rec := range records.Values {
 		hm[q.queueNodes.nodes[ix]] = rec.(int64)
 	}
-	connectQuery := c.buildConnectQuery(q.queueEdges.edges, hm)
+	edges := q.queueEdges.edges[:q.edgeBatch]
+	q.queueEdges.edges = q.queueEdges.edges[:q.edgeBatch]
+	connectQuery := c.buildConnectQuery(edges, hm)
 	_, err = tx.Run(connectQuery, c.vars)
 	if err != nil {
 		return err
