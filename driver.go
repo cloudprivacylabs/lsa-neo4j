@@ -186,14 +186,14 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		}
 		if _, exists := updates[id]; exists {
 			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity], dbIds: entityDBIds}
-			// if err := d.Queue(tx, jobs); err != nil {
-			// 	return 0, err
-			// }
+			if err := d.Queue(tx, jobs); err != nil {
+				return 0, err
+			}
 			jobs.actions = append(jobs.actions, d)
-			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
-			// if err := c.Queue(tx, jobs); err != nil {
-			// 	return 0, err
-			// }
+			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
+			if err := c.Queue(tx, jobs); err != nil {
+				return 0, err
+			}
 			jobs.actions = append(jobs.actions, c)
 		} else if _, exists = creates[id]; exists {
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
@@ -347,6 +347,12 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 	for _, id := range rootIds {
 		queue = append(queue, id)
 	}
+	min := func(x, y int) int {
+		if x < y {
+			return x
+		}
+		return y
+	}
 	for len(queue) > 0 {
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
 		if err != nil {
@@ -383,7 +389,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 					nd.SetProperty(config.Expand(k), v)
 				}
 				visitedNode[node.Id] = nd
-				if selectEntity(nd) {
+				if selectEntity != nil && selectEntity(nd) {
 					queue = append(queue, node.Id)
 				}
 			}
@@ -396,7 +402,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 			target := visitedNode[edge.EndId]
 			grph.NewEdge(src, target, edge.Type, edge.Props)
 		}
-		queue = queue[len(srcNodes):]
+		queue = queue[min(len(srcNodes), len(queue)):]
 	}
 	dbIds := make([]int64, len(visitedNode))
 	for id := range visitedNode {
@@ -431,24 +437,29 @@ func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config)
 	if len(ids) == 0 {
 		return entityDBIds, entityIds, nil
 	}
-	query := "MATCH (n) WITH n, [k in KEYS(n) | n[k]] AS values UNWIND values AS value MATCH (m) WHERE value IN $id RETURN ID(m), value"
+	query := "MATCH (n) WHERE n.`ls:entityId` IS NOT NULL RETURN ID(n), n.`ls:entityId`"
 	// query := "MERGE (n) WITH n, [k in KEYS(n) | n[k]] AS values UNWIND values AS value MATCH (m) WHERE value IN $id RETURN ID(n), value"
 	//"MATCH (n) WHERE n.$propName IN $id return ID(n), n.$propName",
-	idrec, err := tx.Run(query,
-		map[string]interface{}{"id": ids, "propName": config.Map(ls.EntityIDTerm)})
+	idrec, err := tx.Run(query, map[string]interface{}{})
 	if err != nil {
 		return entityDBIds, entityIds, err
 	}
 	for idrec.Next() {
 		record := idrec.Record()
 		val, ok := record.Values[1].(string)
-		if ok {
-			entityIds = append(entityIds, val)
-		} else {
-			entityIds = append(entityIds, record.Values[2].(string))
+		if !ok {
+			sl, e := record.Values[1].([]interface{})
+			if !e {
+				continue
+			}
+			for _, s := range sl {
+				entityIds = append(entityIds, s.(string))
+			}
+			entityDBIds = append(entityDBIds, record.Values[0].(int64))
+			continue
 		}
+		entityIds = append(entityIds, val)
 		entityDBIds = append(entityDBIds, record.Values[0].(int64))
-
 	}
 	return entityDBIds, entityIds, nil
 }
