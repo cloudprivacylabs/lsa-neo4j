@@ -23,14 +23,12 @@ type JobQueue struct {
 	createEdges []graph.Edge
 	deleteNodes []uint64
 	deleteEdges []uint64
-	actions     []neo4jAction
 }
 
 type DeleteEntity struct {
 	Config
 	graph.Graph
 	entityId uint64
-	dbIds    []int64
 }
 
 type CreateEntity struct {
@@ -40,60 +38,59 @@ type CreateEntity struct {
 	vars map[string]interface{}
 }
 
-func (q *JobQueue) Run(tx neo4j.Transaction, hm map[graph.Node]uint64, batch int) error {
+func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, hm map[graph.Node]uint64, batch int) error {
 	if batch == 0 {
 		batch = len(q.createNodes)
 	}
-	for _, a := range q.actions {
-		for ix := 0; ix < len(q.createNodes); ix += batch {
-			switch a.(type) {
-			case *DeleteEntity:
-				d := a.(*DeleteEntity)
-				_, err := tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": d.dbIds})
-				if err != nil {
-					return err
-				}
-			case *CreateEntity:
-				c := a.(*CreateEntity)
-				var createQuery string
-				if ix+batch >= len(q.createNodes) {
-					createQuery = c.buildCreateQuery(q.createNodes[ix:])
-				} else {
-					createQuery = c.buildCreateQuery(q.createNodes[ix : ix+batch])
-				}
-				idrec, err := tx.Run(createQuery, c.vars)
-				if err != nil {
-					return err
-				}
-				records, err := idrec.Single()
-				if err != nil {
-					return err
-				}
-				for i, rec := range records.Values {
-					hm[q.createNodes[i+ix]] = uint64(rec.(int64))
-				}
-			}
+	vars := make(map[string]interface{})
+	for ix := 0; ix < len(q.deleteNodes); ix += batch {
+		var err error
+		if ix+batch >= len(q.deleteNodes) {
+			_, err = tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[ix:]})
+		} else {
+			_, err = tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[ix : ix+batch]})
 		}
-		for ix := 0; ix < len(q.createEdges); ix += batch {
-			switch a.(type) {
-			case *DeleteEntity:
-				// TODO
-				continue
-			case *CreateEntity:
-				c := a.(*CreateEntity)
-				var connectQuery string
-				if ix+batch >= len(q.createEdges) {
-					connectQuery = c.buildConnectQuery(q.createEdges[ix:], hm)
-				} else {
-					connectQuery = c.buildConnectQuery(q.createEdges[ix:ix+batch], hm)
-				}
-				_, err := tx.Run(connectQuery, c.vars)
-				if err != nil {
-					return err
-				}
-			}
+		if err != nil {
+			return err
 		}
 	}
+	// TODO: Delete Edges
+	for ix := 0; ix < len(q.deleteEdges); ix += batch {
+
+	}
+	for ix := 0; ix < len(q.createNodes); ix += batch {
+		var createQuery string
+		if ix+batch >= len(q.createNodes) {
+			createQuery = buildCreateQuery(q.createNodes[ix:], cfg, vars)
+		} else {
+			createQuery = buildCreateQuery(q.createNodes[ix:ix+batch], cfg, vars)
+		}
+		idrec, err := tx.Run(createQuery, vars)
+		if err != nil {
+			return err
+		}
+		records, err := idrec.Single()
+		if err != nil {
+			return err
+		}
+		for i, rec := range records.Values {
+			hm[q.createNodes[i+ix]] = uint64(rec.(int64))
+		}
+
+	}
+	for ix := 0; ix < len(q.createEdges); ix += batch {
+		var connectQuery string
+		if ix+batch >= len(q.createEdges) {
+			connectQuery = buildConnectQuery(q.createEdges[ix:], cfg, hm)
+		} else {
+			connectQuery = buildConnectQuery(q.createEdges[ix:ix+batch], cfg, hm)
+		}
+		_, err := tx.Run(connectQuery, vars)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -102,21 +99,52 @@ func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	if err != nil {
 		return err
 	}
-	d.dbIds = ids
+	for _, id := range ids {
+		if id != 0 {
+			q.deleteNodes = append(q.deleteNodes, uint64(id))
+		}
+	}
 	return nil
 }
 
 func (d *DeleteEntity) Run(tx neo4j.Transaction, q *JobQueue) error {
+	// _, err := tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": d.dbIds})
+	// if err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
 func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
+		if !n.GetLabels().Has(ls.DocumentNodeTerm) {
+			return true
+		}
+		if _, exists := n.GetProperty(ls.EntitySchemaTerm); exists {
+			id := ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm)).AsString()
+			if len(id) > 0 {
+				curr := ls.AsPropertyValue(c.Node.GetProperty(ls.EntityIDTerm)).AsString()
+				if id != curr {
+					return false
+				}
+			}
+		}
 		q.createNodes = append(q.createNodes, n)
 		return true
 	}, func(e graph.Edge) ls.EdgeFuncResult {
+		to := e.GetTo()
+		// Edge must go to a document node
+		if !to.GetLabels().Has(ls.DocumentNodeTerm) {
+			return ls.SkipEdgeResult
+		}
+		// If edge goes to a different entity with ID, we should stop here
+		if _, ok := to.GetProperty(ls.EntitySchemaTerm); ok {
+			if _, ok := to.GetProperty(ls.EntityIDTerm); ok {
+				return ls.SkipEdgeResult
+			}
+		}
 		q.createEdges = append(q.createEdges, e)
-		return 0
+		return ls.FollowEdgeResult
 	}, false)
 	return nil
 }
@@ -125,11 +153,11 @@ func (c *CreateEntity) Run(tx neo4j.Transaction, q *JobQueue) error {
 	return nil
 }
 
-func (c *CreateEntity) buildCreateQuery(nodes []graph.Node) string {
+func buildCreateQuery(nodes []graph.Node, c Config, vars map[string]interface{}) string {
 	sb := strings.Builder{}
 	// {`ls:attributeName`:$p28,`ls:entityId`:$p29}{`ls:entityId`:$p30}
 	for ix, node := range nodes {
-		prop := c.MakeProperties(node, c.vars)
+		prop := c.MakeProperties(node, vars)
 		labels := c.MakeLabels(node.GetLabels().Slice())
 		if ix < len(nodes)-1 {
 			sb.WriteString(fmt.Sprintf("(n%d%s %s),", ix, labels, prop))
@@ -148,7 +176,7 @@ func (c *CreateEntity) buildCreateQuery(nodes []graph.Node) string {
 	return fmt.Sprintf("CREATE %s RETURN %s", sb.String(), builder.String())
 }
 
-func (c *CreateEntity) buildConnectQuery(edges []graph.Edge, hm map[graph.Node]uint64) string {
+func buildConnectQuery(edges []graph.Edge, c Config, hm map[graph.Node]uint64) string {
 	sb := strings.Builder{}
 	for ix, edge := range edges {
 		from := hm[edge.GetFrom()]

@@ -175,7 +175,7 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	jobs := &JobQueue{
 		createNodes: make([]graph.Node, 0),
 		createEdges: make([]graph.Edge, 0),
-		actions:     make([]neo4jAction, 0),
+
 		deleteNodes: make([]uint64, 0),
 		deleteEdges: make([]uint64, 0),
 	}
@@ -185,25 +185,25 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 			continue
 		}
 		if _, exists := updates[id]; exists {
-			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity], dbIds: entityDBIds}
+			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity]}
 			if err := d.Queue(tx, jobs); err != nil {
 				return 0, err
 			}
-			jobs.actions = append(jobs.actions, d)
+
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
 			if err := c.Queue(tx, jobs); err != nil {
 				return 0, err
 			}
-			jobs.actions = append(jobs.actions, c)
+
 		} else if _, exists = creates[id]; exists {
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
 			if err := c.Queue(tx, jobs); err != nil {
 				return 0, err
 			}
-			jobs.actions = append(jobs.actions, c)
+
 		}
 	}
-	if err := jobs.Run(tx, mappedEntities, batch); err != nil {
+	if err := jobs.Run(tx, config, mappedEntities, batch); err != nil {
 		return 0, err
 	}
 
@@ -406,25 +406,25 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 	return nil, dbIds
 }
 
-func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config) (bool, int64, error) {
-	if node == nil {
-		return false, -1, nil
-	}
-	vars := make(map[string]interface{})
-	labelsClause := config.MakeLabels(node.GetLabels().Slice())
-	propertiesClause := config.MakeProperties(node, vars)
-	query := fmt.Sprintf("MATCH (n %s %s) return n", labelsClause, propertiesClause)
-	idrec, err := tx.Run(query, vars)
-	if err != nil {
-		return false, -1, err
-	}
-	rec, err := idrec.Single()
-	if err != nil {
-		return false, -1, err
-	}
-	nd := rec.Values[0].(neo4j.Node)
-	return true, nd.Id, nil
-}
+// func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config) (bool, int64, error) {
+// 	if node == nil {
+// 		return false, -1, nil
+// 	}
+// 	vars := make(map[string]interface{})
+// 	labelsClause := config.MakeLabels(node.GetLabels().Slice())
+// 	propertiesClause := config.MakeProperties(node, vars)
+// 	query := fmt.Sprintf("MATCH (n %s %s) return n", labelsClause, propertiesClause)
+// 	idrec, err := tx.Run(query, vars)
+// 	if err != nil {
+// 		return false, -1, err
+// 	}
+// 	rec, err := idrec.Single()
+// 	if err != nil {
+// 		return false, -1, err
+// 	}
+// 	nd := rec.Values[0].(neo4j.Node)
+// 	return true, nd.Id, nil
+// }
 
 func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config) ([]int64, []string, error) {
 	var entityDBIds []int64 = make([]int64, 0, len(ids))
