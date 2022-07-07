@@ -21,13 +21,13 @@ var (
 			if err != nil {
 				return err
 			}
-			rootIds := make([]int64, 0)
+			rootIds := make([]uint64, 0)
 			for _, arg := range args {
 				id, err := strconv.ParseInt(arg, 10, 64)
 				if err != nil {
 					return err
 				}
-				rootIds = append(rootIds, id)
+				rootIds = append(rootIds, uint64(id))
 			}
 			cfg, err := loadConfig(cmd)
 			if err != nil {

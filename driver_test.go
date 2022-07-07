@@ -38,9 +38,9 @@ var expected = []expectedStruct{
 	},
 }
 
-func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, ids []int64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
+func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, ids []uint64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
 	seq := -1
-	return func(tx neo4j.Transaction, ids []int64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
+	return func(tx neo4j.Transaction, ids []uint64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
 		seq++
 		x := expected[seq]
 		return x.sources, x.targets, x.edges, nil
@@ -67,9 +67,9 @@ func TestLoadEntityNodes(t *testing.T) {
 	}
 	InitNamespaceTrie(&cfg)
 	tx := transaction{}
-	roots := make([]int64, 0, len(expected[0].sources))
+	roots := make([]uint64, 0, len(expected[0].sources))
 	for _, node := range expected[0].sources {
-		roots = append(roots, node.Id)
+		roots = append(roots, uint64(node.Id))
 	}
 	grph := ls.NewDocumentGraph()
 	err, _ := loadEntityNodes(tx, grph, roots, cfg, getMockFindNeighbor(expected), selectEntity)
