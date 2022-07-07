@@ -18,6 +18,8 @@ var (
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
 			inputFormat, _ := cmd.Flags().GetString("input")
+			nodeBatch, _ := cmd.Flags().GetInt64("nodeBatch")
+			edgeBatch, _ := cmd.Flags().GetInt64("edgeBatch")
 			var cfg neo.Config
 
 			if cfgfile, _ := cmd.Flags().GetString("cfg"); len(cfgfile) == 0 {
@@ -51,7 +53,7 @@ var (
 				if err != nil {
 					return err
 				}
-				_, err = neo.SaveGraph(session, tx, g, cfg)
+				_, err = neo.SaveGraph(session, tx, g, cfg, nodeBatch, edgeBatch)
 				if err != nil {
 					tx.Rollback()
 					return err
@@ -68,4 +70,6 @@ func init() {
 	rootCmd.AddCommand(createGraphCmd)
 	createGraphCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
 	createGraphCmd.Flags().String("cfg", "", "configuration spec for node properties and labels (default: lsaneo.config.yaml)")
+	createGraphCmd.Flags().Int64("nodeBatch", 0, "batching size for creation of nodes")
+	createGraphCmd.Flags().Int64("edgeBatch", 0, "batching size for creation of edges")
 }

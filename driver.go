@@ -115,7 +115,7 @@ func (s *Session) Logf(format string, a ...interface{}) {
 // CreateGraph creates a graph and returns the neo4j ID of the root node
 // previous: 6.226258831s ~ 6.951803475
 // now: 783.724655ms ~ 793.762209ms
-func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config) (int64, error) {
+func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config, nodeBatch, edgeBatch int64) (int64, error) {
 	mappedEntities := make(map[graph.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]graph.Node, 0)
@@ -176,8 +176,8 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		queueNodes: createNodes{},
 		queueEdges: createEdges{},
 		actions:    make([]neo4jAction, 0),
-		// nodeBatch:  10,
-		// edgeBatch:  10,
+		nodeBatch:  nodeBatch,
+		edgeBatch:  edgeBatch,
 	}
 	for _, entity := range entities {
 		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
@@ -337,6 +337,13 @@ func MakeProperties(input map[string]interface{}) map[string]*ls.PropertyValue {
 	return ret
 }
 
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
 func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error), selectEntity func(graph.Node) bool) (error, []int64) {
 	if len(rootIds) == 0 {
 		return fmt.Errorf("Empty entity schema nodes"), nil
@@ -347,12 +354,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 	for _, id := range rootIds {
 		queue = append(queue, id)
 	}
-	min := func(x, y int) int {
-		if x < y {
-			return x
-		}
-		return y
-	}
+
 	for len(queue) > 0 {
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
 		if err != nil {
@@ -402,7 +404,11 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 			target := visitedNode[edge.EndId]
 			grph.NewEdge(src, target, edge.Type, edge.Props)
 		}
-		queue = queue[min(len(srcNodes), len(queue)):]
+		if len(srcNodes) < len(queue) {
+			queue = queue[len(srcNodes):]
+		} else {
+			queue = queue[len(queue):]
+		}
 	}
 	dbIds := make([]int64, len(visitedNode))
 	for id := range visitedNode {
