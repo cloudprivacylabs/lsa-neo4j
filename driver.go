@@ -189,7 +189,6 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 			if err := d.Queue(tx, jobs); err != nil {
 				return 0, err
 			}
-
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
 			if err := c.Queue(tx, jobs); err != nil {
 				return 0, err
@@ -296,21 +295,22 @@ func newEdge(ob1 neo4j.Relationship) Neo4jEdge {
 	return ob2
 }
 
-// there may be more than one record returned
 func findNeighbors(tx neo4j.Transaction, ids []uint64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
 	sources := make([]Neo4jNode, 0)
 	targets := make([]Neo4jNode, 0)
 	edges := make([]Neo4jEdge, 0)
-	idrec, err := tx.Run("MATCH (n)-[e]->(m) where id(n) in $id return n,m,e", map[string]interface{}{"id": ids})
+	idrec, err := tx.Run("MATCH (n)-[e*]->(m) where id(n) in $id RETURN n,m,e", map[string]interface{}{"id": ids})
 	if err != nil {
 		return sources, targets, edges, err
 	}
 	for idrec.Next() {
 		record := idrec.Record()
-		source := record.Values[0].(neo4j.Node)
-		sources = append(sources, newNode(source))
+		sources = append(sources, newNode(record.Values[0].(neo4j.Node)))
 		targets = append(targets, newNode(record.Values[1].(neo4j.Node)))
-		edges = append(edges, newEdge(record.Values[2].(neo4j.Relationship)))
+		edge := record.Values[2].([]interface{})
+		for _, e := range edge {
+			edges = append(edges, newEdge(e.(neo4j.Relationship)))
+		}
 	}
 	return sources, targets, edges, nil
 }
@@ -399,7 +399,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 			queue = queue[len(queue):]
 		}
 	}
-	dbIds := make([]int64, len(visitedNode))
+	dbIds := make([]int64, 0, len(visitedNode))
 	for id := range visitedNode {
 		dbIds = append(dbIds, id)
 	}

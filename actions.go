@@ -39,11 +39,11 @@ type CreateEntity struct {
 }
 
 func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, hm map[graph.Node]uint64, batch int) error {
-	if batch == 0 {
-		batch = len(q.createNodes)
-	}
 	vars := make(map[string]interface{})
 	for ix := 0; ix < len(q.deleteNodes); ix += batch {
+		if batch == 0 {
+			batch = len(q.deleteNodes)
+		}
 		var err error
 		if ix+batch >= len(q.deleteNodes) {
 			_, err = tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[ix:]})
@@ -54,11 +54,15 @@ func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, hm map[graph.Node]uint6
 			return err
 		}
 	}
+	// return nil
 	// TODO: Delete Edges
 	for ix := 0; ix < len(q.deleteEdges); ix += batch {
 
 	}
 	for ix := 0; ix < len(q.createNodes); ix += batch {
+		if batch == 0 {
+			batch = len(q.createNodes)
+		}
 		var createQuery string
 		if ix+batch >= len(q.createNodes) {
 			createQuery = buildCreateQuery(q.createNodes[ix:], cfg, vars)
@@ -95,7 +99,9 @@ func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, hm map[graph.Node]uint6
 }
 
 func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
-	err, ids := loadEntityNodes(tx, d.Graph, []uint64{d.entityId}, d.Config, findNeighbors, nil)
+	err, ids := loadEntityNodes(tx, d.Graph, []uint64{d.entityId}, d.Config, findNeighbors, func(n graph.Node) bool {
+		return true
+	})
 	if err != nil {
 		return err
 	}
