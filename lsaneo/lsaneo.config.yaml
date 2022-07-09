@@ -1,7 +1,9 @@
 termMappings:
   https://lschema.org/AttributeName: ls:attributeName
+  https://lschema.org/AttributeIndex: ls:attributeIndex
   https://lschema.org/AttributeValue: ls:attributeValue
   https://lschema.org/EntityID: ls:entityId
+  https://lschema.org/EntityIDFields: ls:entityIdFields
   https://lschema.org/NodeID: ls:nodeId
   https://lschema.org/SchemaNodeID: ls:schemaNodeId
   https://lschema.org/EdgeLabel: ls:edgeLabel

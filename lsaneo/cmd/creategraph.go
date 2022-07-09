@@ -18,7 +18,7 @@ var (
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
 			inputFormat, _ := cmd.Flags().GetString("input")
-			batch, _ := cmd.Flags().GetInt("batch")
+			batchSize, _ := cmd.Flags().GetInt("batch")
 			var cfg neo.Config
 
 			if cfgfile, _ := cmd.Flags().GetString("cfg"); len(cfgfile) == 0 {
@@ -52,7 +52,7 @@ var (
 				if err != nil {
 					return err
 				}
-				_, err = neo.SaveGraph(session, tx, g, cfg, batch)
+				err = neo.SaveGraph(session, tx, g, cfg, batchSize)
 				if err != nil {
 					tx.Rollback()
 					return err

@@ -1,6 +1,8 @@
 package neo4j
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
@@ -42,8 +44,11 @@ func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, i
 	seq := -1
 	return func(tx neo4j.Transaction, ids []uint64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
 		seq++
-		x := expected[seq]
-		return x.sources, x.targets, x.edges, nil
+		if seq < len(expected) {
+			x := expected[seq]
+			return x.sources, x.targets, x.edges, nil
+		}
+		return nil, nil, nil, nil
 	}
 }
 
@@ -62,8 +67,8 @@ func (transaction) Close() error    { return nil }
 
 func TestLoadEntityNodes(t *testing.T) {
 	var cfg Config
-	if err := cmdutil.ReadJSONOrYAML("lsaneo/config.yaml", &cfg); err != nil {
-		t.Errorf("Could not read file: %s", "lsaneo/config.yaml")
+	if err := cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg); err != nil {
+		t.Fatalf("Could not read file: %s", "lsaneo/lsaneo.config.yaml")
 	}
 	InitNamespaceTrie(&cfg)
 	tx := transaction{}
@@ -71,8 +76,74 @@ func TestLoadEntityNodes(t *testing.T) {
 	for _, node := range expected[0].sources {
 		roots = append(roots, uint64(node.Id))
 	}
-	grph := ls.NewDocumentGraph()
-	err, _ := loadEntityNodes(tx, grph, roots, cfg, getMockFindNeighbor(expected), selectEntity)
+	grph, err := cmdutil.ReadJSONGraph([]string{"examples/test.json"}, nil)
+	if err != nil {
+		t.Errorf("Could not read file: %s", "examples/test.json")
+	}
+	var exp []expectedStruct
+	uniqueIds := make(map[graph.Node]int64)
+	for itr := grph.GetEdges(); itr.Next(); {
+		estr := expectedStruct{}
+		edge := itr.Edge()
+		n4jEdge := Neo4jEdge{Type: edge.GetLabel()}
+		if edge.GetFrom() != nil {
+			src := edge.GetFrom()
+			if _, ok := uniqueIds[src]; !ok {
+				uniqueIds[src] = int64(rand.Intn(1000))
+			}
+			id := uniqueIds[src]
+			if err != nil {
+				t.Errorf("Error parsing node ID, mismatch for %v", id)
+				t.Fatal()
+			}
+			props := make(map[string]interface{})
+			src.ForEachProperty(func(s string, i interface{}) bool {
+				props[s] = cfg.MakeProperties(src, map[string]interface{}{})
+				return true
+			})
+			n4jNode := Neo4jNode{
+				Id:     id,
+				Labels: []string{cfg.MakeLabels(src.GetLabels().Slice())},
+				Props:  props,
+			}
+			estr.sources = append(estr.sources, n4jNode)
+			n4jEdge.StartId = id
+		}
+		if edge.GetTo() != nil {
+			to := edge.GetTo()
+			if _, ok := uniqueIds[to]; !ok {
+				uniqueIds[to] = int64(rand.Intn(1000))
+			}
+			id := uniqueIds[to]
+			if err != nil {
+				t.Errorf("Error parsing node ID, mismatch for %v", id)
+				t.Fatal()
+			}
+			props := make(map[string]interface{})
+			to.ForEachProperty(func(s string, i interface{}) bool {
+				props[s] = cfg.MakeProperties(to, map[string]interface{}{})
+				return true
+			})
+			n4jNode := Neo4jNode{
+				Id:     id,
+				Labels: []string{cfg.MakeLabels(to.GetLabels().Slice())},
+				Props:  props,
+			}
+			estr.targets = append(estr.targets, n4jNode)
+			n4jEdge.EndId = id
+		}
+		estr.edges = append(estr.edges, n4jEdge)
+		exp = append(exp, estr)
+	}
+
+	fmt.Println("----------------------------------------------------------------------------------------------------------------------------------------------")
+	// for ix := range exp {
+	// 	fmt.Println(exp[ix].edges)
+	// }
+	// t.Fatal()
+	fmt.Println()
+	// gr := ls.NewDocumentGraph(
+	err, _ = loadEntityNodes(tx, grph, roots, cfg, getMockFindNeighbor(exp), selectEntity)
 	ectx := opencypher.NewEvalContext(grph)
 	v, err := opencypher.ParseAndEvaluate("MATCH (n)-[e]->(m) return n,m,e", ectx)
 	if err != nil {
@@ -82,26 +153,53 @@ func TestLoadEntityNodes(t *testing.T) {
 	rs := v.Get().(opencypher.ResultSet)
 	expectedGraph := ls.NewDocumentGraph()
 
-	x := rs.Rows[0]["1"].Get().(graph.Node)
-	y := rs.Rows[0]["2"].Get().(graph.Node)
-	edge := rs.Rows[0]["3"].Get().([]graph.Edge)
-	src := expectedGraph.NewNode(x.GetLabels().Slice(), ls.CloneProperties(x))
-	target := expectedGraph.NewNode(y.GetLabels().Slice(), ls.CloneProperties(y))
-	expectedGraph.NewEdge(src, target, edge[0].GetLabel(), ls.CloneProperties(edge[0]))
+	for _, row := range rs.Rows {
+		x := row["1"].Get().(graph.Node)
+		y := row["2"].Get().(graph.Node)
+		tmp := MakeProperties(ls.CloneProperties(x))
+		for k, v := range tmp {
+			x.SetProperty(cfg.Map(k), v)
+		}
+		tm := MakeProperties(ls.CloneProperties(y))
+		for k, v := range tm {
+			y.SetProperty(cfg.Map(k), v)
+		}
+		edge := row["3"].Get().([]graph.Edge)
+		src := expectedGraph.NewNode([]string{cfg.MakeLabels(x.GetLabels().Slice())}, ls.CloneProperties(x))
+		target := expectedGraph.NewNode([]string{cfg.MakeLabels(x.GetLabels().Slice())}, ls.CloneProperties(y))
+		expectedGraph.NewEdge(src, target, edge[0].GetLabel(), ls.CloneProperties(edge[0]))
+	}
 
-	b := rs.Rows[1]["2"].Get().(graph.Node)
-	e := rs.Rows[1]["3"].Get().([]graph.Edge)
-	n := expectedGraph.NewNode(y.GetLabels().Slice(), ls.CloneProperties(b))
-	expectedGraph.NewEdge(src, n, edge[0].GetLabel(), ls.CloneProperties(e[0]))
+	// x := rs.Rows[0]["1"].Get().(graph.Node)
+	// y := rs.Rows[0]["2"].Get().(graph.Node)
+	// edge := rs.Rows[0]["3"].Get().([]graph.Edge)
+	// src := expectedGraph.NewNode([]string{cfg.MakeLabels(x.GetLabels().Slice())}, ls.CloneProperties(x))
+	// target := expectedGraph.NewNode([]string{cfg.MakeLabels(x.GetLabels().Slice())}, ls.CloneProperties(y))
+	// expectedGraph.NewEdge(src, target, edge[0].GetLabel(), ls.CloneProperties(edge[0]))
+
+	// b := rs.Rows[1]["2"].Get().(graph.Node)
+	// e := rs.Rows[1]["3"].Get().([]graph.Edge)
+	// n := expectedGraph.NewNode([]string{cfg.MakeLabels(y.GetLabels().Slice())}, ls.CloneProperties(b))
+	// expectedGraph.NewEdge(src, n, edge[0].GetLabel(), ls.CloneProperties(e[0]))
 
 	gotSources := make([]graph.Node, 0)
 	expectedSources := make([]graph.Node, 0)
-	for nodeItr := grph.GetNodes(); nodeItr.Next(); {
+	for nodeItr := grph.GetNodes(); nodeItr.Next(); { // 83
 		gotSources = append(gotSources, nodeItr.Node())
 	}
 	for nodeItr := expectedGraph.GetNodes(); nodeItr.Next(); {
 		expectedSources = append(expectedSources, nodeItr.Node())
 	}
+	// vexp := 0
+	// for ix := range exp {
+	// 	vexp += len(exp[ix].sources)
+	// 	vexp += len(exp[ix].targets)
+	// }
+
+	if len(gotSources) != len(expectedSources) {
+		t.Fatalf("MISMATCH GRAPHS -- gotSources = %d, expectedSources = %d", len(gotSources), len(expectedSources))
+	}
+
 	for g := range gotSources {
 		matched := false
 		for e := range expectedSources {
@@ -160,7 +258,7 @@ func TestLoadEntityNodes(t *testing.T) {
 			m := ls.JSONMarshaler{}
 			result, _ := m.Marshal(grph)
 			expected, _ := m.Marshal(expectedGraph)
-			t.Errorf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
+			t.Fatalf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
 		}
 	}
 }

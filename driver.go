@@ -58,64 +58,8 @@ func (s *Session) Logf(format string, a ...interface{}) {
 	fmt.Println(fmt.Sprintf(format+":%v", a))
 }
 
-// CreateGraph creates a graph and returns the neo4j ID of the root node
-// func SaveGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, config Config) (int64, error) {
-// 	nodeIds := make(map[graph.Node]int64)
-// 	allNodes := make(map[graph.Node]struct{})
-// 	//entityNodes := make(map[graph.Node]struct{})
-// 	// Find triples:
-// 	for _, node := range nodes {
-// 		allNodes[node] = struct{}{}
-// 	}
-// 	start := time.Now()
-// 	for node := range allNodes {
-
-// 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-// 			// TODO: Load entity nodes here
-// 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
-// 			if len(id) > 0 {
-// 				if exists, nid, err := session.existsDB(tx, node, config); exists && err == nil {
-// 					nodeIds[node] = nid
-// 				}
-// 			}
-// 		}
-
-// 	}
-// 	duration := time.Since(start)
-// 	fmt.Println(fmt.Sprintf("time elapsed for existsDB: %v", duration))
-
-// 	start = time.Now()
-// 	for node := range allNodes {
-// 		hasEdges := false
-// 		for edges := node.GetEdges(graph.OutgoingEdge); edges.Next(); {
-// 			edge := edges.Edge()
-// 			if _, exists := allNodes[edge.GetTo()]; exists {
-// 				// Triple: edge.GetFrom(), edge, edge.GetTo()
-// 				if err := session.processTriple(tx, edge, nodeIds, config); err != nil {
-// 					return 0, err
-// 				}
-// 				hasEdges = true
-// 			}
-// 		}
-// 		if !hasEdges {
-// 			if _, exists := nodeIds[node]; !exists {
-// 				c := createNode{Config: config, node: node}
-// 				if err := c.Run(tx, nodeIds); err != nil {
-// 					return 0, err
-// 				}
-// 			}
-// 		}
-
-// 	}
-// 	duration = time.Since(start)
-// 	fmt.Println(fmt.Sprintf("time elapsed for processTriple: %v", duration))
-// 	return 0, nil
-// }
-
-// CreateGraph creates a graph and returns the neo4j ID of the root node
-// previous: 6.226258831s ~ 6.951803475
-// now: 783.724655ms ~ 793.762209ms
-func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config, batch int) (int64, error) {
+// SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j ID of the entity node
+func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config, batch int) error {
 	mappedEntities := make(map[graph.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]graph.Node, 0)
@@ -142,7 +86,7 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	// TODO: After creation, check if function works
 	entityDBIds, entityIds, err := session.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	// map DB ids
@@ -175,7 +119,6 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	jobs := &JobQueue{
 		createNodes: make([]graph.Node, 0),
 		createEdges: make([]graph.Edge, 0),
-
 		deleteNodes: make([]uint64, 0),
 		deleteEdges: make([]uint64, 0),
 	}
@@ -187,23 +130,23 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		if _, exists := updates[id]; exists {
 			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity]}
 			if err := d.Queue(tx, jobs); err != nil {
-				return 0, err
+				return err
 			}
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
 			if err := c.Queue(tx, jobs); err != nil {
-				return 0, err
+				return err
 			}
 
 		} else if _, exists = creates[id]; exists {
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
 			if err := c.Queue(tx, jobs); err != nil {
-				return 0, err
+				return err
 			}
 
 		}
 	}
 	if err := jobs.Run(tx, config, mappedEntities, batch); err != nil {
-		return 0, err
+		return err
 	}
 
 	duration := time.Since(start)
@@ -216,12 +159,12 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 			if len(id) > 0 {
 				// TODO
 				if err := LinkNodesForNewEntity(tx, config, node, nil); err != nil {
-					return 0, err
+					return err
 				}
 			}
 		}
 	}
-	return 0, nil
+	return nil
 }
 
 type action interface {
@@ -299,7 +242,7 @@ func findNeighbors(tx neo4j.Transaction, ids []uint64) ([]Neo4jNode, []Neo4jNode
 	sources := make([]Neo4jNode, 0)
 	targets := make([]Neo4jNode, 0)
 	edges := make([]Neo4jEdge, 0)
-	idrec, err := tx.Run("MATCH (n)-[e*]->(m) where id(n) in $id RETURN n,m,e", map[string]interface{}{"id": ids})
+	idrec, err := tx.Run("MATCH (n)-[e]->(m) where id(n) in $id RETURN n,m,e", map[string]interface{}{"id": ids})
 	if err != nil {
 		return sources, targets, edges, err
 	}
@@ -307,9 +250,14 @@ func findNeighbors(tx neo4j.Transaction, ids []uint64) ([]Neo4jNode, []Neo4jNode
 		record := idrec.Record()
 		sources = append(sources, newNode(record.Values[0].(neo4j.Node)))
 		targets = append(targets, newNode(record.Values[1].(neo4j.Node)))
-		edge := record.Values[2].([]interface{})
-		for _, e := range edge {
-			edges = append(edges, newEdge(e.(neo4j.Relationship)))
+		e, ok := record.Values[2].(neo4j.Relationship)
+		if ok {
+			edges = append(edges, newEdge(e))
+		} else {
+			edge := record.Values[2].([]interface{})
+			for _, e := range edge {
+				edges = append(edges, newEdge(e.(neo4j.Relationship)))
+			}
 		}
 	}
 	return sources, targets, edges, nil
@@ -346,6 +294,11 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 
 	for len(queue) > 0 {
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
+		if len(srcNodes) < len(queue) {
+			queue = queue[len(srcNodes):]
+		} else {
+			queue = queue[len(queue):]
+		}
 		if err != nil {
 			return err, nil
 		}
@@ -393,11 +346,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 			target := visitedNode[edge.EndId]
 			grph.NewEdge(src, target, edge.Type, edge.Props)
 		}
-		if len(srcNodes) < len(queue) {
-			queue = queue[len(srcNodes):]
-		} else {
-			queue = queue[len(queue):]
-		}
+
 	}
 	dbIds := make([]int64, 0, len(visitedNode))
 	for id := range visitedNode {
