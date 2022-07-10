@@ -102,11 +102,8 @@ func CreateGraph(session *Session, tx neo4j.Transaction, nodes []graph.Node, con
 	// Link nodes
 	for node := range allNodes {
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
-			if len(id) > 0 {
-				if err := LinkNodesForNewEntity(tx, config, node, nodeIds); err != nil {
-					return 0, err
-				}
+			if err := LinkNodesForNewEntity(tx, config, node, nodeIds); err != nil {
+				return 0, err
 			}
 		}
 	}

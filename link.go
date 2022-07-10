@@ -29,7 +29,7 @@ func getLinkSpec(docNode graph.Node) *linkSpec {
 	if docNode == nil {
 		return nil
 	}
-	ref := ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceTerm)).AsString()
+	ref := ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceFKFor)).AsString()
 	if len(ref) == 0 {
 		return nil
 	}
@@ -44,7 +44,7 @@ func getLinkSpec(docNode graph.Node) *linkSpec {
 		ret.label = ls.HasTerm
 	}
 	ret.linkNode = ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceLinkNodeTerm)).AsString()
-	switch ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceLinkTerm)).AsString() {
+	switch ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceDirectionTerm)).AsString() {
 	case "to", "":
 		ret.forward = true
 	case "from":
