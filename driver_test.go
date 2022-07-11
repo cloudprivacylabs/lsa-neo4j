@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"testing"
 
@@ -10,6 +11,9 @@ import (
 	"github.com/cloudprivacylabs/opencypher"
 	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/ory/dockertest"
 )
 
 type expectedStruct struct {
@@ -261,4 +265,52 @@ func TestLoadEntityNodes(t *testing.T) {
 			t.Fatalf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
 		}
 	}
+}
+
+/*
+TestContainers plays well with the native go test framework.
+
+The ideal use case is for integration or end to end tests. It helps you to spin up and manage the dependencies life cycle via Docker.
+
+Docker has to be available for this library to work.
+*/
+// start docker container before testing
+
+// var _ = Describe("Driver", func() {
+// 	const username = "neo4j"
+// 	const pwd = "password"
+// 	const uri = "neo4j://34.213.163.7:7687"
+// 	const db = "neo4j"
+
+// 	var ctx context.Context
+// 	var neo4jContainer testcontainers.Container
+// 	var driver neo4j.Driver
+
+// 	BeforeEach(func() {
+
+// 	})
+// })
+
+// func startContainer(ctx context.Context, user, pwd string) (testcontainers.Container, error) {
+// 	request := testcontainers.ContainerRequest{
+// 		Image:        "neo4j",
+// 		ExposedPorts: []string{"7687/tcp"},
+// 		Env:          map[string]string{"NEO4J_AUTH": fmt.Sprintf("%s/%s", user, pwd)},
+// 		WaitingFor:   wait.ForLog("Bolt enabled"),
+// 	}
+// 	return testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+// 		ContainerRequest: request,
+// 		Started:          true,
+// 	})
+// }
+
+func setup(user, pwd string) *dockertest.Resource {
+	pool, err := dockertest.NewPool("")
+	if err != nil {
+		log.Fatalf("Could not connect to docker: %s", err)
+	}
+	// pull image, creates a container based on it and runs it
+	// resource, err := pool.Run("postgres", "13", []string{fmt.Sprintf("POSTGRES_PASSWORD=%s", testPassword), fmt.Sprintf("POSTGRES_DB=%s", testDbName)})
+
+	resource, err := pool.Run("neo4j", "", []string{fmt.Sprintf("NEO4J_USER=%s", user), fmt.Sprintf("NEO4J_PASSWORD=%s", pwd)})
 }
