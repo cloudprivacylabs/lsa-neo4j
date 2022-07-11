@@ -7,11 +7,9 @@ import (
 )
 
 type Config struct {
-	TermMappings       map[string]string `yaml:"termMappings"`
-	termExpansion      map[string]string
-	NamespaceMappings  map[string]string `yaml:"namespaceMappings"`
-	namespaceExpansion map[string]string
-	trie               *Trie
+	TermMappings      map[string]string `yaml:"termMappings"`
+	NamespaceMappings map[string]string `yaml:"namespaceMappings"`
+	trie              *Trie
 }
 
 type withProperty interface {
@@ -31,9 +29,7 @@ func (m mapWithProperty) ForEachProperty(f func(string, interface{}) bool) bool 
 
 func InitNamespaceTrie(cfg *Config) *Trie {
 	root := InitTrie()
-	cfg.namespaceExpansion = make(map[string]string)
 	for k, v := range cfg.NamespaceMappings {
-		cfg.namespaceExpansion[v] = k
 		root.Insert(k, v)
 	}
 	cfg.trie = root
@@ -76,15 +72,24 @@ func (cfg Config) Map(fullName string) string {
 	return fullName
 }
 
-func (cfg Config) Expand(short string) string {
-	if _, exists := cfg.termExpansion[short]; exists {
-		return cfg.termExpansion[short]
+func reverseLookup(m map[string]string, key string) (string, bool) {
+	for k, v := range m {
+		if key == v {
+			return k, true
+		}
+	}
+	return "", false
+}
+
+func (cfg *Config) Expand(short string) string {
+	if x, exists := reverseLookup(cfg.TermMappings, short); exists {
+		return x
 	}
 	col := strings.Index(short, ":")
 	if col == -1 {
 		return short
 	}
-	if prefix, exists := cfg.namespaceExpansion[short[:col]]; exists {
+	if prefix, exists := reverseLookup(cfg.NamespaceMappings, short[:col]); exists {
 		suffix := short[col+1:]
 		return prefix + suffix
 	}

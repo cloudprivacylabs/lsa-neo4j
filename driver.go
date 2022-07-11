@@ -260,7 +260,11 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 				for _, lbl := range srcNode.labels {
 					labels = append(labels, config.Expand(lbl))
 				}
-				src.SetLabels(graph.NewStringSet(labels...))
+				ss := graph.NewStringSet(labels...)
+				if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
+					ss.Add(ls.DocumentNodeTerm)
+				}
+				src.SetLabels(ss)
 				tmp := MakeProperties(srcNode.props)
 				for k, v := range tmp {
 					src.SetProperty(config.Expand(k), v)
@@ -275,7 +279,11 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 				for _, lbl := range node.labels {
 					labels = append(labels, config.Expand(lbl))
 				}
-				nd.SetLabels(graph.NewStringSet(labels...))
+				ss := graph.NewStringSet(labels...)
+				if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
+					ss.Add(ls.DocumentNodeTerm)
+				}
+				nd.SetLabels(ss)
 				tmp := MakeProperties(node.props)
 				for k, v := range tmp {
 					nd.SetProperty(config.Expand(k), v)
