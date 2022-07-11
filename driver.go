@@ -146,6 +146,23 @@ func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootId
 	return loadEntityNodes(tx, grph, rootIds, config, findNeighbors, selectEntity)
 }
 
+func (s *Session) LoadEntityNodesByEntityId(tx neo4j.Transaction, grph graph.Graph, rootIds []string, config Config, selectEntity func(graph.Node) bool) error {
+
+	idTerm := config.Map(ls.EntityIDTerm)
+	res, err := tx.Run(fmt.Sprintf("match (root) where root.`%s` in $ids return id(root)", idTerm), map[string]interface{}{"ids": rootIds})
+	if err != nil {
+		return err
+	}
+	ids := make([]int64, 0)
+	for res.Next() {
+		record := res.Record()
+		v := record.Values[0].(int64)
+		ids = append(ids, v)
+	}
+
+	return loadEntityNodes(tx, grph, ids, config, findNeighbors, selectEntity)
+}
+
 type neo4jNode struct {
 	id     int64
 	labels []string
@@ -228,6 +245,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 		queue = append(queue, id)
 	}
 	for len(queue) > 0 {
+		qLen := len(queue)
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
 		if err != nil {
 			return err
@@ -276,7 +294,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []int64, co
 			target := visitedNode[edge.endId]
 			grph.NewEdge(src, target, edge.types, edge.props)
 		}
-		queue = queue[len(srcNodes):]
+		queue = queue[qLen:]
 	}
 	return nil
 }

@@ -14,7 +14,7 @@ func loadConfig(cmd *cobra.Command) (neo.Config, error) {
 
 	if cfgfile, _ := cmd.Flags().GetString("cfg"); len(cfgfile) == 0 {
 		err := cmdutil.ReadJSONOrYAML("lsaneo.config.yaml", &cfg)
-		if !errors.Is(err, os.ErrNotExist) {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return neo.Config{}, err
 		}
 	} else {

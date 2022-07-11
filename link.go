@@ -45,9 +45,9 @@ func getLinkSpec(docNode graph.Node) *linkSpec {
 	}
 	ret.linkNode = ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceLinkNodeTerm)).AsString()
 	switch ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceDirectionTerm)).AsString() {
-	case "to", "":
+	case "to", "toTarget", "":
 		ret.forward = true
-	case "from":
+	case "from", "fromTarget":
 		ret.forward = false
 	}
 
