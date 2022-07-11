@@ -29,7 +29,7 @@ func getLinkSpec(docNode graph.Node) *linkSpec {
 	if docNode == nil {
 		return nil
 	}
-	ref := ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceTerm)).AsString()
+	ref := ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceFKFor)).AsString()
 	if len(ref) == 0 {
 		return nil
 	}
@@ -44,10 +44,10 @@ func getLinkSpec(docNode graph.Node) *linkSpec {
 		ret.label = ls.HasTerm
 	}
 	ret.linkNode = ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceLinkNodeTerm)).AsString()
-	switch ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceLinkTerm)).AsString() {
-	case "to", "":
+	switch ls.AsPropertyValue(docNode.GetProperty(ls.ReferenceDirectionTerm)).AsString() {
+	case "to", "toTarget", "":
 		ret.forward = true
-	case "from":
+	case "from", "fromTarget":
 		ret.forward = false
 	}
 
@@ -100,7 +100,7 @@ func (spec linkSpec) getForeignKeys(entityRoot graph.Node) ([][]string, error) {
 	return fks, nil
 }
 
-func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot graph.Node, nodeMap map[graph.Node]int64) error {
+func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot graph.Node, nodeMap map[graph.Node]uint64) error {
 	links := make([]linkSpec, 0)
 	// Does the entity have any outstanding links we need to work on?
 	var itrErr error
@@ -145,7 +145,7 @@ func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot graph
 	return linkToThisEntity(id)
 }
 
-func linkEntities(tx neo4j.Transaction, config Config, entityRoot graph.Node, spec linkSpec, nodeMap map[graph.Node]int64) error {
+func linkEntities(tx neo4j.Transaction, config Config, entityRoot graph.Node, spec linkSpec, nodeMap map[graph.Node]uint64) error {
 	foreignKeys, err := spec.getForeignKeys(entityRoot)
 	if err != nil {
 		return err

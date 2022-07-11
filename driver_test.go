@@ -13,36 +13,36 @@ import (
 )
 
 type expectedStruct struct {
-	sources []Neo4jNode
-	targets []Neo4jNode
-	edges   []Neo4jEdge
+	sources []neo4jNode
+	targets []neo4jNode
+	edges   []neo4jEdge
 }
 
 var expected = []expectedStruct{
 	{
-		sources: []Neo4jNode{
-			{Id: 60, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"ls:entitySchema": "Schema for a city"}},
+		sources: []neo4jNode{
+			{id: 60, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"ls:entitySchema": "Schema for a city"}},
 		},
-		targets: []Neo4jNode{
-			{Id: 61, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "San Francisco"}},
-			{Id: 62, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "Denver"}},
+		targets: []neo4jNode{
+			{id: 61, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "San Francisco"}},
+			{id: 62, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "Denver"}},
 		},
-		edges: []Neo4jEdge{
-			{Id: 28, Props: map[string]interface{}{"type": "city"}, StartId: 60, EndId: 61},
-			{Id: 29, Props: map[string]interface{}{"type": "city"}, StartId: 60, EndId: 62},
+		edges: []neo4jEdge{
+			{id: 28, props: map[string]interface{}{"type": "city"}, startId: 60, endId: 61},
+			{id: 29, props: map[string]interface{}{"type": "city"}, startId: 60, endId: 62},
 		},
 	},
 	{
-		sources: []Neo4jNode{
-			{Id: 61, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "San Francisco"}},
-			{Id: 62, Labels: []string{ls.DocumentNodeTerm}, Props: map[string]interface{}{"value": "Denver"}},
+		sources: []neo4jNode{
+			{id: 61, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "San Francisco"}},
+			{id: 62, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "Denver"}},
 		},
 	},
 }
 
-func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, ids []uint64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
+func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, ids []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
 	seq := -1
-	return func(tx neo4j.Transaction, ids []uint64) ([]Neo4jNode, []Neo4jNode, []Neo4jEdge, error) {
+	return func(tx neo4j.Transaction, ids []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
 		seq++
 		if seq < len(expected) {
 			x := expected[seq]
@@ -74,7 +74,7 @@ func TestLoadEntityNodes(t *testing.T) {
 	tx := transaction{}
 	roots := make([]uint64, 0, len(expected[0].sources))
 	for _, node := range expected[0].sources {
-		roots = append(roots, uint64(node.Id))
+		roots = append(roots, uint64(node.id))
 	}
 	grph, err := cmdutil.ReadJSONGraph([]string{"examples/test.json"}, nil)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestLoadEntityNodes(t *testing.T) {
 	for itr := grph.GetEdges(); itr.Next(); {
 		estr := expectedStruct{}
 		edge := itr.Edge()
-		n4jEdge := Neo4jEdge{Type: edge.GetLabel()}
+		n4jEdge := neo4jEdge{types: edge.GetLabel()}
 		if edge.GetFrom() != nil {
 			src := edge.GetFrom()
 			if _, ok := uniqueIds[src]; !ok {
@@ -101,13 +101,13 @@ func TestLoadEntityNodes(t *testing.T) {
 				props[s] = cfg.MakeProperties(src, map[string]interface{}{})
 				return true
 			})
-			n4jNode := Neo4jNode{
-				Id:     id,
-				Labels: []string{cfg.MakeLabels(src.GetLabels().Slice())},
-				Props:  props,
+			n4jNode := neo4jNode{
+				id:     id,
+				labels: []string{cfg.MakeLabels(src.GetLabels().Slice())},
+				props:  props,
 			}
 			estr.sources = append(estr.sources, n4jNode)
-			n4jEdge.StartId = id
+			n4jEdge.startId = id
 		}
 		if edge.GetTo() != nil {
 			to := edge.GetTo()
@@ -124,13 +124,13 @@ func TestLoadEntityNodes(t *testing.T) {
 				props[s] = cfg.MakeProperties(to, map[string]interface{}{})
 				return true
 			})
-			n4jNode := Neo4jNode{
-				Id:     id,
-				Labels: []string{cfg.MakeLabels(to.GetLabels().Slice())},
-				Props:  props,
+			n4jNode := neo4jNode{
+				id:     id,
+				labels: []string{cfg.MakeLabels(to.GetLabels().Slice())},
+				props:  props,
 			}
 			estr.targets = append(estr.targets, n4jNode)
-			n4jEdge.EndId = id
+			n4jEdge.endId = id
 		}
 		estr.edges = append(estr.edges, n4jEdge)
 		exp = append(exp, estr)
