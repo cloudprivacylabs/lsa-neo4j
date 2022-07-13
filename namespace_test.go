@@ -9,8 +9,8 @@ import (
 
 func TestNamespace(t *testing.T) {
 	var cfg Config
-	if err := cmdutil.ReadJSONOrYAML("lsaneo/config.yaml", &cfg); err != nil {
-		t.Errorf("Could not read file: %s", "lsaneo/config.yaml")
+	if err := cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg); err != nil {
+		t.Errorf("Could not read file: %s", "lsaneo.config.yaml")
 	}
 
 	myTrie := InitNamespaceTrie(&cfg)

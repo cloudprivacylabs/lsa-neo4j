@@ -96,7 +96,7 @@ func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[graph.Node]
 }
 
 func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
-	err, ids := loadEntityNodes(tx, d.Graph, []uint64{d.entityId}, d.Config, findNeighbors, func(n graph.Node) bool {
+	ids, err := loadEntityNodes(tx, d.Graph, []uint64{d.entityId}, d.Config, findNeighbors, func(n graph.Node) bool {
 		return true
 	})
 	if err != nil {
@@ -125,10 +125,18 @@ func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 		}
 		if _, exists := n.GetProperty(ls.EntitySchemaTerm); exists {
 			id := ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm)).AsString()
-			if len(id) > 0 {
+			ids := ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm)).AsStringSlice()
+			if id != "" {
 				curr := ls.AsPropertyValue(c.Node.GetProperty(ls.EntityIDTerm)).AsString()
 				if curr != id {
 					return false
+				}
+			} else if len(ids) > 0 {
+				curr := ls.AsPropertyValue(c.Node.GetProperty(ls.EntityIDTerm)).AsStringSlice()
+				for ix := 0; ix < len(curr); ix++ {
+					if curr[ix] != ids[ix] {
+						return false
+					}
 				}
 			}
 		}
@@ -143,6 +151,7 @@ func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 		// If edge goes to a different entity with ID, we should stop here
 		if _, ok := to.GetProperty(ls.EntitySchemaTerm); ok {
 			if _, ok := to.GetProperty(ls.EntityIDTerm); ok {
+				q.createEdges = append(q.createEdges, e)
 				return ls.SkipEdgeResult
 			}
 		}
@@ -193,89 +202,6 @@ func buildConnectQuery(edges []graph.Edge, c Config, hm map[graph.Node]uint64) s
 	}
 	return sb.String()
 }
-
-// func (c createEntity) create(tx neo4j.Transaction) error {
-// 	// TODO: recreate, find all reachable nodes from this node
-// 	// create entity
-// 	vars := make(map[string]interface{})
-// 	query := fmt.Sprintf("CREATE (m %s %s), return m",
-// 		c.MakeLabels(c.Node.GetLabels().Slice()),
-// 		c.MakeProperties(c.Node, vars))
-// 	idrec, err := tx.Run(query, vars)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	rec, err := idrec.Single()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	eid := rec.Values[0].(neo4j.Node).Id
-
-// 	connectedComponents := findConnectedComponents(c.Graph, c.Node, c.Config)
-// 	query = "UNWIND $nodeBatch as node UNWIND $edgeBatch as edge MATCH (m) where ID(m)=$eid CREATE (m)-[e]->(n) SET n = node, SET e = edge"
-// 	_, err = tx.Run(query, map[string]interface{}{"nodeBatch": mapNeo4jObject(connectedComponents), "edgeBatch": mapNeo4jObject(edges), "eid": eid})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
-
-// type insert struct {
-// 	Config
-// 	graph.Graph
-// 	graph.Node
-// 	entityId   int64
-// 	addedNodes []neo4jNode
-// }
-
-// // insert entity nodes in the db
-// // Insert should keep the nodes/edges to be inserted in a list
-// func (i insert) Run(tx neo4j.Transaction) error {
-// 	connectedComponents := findConnectedComponents(i.Graph, i.Node, i.Config)
-// 	query := fmt.Sprintf(`
-// 		UNWIND $batch as item MATCH (m) where ID(m)=$eid CREATE (m)-[%s *]->(n) SET n = item`,
-// 		i.GetNodes().Node().GetEdges(graph.EdgeDir(graph.OutgoingEdge)).Edge())
-// 	_, err := tx.Run(query, map[string]interface{}{"batch": mapNodes(connectedComponents), "eid": i.entityId})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
-
-// func findConnectedComponents(grph graph.Graph, node graph.Node, cfg Config) []neo4jNode {
-// 	queue := make([]graph.Node, 1)
-// 	allConnectedNodes := make([]neo4jNode, 0, grph.NumNodes())
-// 	queue[0] = node
-// 	visited := make(map[graph.Node]struct{})
-// 	for len(queue) > 0 {
-// 		curr := queue[0]
-// 		props := make(map[string]interface{})
-// 		vars := make(map[string]interface{})
-// 		curr.ForEachProperty(func(s string, in interface{}) bool {
-// 			prop := cfg.MakeProperties(curr, vars)
-// 			props[s] = prop
-// 			return true
-// 		})
-// 		node := neo4jNode{
-// 			labels: []string{cfg.MakeLabels(curr.GetLabels().Slice())},
-// 			props:  props,
-// 		}
-// 		allConnectedNodes = append(allConnectedNodes, node)
-// 		queue = queue[1:]
-// 		if _, seen := visited[curr]; !seen {
-// 			visited[curr] = struct{}{}
-// 			for edgeItr := curr.GetEdges(graph.OutgoingEdge); edgeItr.Next(); {
-// 				edge := edgeItr.Edge()
-// 				if _, seen := visited[edge.GetTo()]; !seen {
-// 					if _, exists := edge.GetTo().GetProperty(ls.EntitySchemaTerm); !exists {
-// 						queue = append(queue, edge.GetTo())
-// 					}
-// 				}
-// 			}
-// 		}
-// 	}
-// 	return allConnectedNodes
-// }
 
 type createEdgeToSourceAndTarget struct {
 	Config

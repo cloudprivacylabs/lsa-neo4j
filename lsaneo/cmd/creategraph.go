@@ -52,7 +52,7 @@ var (
 				if err != nil {
 					return err
 				}
-				err = neo.SaveGraph(session, tx, g, cfg, batchSize)
+				_, err = neo.SaveGraph(session, tx, g, cfg, batchSize)
 				if err != nil {
 					tx.Rollback()
 					return err

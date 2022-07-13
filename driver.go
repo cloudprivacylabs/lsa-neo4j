@@ -59,7 +59,8 @@ func (s *Session) Logf(format string, a ...interface{}) {
 }
 
 // SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j ID of the entity node
-func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config, batch int) error {
+func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config, batch int) ([]uint64, error) {
+	eids := make([]uint64, 0)
 	mappedEntities := make(map[graph.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]graph.Node, 0)
@@ -71,11 +72,11 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		node := nodeItr.Node()
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
-			// ids := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsStringSlice()
-			// if len(ids) > 0 {
-			// 	nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, ids...)
-			// 	entities = append(entities, node)
-			// }
+			ids := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsStringSlice()
+			if len(ids) > 0 {
+				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, strings.Join(ids, ","))
+				entities = append(entities, node)
+			}
 			if id != "" {
 				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, id)
 				entities = append(entities, node)
@@ -86,7 +87,7 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	// TODO: After creation, check if function works
 	entityDBIds, entityIds, err := session.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// map DB ids
@@ -96,9 +97,17 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		for ix := 0; ix < len(entityDBIds); ix++ {
 			if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 				id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
-				if len(id) > 0 {
+				ids := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).Slice()
+				if len(ids) > 0 {
+					eid := strings.Join(ids, ",")
+					if entityIds[ix] == eid {
+						mappedEntities[node] = uint64(entityDBIds[ix])
+						eids = append(eids, mappedEntities[node])
+					}
+				} else {
 					if entityIds[ix] == id {
 						mappedEntities[node] = uint64(entityDBIds[ix])
+						eids = append(eids, mappedEntities[node])
 					}
 				}
 			}
@@ -124,29 +133,33 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	}
 	for _, entity := range entities {
 		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
+		ids := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsStringSlice()
 		if id == "" {
-			continue
+			if len(ids) < 0 {
+				continue
+			}
+			id = strings.Join(ids, ",")
 		}
 		if _, exists := updates[id]; exists {
 			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity]}
 			if err := d.Queue(tx, jobs); err != nil {
-				return err
+				return nil, err
 			}
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
 			if err := c.Queue(tx, jobs); err != nil {
-				return err
+				return nil, err
 			}
 
 		} else if _, exists = creates[id]; exists {
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
 			if err := c.Queue(tx, jobs); err != nil {
-				return err
+				return nil, err
 			}
 
 		}
 	}
 	if err := jobs.Run(tx, config, mappedEntities, batch); err != nil {
-		return err
+		return nil, err
 	}
 
 	duration := time.Since(start)
@@ -156,11 +169,11 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 	for node := range allNodes {
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			if err := LinkNodesForNewEntity(tx, config, node, mappedEntities); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
-	return nil
+	return eids, nil
 }
 
 type action interface {
@@ -196,7 +209,7 @@ func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds m
 }
 
 func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, config Config, selectEntity func(graph.Node) bool) error {
-	err, _ := loadEntityNodes(tx, grph, rootIds, config, findNeighbors, selectEntity)
+	_, err := loadEntityNodes(tx, grph, rootIds, config, findNeighbors, selectEntity)
 	return err
 }
 
@@ -214,7 +227,7 @@ func (s *Session) LoadEntityNodesByEntityId(tx neo4j.Transaction, grph graph.Gra
 		ids = append(ids, uint64(v))
 	}
 
-	err, _ = loadEntityNodes(tx, grph, ids, config, findNeighbors, selectEntity)
+	_, err = loadEntityNodes(tx, grph, ids, config, findNeighbors, selectEntity)
 	return err
 }
 
@@ -295,9 +308,9 @@ func MakeProperties(input map[string]interface{}) map[string]*ls.PropertyValue {
 	return ret
 }
 
-func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(graph.Node) bool) (error, []int64) {
+func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(graph.Node) bool) ([]int64, error) {
 	if len(rootIds) == 0 {
-		return fmt.Errorf("Empty entity schema nodes"), nil
+		return nil, fmt.Errorf("Empty entity schema nodes")
 	}
 	// neo4j IDs
 	visitedNode := make(map[int64]graph.Node)
@@ -308,13 +321,9 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 
 	for len(queue) > 0 {
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
-		if len(srcNodes) < len(queue) {
-			queue = queue[len(srcNodes):]
-		} else {
-			queue = queue[len(queue):]
-		}
+		queue = queue[len(queue):]
 		if err != nil {
-			return err, nil
+			return nil, err
 		}
 		if len(srcNodes) == 0 || (len(adjNodes) == 0 && len(adjRelationships) == 0) {
 			break
@@ -326,11 +335,11 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 				for _, lbl := range srcNode.labels {
 					labels = append(labels, config.Expand(lbl))
 				}
-				ss := graph.NewStringSet(labels...)
-				if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
-					ss.Add(ls.DocumentNodeTerm)
-				}
-				src.SetLabels(ss)
+				// ss := graph.NewStringSet(labels...)
+				// if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
+				// 	ss.Add(ls.DocumentNodeTerm)
+				// }
+				src.SetLabels(graph.NewStringSet(labels...))
 				tmp := MakeProperties(srcNode.props)
 				for k, v := range tmp {
 					src.SetProperty(config.Expand(k), v)
@@ -366,14 +375,14 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 		for _, edge := range adjRelationships {
 			src := visitedNode[edge.startId]
 			target := visitedNode[edge.endId]
-			grph.NewEdge(src, target, edge.types, edge.props)
+			grph.NewEdge(src, target, config.Expand(edge.types), edge.props)
 		}
 	}
 	dbIds := make([]int64, 0, len(visitedNode))
 	for id := range visitedNode {
 		dbIds = append(dbIds, id)
 	}
-	return nil, dbIds
+	return dbIds, nil
 }
 
 // func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config) (bool, int64, error) {
@@ -403,7 +412,7 @@ func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config)
 		return entityDBIds, entityIds, nil
 	}
 	idTerm := config.Map(ls.EntityIDTerm)
-	query := fmt.Sprintf("MATCH (n) WHERE n.`%s` in $ids IS NOT NULL RETURN ID(n), n.`%s`", idTerm, idTerm)
+	query := fmt.Sprintf("MATCH (n) WHERE n.`%s` IS NOT NULL RETURN ID(n), n.`%s`", idTerm, idTerm)
 	// query := "MERGE (n) WITH n, [k in KEYS(n) | n[k]] AS values UNWIND values AS value MATCH (m) WHERE value IN $id RETURN ID(n), value"
 	//"MATCH (n) WHERE n.$propName IN $id return ID(n), n.$propName",
 	idrec, err := tx.Run(query, map[string]interface{}{"ids": ids})
@@ -418,9 +427,11 @@ func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config)
 			if !e {
 				continue
 			}
+			temp := make([]string, 0, len(sl))
 			for _, s := range sl {
-				entityIds = append(entityIds, s.(string))
+				temp = append(temp, s.(string))
 			}
+			entityIds = append(entityIds, strings.Join(temp, ","))
 			entityDBIds = append(entityDBIds, record.Values[0].(int64))
 			continue
 		}
