@@ -4,6 +4,7 @@
             "n": 0,
             "id": "http://example.org/root.ClinicalDocument",
             "labels": [
+                "lbl0",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object",
                 "ClinicalDocument"
@@ -22,6 +23,7 @@
             "n": 1,
             "id": "http://example.org/root.ClinicalDocument.id",
             "labels": [
+                "lbl1",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -38,6 +40,7 @@
             "n": 2,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole",
             "labels": [
+                "lbl2",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object",
                 "Patient"
@@ -57,6 +60,7 @@
             "n": 3,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.id",
             "labels": [
+                "lbl3",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -72,6 +76,7 @@
             "n": 4,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.addr",
             "labels": [
+                "lbl4",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -86,6 +91,7 @@
             "n": 5,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.addr.streetAddressLine",
             "labels": [
+                "lbl5",
                 "https://lschema.org/Value",
                 "https://lschema.org/DocumentNode"
             ],
@@ -101,6 +107,7 @@
             "n": 6,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.addr.city",
             "labels": [
+                "lbl6",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -116,6 +123,7 @@
             "n": 7,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.addr.state",
             "labels": [
+                "lbl7",
                 "https://lschema.org/Value",
                 "https://lschema.org/DocumentNode"
             ],
@@ -131,6 +139,7 @@
             "n": 8,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.addr.postalCode",
             "labels": [
+                "lbl8",
                 "https://lschema.org/Value",
                 "https://lschema.org/DocumentNode"
             ],
@@ -146,6 +155,7 @@
             "n": 9,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.addr.country",
             "labels": [
+                "lbl9",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -162,6 +172,7 @@
             "n": 10,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.telecom",
             "labels": [
+                "lbl10",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -176,6 +187,7 @@
             "n": 11,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.patient",
             "labels": [
+                "lbl11",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -190,6 +202,7 @@
             "n": 12,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.patient.name",
             "labels": [
+                "lbl12",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -204,6 +217,7 @@
             "n": 13,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.patient.name.family",
             "labels": [
+                "lbl13",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -219,6 +233,7 @@
             "n": 14,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.patient.name.given",
             "labels": [
+                "lbl14",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -235,6 +250,7 @@
             "n": 15,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.patient.administrativeGenderCode",
             "labels": [
+                "lbl15",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -253,6 +269,7 @@
             "n": 16,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.patient.birthTime.value",
             "labels": [
+                "lbl16",
                 "https://lschema.org/Value",
                 "https://lschema.org/DocumentNode"
             ],
@@ -269,6 +286,7 @@
             "n": 17,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.patient.raceCode",
             "labels": [
+                "lbl17",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -287,6 +305,7 @@
             "n": 18,
             "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.patient.ethnicGroupCode",
             "labels": [
+                "lbl18",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -301,6 +320,7 @@
             "n": 19,
             "id": "http://example.org/root.ClinicalDocument.author",
             "labels": [
+                "lbl19",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode",
                 "Author"
@@ -320,6 +340,7 @@
             "n": 20,
             "id": "http://example.org/root.ClinicalDocument.author.time",
             "labels": [
+                "lbl20",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -334,6 +355,7 @@
             "n": 21,
             "id": "http://example.org/root.ClinicalDocument.author.time#value",
             "labels": [
+                "lbl21",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -350,6 +372,7 @@
             "n": 22,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor",
             "labels": [
+                "lbl22",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -364,6 +387,7 @@
             "n": 23,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.id",
             "labels": [
+                "lbl23",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -378,6 +402,7 @@
             "n": 24,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.id#extension",
             "labels": [
+                "lbl24",
                 "https://lschema.org/Value",
                 "https://lschema.org/DocumentNode"
             ],
@@ -393,6 +418,7 @@
             "n": 25,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.addr",
             "labels": [
+                "lbl25",
                 "Address",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
@@ -410,6 +436,7 @@
             "n": 26,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.representedOrganization",
             "labels": [
+                "lbl26",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -424,6 +451,7 @@
             "n": 27,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.representedOrganization.id",
             "labels": [
+                "lbl27",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -438,6 +466,7 @@
             "n": 28,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.representedOrganization.name",
             "labels": [
+                "lbl28",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -453,6 +482,7 @@
             "n": 29,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.representedOrganization.addr",
             "labels": [
+                "lbl29",
                 "https://lschema.org/Object",
                 "Address",
                 "https://lschema.org/DocumentNode"
@@ -470,6 +500,7 @@
             "n": 30,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.representedOrganization.addr.streetAddressLine",
             "labels": [
+                "lbl30",
                 "https://lschema.org/Value",
                 "https://lschema.org/DocumentNode"
             ],
@@ -485,6 +516,7 @@
             "n": 31,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.representedOrganization.addr.city",
             "labels": [
+                "lbl31",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -500,6 +532,7 @@
             "n": 32,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.representedOrganization.addr.state",
             "labels": [
+                "lbl32",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -515,6 +548,7 @@
             "n": 33,
             "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor.representedOrganization.addr.postalCode",
             "labels": [
+                "lbl33",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -530,6 +564,7 @@
             "n": 34,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
             "labels": [
+                "lbl34",
                 "AllergySection",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
@@ -549,6 +584,7 @@
             "n": 35,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.code",
             "labels": [
+                "lbl35",
                 "https://lschema.org/Object",
                 "Code",
                 "https://lschema.org/DocumentNode"
@@ -569,6 +605,7 @@
             "n": 36,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.act",
             "labels": [
+                "lbl36",
                 "https://lschema.org/DocumentNode",
                 "Act",
                 "AllergyAct",
@@ -590,6 +627,7 @@
             "n": 37,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.act.code",
             "labels": [
+                "lbl37",
                 "https://lschema.org/DocumentNode",
                 "AllergyActCode",
                 "Code",
@@ -608,6 +646,7 @@
             "n": 38,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.act.entryRelationship.observation",
             "labels": [
+                "lbl38",
                 "Observation",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object",
@@ -630,6 +669,7 @@
             "n": 39,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.act.entryRelationship.observation.code",
             "labels": [
+                "lbl39",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object",
                 "Code"
@@ -649,6 +689,7 @@
             "n": 40,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
             "labels": [
+                "lbl40",
                 "https://lschema.org/Object",
                 "MedicationSection",
                 "https://lschema.org/DocumentNode"
@@ -668,6 +709,7 @@
             "n": 41,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.code",
             "labels": [
+                "lbl41",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode",
                 "Code"
@@ -688,6 +730,7 @@
             "n": 42,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.substanceAdministration",
             "labels": [
+                "lbl42",
                 "SubstanceAdministration",
                 "https://lschema.org/DocumentNode",
                 "MedicationSubstanceAdministration",
@@ -709,6 +752,7 @@
             "n": 43,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.substanceAdministration.consumable.manufacturedProduct",
             "labels": [
+                "lbl43",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -725,6 +769,7 @@
             "n": 44,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
             "labels": [
+                "lbl44",
                 "ProblemSection",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
@@ -743,6 +788,7 @@
             "n": 45,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.code",
             "labels": [
+                "lbl45",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object",
                 "Code"
@@ -763,6 +809,7 @@
             "n": 46,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.act",
             "labels": [
+                "lbl46",
                 "https://lschema.org/Object",
                 "ProblemAct",
                 "Act",
@@ -784,6 +831,7 @@
             "n": 47,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.act.code",
             "labels": [
+                "lbl47",
                 "https://lschema.org/DocumentNode",
                 "ProblemActCode",
                 "Code",
@@ -802,6 +850,7 @@
             "n": 48,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.act.entryRelationship.observation",
             "labels": [
+                "lbl48",
                 "ProblemActObservation",
                 "ProblemObservation",
                 "https://lschema.org/DocumentNode",
@@ -824,6 +873,7 @@
             "n": 49,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.act.entryRelationship.observation.value",
             "labels": [
+                "lbl49",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -843,6 +893,7 @@
             "n": 50,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
             "labels": [
+                "lbl50",
                 "ProcedureSection",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
@@ -861,6 +912,7 @@
             "n": 51,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.code",
             "labels": [
+                "lbl51",
                 "Code",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
@@ -881,6 +933,7 @@
             "n": 52,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.procedure",
             "labels": [
+                "lbl52",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object",
                 "Procedure"
@@ -902,6 +955,7 @@
             "n": 53,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.procedure.code",
             "labels": [
+                "lbl53",
                 "Code",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
@@ -918,6 +972,7 @@
             "n": 54,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.procedure.code.translation",
             "labels": [
+                "lbl54",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -937,6 +992,7 @@
             "n": 55,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.procedure.statusCode.code",
             "labels": [
+                "lbl55",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -953,6 +1009,7 @@
             "n": 56,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.procedure.effectiveTime",
             "labels": [
+                "lbl56",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -970,6 +1027,7 @@
             "n": 57,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.procedure.entryRelationship.encounter",
             "labels": [
+                "lbl57",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -984,6 +1042,7 @@
             "n": 58,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.procedure.entryRelationship.encounter.id",
             "labels": [
+                "lbl58",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -998,6 +1057,7 @@
             "n": 59,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
             "labels": [
+                "lbl59",
                 "EncounterSection",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
@@ -1016,6 +1076,7 @@
             "n": 60,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.code",
             "labels": [
+                "lbl60",
                 "Code",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
@@ -1036,6 +1097,7 @@
             "n": 61,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter",
             "labels": [
+                "lbl61",
                 "Encounter",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
@@ -1063,6 +1125,7 @@
             "n": 62,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter.id",
             "labels": [
+                "lbl62",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode"
             ],
@@ -1077,6 +1140,7 @@
             "n": 63,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter.id#root",
             "labels": [
+                "lbl63",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -1092,6 +1156,7 @@
             "n": 64,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter.id#extension",
             "labels": [
+                "lbl64",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Value"
             ],
@@ -1107,6 +1172,7 @@
             "n": 65,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter.code",
             "labels": [
+                "lbl65",
                 "https://lschema.org/DocumentNode",
                 "Code",
                 "https://lschema.org/Object"
@@ -1127,6 +1193,7 @@
             "n": 66,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter.effectiveTime",
             "labels": [
+                "lbl66",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -1144,6 +1211,7 @@
             "n": 67,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
             "labels": [
+                "lbl67",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode",
                 "ImmunizationSection"
@@ -1163,6 +1231,7 @@
             "n": 68,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.code",
             "labels": [
+                "lbl68",
                 "https://lschema.org/Object",
                 "Code",
                 "https://lschema.org/DocumentNode"
@@ -1183,6 +1252,7 @@
             "n": 69,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.substanceAdministration",
             "labels": [
+                "lbl69",
                 "https://lschema.org/Object",
                 "ImmunizationSubstanceAdministration",
                 "SubstanceAdministration",
@@ -1206,6 +1276,7 @@
             "n": 70,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.substanceAdministration.consumable.manufacturedProduct",
             "labels": [
+                "lbl70",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
             ],
@@ -1222,6 +1293,7 @@
             "n": 71,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
             "labels": [
+                "lbl71",
                 "SocialHistorySection",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object"
@@ -1240,6 +1312,7 @@
             "n": 72,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.code",
             "labels": [
+                "lbl72",
                 "https://lschema.org/Object",
                 "Code",
                 "https://lschema.org/DocumentNode"
@@ -1260,6 +1333,7 @@
             "n": 73,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.observation",
             "labels": [
+                "lbl73",
                 "https://lschema.org/DocumentNode",
                 "Observation",
                 "https://lschema.org/Object",
@@ -1280,6 +1354,7 @@
             "n": 74,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.observation.code",
             "labels": [
+                "lbl74",
                 "https://lschema.org/DocumentNode",
                 "https://lschema.org/Object",
                 "Code"
@@ -1299,6 +1374,7 @@
             "n": 75,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
             "labels": [
+                "lbl75",
                 "https://lschema.org/Object",
                 "VitalSignsSection",
                 "https://lschema.org/DocumentNode"
@@ -1320,6 +1396,7 @@
             "n": 76,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.code",
             "labels": [
+                "lbl76",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode",
                 "Code"
@@ -1340,6 +1417,7 @@
             "n": 77,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.organizer.templateId.root",
             "labels": [
+                "lbl77",
                 "https://lschema.org/Value",
                 "https://lschema.org/DocumentNode"
             ],
@@ -1357,6 +1435,7 @@
             "n": 78,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.organizer.code",
             "labels": [
+                "lbl78",
                 "https://lschema.org/Object",
                 "https://lschema.org/DocumentNode",
                 "Code"
@@ -1377,6 +1456,7 @@
             "n": 79,
             "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.organizer.component.observation",
             "labels": [
+                "lbl79",
                 "https://lschema.org/DocumentNode",
                 "Observation",
                 "VitalSignObservation",

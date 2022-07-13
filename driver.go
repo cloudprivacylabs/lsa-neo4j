@@ -58,7 +58,7 @@ func (s *Session) Logf(format string, a ...interface{}) {
 	fmt.Println(fmt.Sprintf(format+":%v", a))
 }
 
-// SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j ID of the entity node
+// SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j IDs of the entity nodes
 func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config, batch int) ([]uint64, error) {
 	eids := make([]uint64, 0)
 	mappedEntities := make(map[graph.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
@@ -84,7 +84,6 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		}
 	}
 
-	// TODO: After creation, check if function works
 	entityDBIds, entityIds, err := session.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
 		return nil, err
@@ -174,38 +173,6 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		}
 	}
 	return eids, nil
-}
-
-type action interface {
-	Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error
-}
-
-func (s *Session) processTriple(tx neo4j.Transaction, edge graph.Edge, nodeIds map[graph.Node]int64, cfg Config) error {
-	var a action
-	hasFrom := contains(edge.GetFrom(), nodeIds)
-	hasTo := contains(edge.GetTo(), nodeIds)
-	switch {
-	case hasFrom && hasTo:
-		// Contains both node and target nodes
-		// (node)--edge-->(node)
-		a = createEdgeToSourceAndTarget{Config: cfg, edge: edge}
-	case hasFrom && !hasTo:
-		// contains only source node
-		// (match) --edge-->(newNode)
-		a = createTargetFromSource{Config: cfg, edge: edge}
-	case !hasFrom && hasTo:
-		// contains only target node
-		// (newNode) --edge-->(match) --edge-->(newNode)
-		a = createSourceFromTarget{Config: cfg, edge: edge}
-	default:
-		// source,target does not exist in db
-		// (newNode) --edge-->(newNode)
-		a = createNodePair{Config: cfg, edge: edge}
-	}
-	if err := a.Run(tx, nodeIds); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, config Config, selectEntity func(graph.Node) bool) error {
@@ -335,10 +302,10 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 				for _, lbl := range srcNode.labels {
 					labels = append(labels, config.Expand(lbl))
 				}
-				// ss := graph.NewStringSet(labels...)
-				// if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
-				// 	ss.Add(ls.DocumentNodeTerm)
-				// }
+				ss := graph.NewStringSet(labels...)
+				if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
+					ss.Add(ls.DocumentNodeTerm)
+				}
 				src.SetLabels(graph.NewStringSet(labels...))
 				tmp := MakeProperties(srcNode.props)
 				for k, v := range tmp {
@@ -385,26 +352,6 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 	return dbIds, nil
 }
 
-// func (s *Session) existsDB(tx neo4j.Transaction, node graph.Node, config Config) (bool, int64, error) {
-// 	if node == nil {
-// 		return false, -1, nil
-// 	}
-// 	vars := make(map[string]interface{})
-// 	labelsClause := config.MakeLabels(node.GetLabels().Slice())
-// 	propertiesClause := config.MakeProperties(node, vars)
-// 	query := fmt.Sprintf("MATCH (n %s %s) return n", labelsClause, propertiesClause)
-// 	idrec, err := tx.Run(query, vars)
-// 	if err != nil {
-// 		return false, -1, err
-// 	}
-// 	rec, err := idrec.Single()
-// 	if err != nil {
-// 		return false, -1, err
-// 	}
-// 	nd := rec.Values[0].(neo4j.Node)
-// 	return true, nd.Id, nil
-// }
-
 func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config) ([]int64, []string, error) {
 	var entityDBIds []int64 = make([]int64, 0, len(ids))
 	var entityIds []string = make([]string, 0, len(ids))
@@ -413,8 +360,6 @@ func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config)
 	}
 	idTerm := config.Map(ls.EntityIDTerm)
 	query := fmt.Sprintf("MATCH (n) WHERE n.`%s` IS NOT NULL RETURN ID(n), n.`%s`", idTerm, idTerm)
-	// query := "MERGE (n) WITH n, [k in KEYS(n) | n[k]] AS values UNWIND values AS value MATCH (m) WHERE value IN $id RETURN ID(n), value"
-	//"MATCH (n) WHERE n.$propName IN $id return ID(n), n.$propName",
 	idrec, err := tx.Run(query, map[string]interface{}{"ids": ids})
 	if err != nil {
 		return entityDBIds, entityIds, err
