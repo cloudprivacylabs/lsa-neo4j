@@ -1,0 +1,352 @@
+{
+    "nodes": [
+        {
+            "n": 0,
+            "id": "http://example.org/root.ClinicalDocument",
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object",
+                "ClinicalDocument"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "10",
+                "https://lschema.org/attributeName": "ClinicalDocument",
+                "https://lschema.org/entityId": "79efe282-b105-4e79-9e72-38427f7b9c1f",
+                "https://lschema.org/entityIdFields": "https://hl7.org/ccda/v3/ClinicalDocument/id/extension",
+                "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/ClinicalDocument/schema",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/ClinicalDocument",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        },
+        {
+            "n": 1,
+            "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole",
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object",
+                "Patient"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/ref": "Patient",
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/attributeName": "patientRole",
+                "https://lschema.org/entityId": "1002391",
+                "https://lschema.org/entityIdFields": "https://hl7.org/ccda/v3/patientRole/id/extension",
+                "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/Patient/schema",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/ClinicalDocument/recordTarget/patientRole",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        },
+        {
+            "n": 2,
+            "id": "http://example.org/root.ClinicalDocument.id",
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object"
+            ],
+            "properties": {
+                "extension": "79efe282-b105-4e79-9e72-38427f7b9c1f",
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/attributeName": "id",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/ClinicalDocument/id",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "root": "0001"
+            }
+        },
+        {
+            "n": 3,
+            "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
+            "labels": [
+                "AllergySection",
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/ref": "AllergySection",
+                "https://lschema.org/attributeIndex": "3",
+                "https://lschema.org/attributeName": "section",
+                "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/AllergySection/schema",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/Component/section/AllergySection",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "templateId": "2.16.840.1.113883.10.20.22.2.6.1",
+                "typeCode": "DRIV"
+            }
+        },
+        {
+            "n": 4,
+            "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
+            "labels": [
+                "https://lschema.org/Object",
+                "MedicationSection",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/ref": "MedicationSection",
+                "https://lschema.org/attributeIndex": "4",
+                "https://lschema.org/attributeName": "section",
+                "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/MedicationSection/schema",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/Component/section/MedicationSection",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "templateId": "2.16.840.1.113883.10.20.22.2.1.1",
+                "typeCode": "DRIV"
+            }
+        },
+        {
+            "n": 5,
+            "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
+            "labels": [
+                "ProblemSection",
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/ref": "ProblemSection",
+                "https://lschema.org/attributeIndex": "5",
+                "https://lschema.org/attributeName": "section",
+                "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/ProblemSection/schema",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/Component/section/ProblemSection",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "templateId": "2.16.840.1.113883.10.20.22.2.5.1"
+            }
+        },
+        {
+            "n": 6,
+            "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter",
+            "labels": [
+                "Encounter",
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "classCode": "ENC",
+                "https://lschema.org/Reference/ref": "Encounter",
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/attributeName": "encounter",
+                "https://lschema.org/entityId": [
+                    "0001",
+                    "0f9fb7e6-3ba9-420d-b767-022b4de408d7"
+                ],
+                "https://lschema.org/entityIdFields": [
+                    "https://hl7.org/ccda/v3/encounter/id/root",
+                    "https://hl7.org/ccda/v3/encounter/id/extension"
+                ],
+                "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/Encounter/schema",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/EncounderSection/entry/encounter",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "moodCode": "EVN"
+            }
+        },
+        {
+            "n": 7,
+            "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter.id",
+            "labels": [
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/attributeName": "id",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/encounter/id",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        },
+        {
+            "n": 8,
+            "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter.code",
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "Code",
+                "https://lschema.org/Object"
+            ],
+            "properties": {
+                "code": "99395",
+                "codeSystem": "2.16.840.1.113883.6.12",
+                "codeSystemName": "CPT4",
+                "displayName": "Preventive checkup, est, 18-39 yrs",
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/attributeName": "code",
+                "https://lschema.org/conditional": "mustHaveChildren",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/encounter/code",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        },
+        {
+            "n": 9,
+            "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section.entry.encounter.effectiveTime",
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object"
+            ],
+            "properties": {
+                "high": "20150507",
+                "https://lschema.org/attributeIndex": "2",
+                "https://lschema.org/attributeName": "effectiveTime",
+                "https://lschema.org/conditional": "mustHaveChildren",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/Encounter/effectiveTime",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "low": "20150507"
+            }
+        },
+        {
+            "n": 10,
+            "id": "http://example.org/root.ClinicalDocument.author",
+            "labels": [
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode",
+                "Author"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/ref": "Author",
+                "https://lschema.org/attributeIndex": "2",
+                "https://lschema.org/attributeName": "author",
+                "https://lschema.org/entityId": "ab6b1d3d-8626-49a8-a0c7-39d8aee04d06",
+                "https://lschema.org/entityIdFields": "https://hl7.org/ccda/v3/author/id",
+                "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/Author/schema",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/ClinilcalDocument/author",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        },
+        {
+            "n": 11,
+            "id": "http://example.org/root.ClinicalDocument.author.time",
+            "labels": [
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/attributeName": "time",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/author/time/object",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        },
+        {
+            "n": 12,
+            "id": "http://example.org/root.ClinicalDocument.author.assignedAuthor",
+            "labels": [
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/attributeName": "assignedAuthor",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/author/assignedAuthor",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        },
+        {
+            "n": 13,
+            "id": "http://example.org/root.ClinicalDocument.component.structuredBody.component.section",
+            "labels": [
+                "EncounterSection",
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/ref": "EncounterSection",
+                "https://lschema.org/attributeIndex": "7",
+                "https://lschema.org/attributeName": "section",
+                "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/EncounterSection/schema",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/Component/section/EncounterSection",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "templateId": "2.16.840.1.113883.10.20.22.2.22"
+            }
+        },
+        {
+            "n": 14,
+            "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.id",
+            "labels": [
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "extension": "1002391",
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/attributeName": "id",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/patientRole/id",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        },
+        {
+            "n": 15,
+            "id": "http://example.org/root.ClinicalDocument.recordTarget.patientRole.addr",
+            "labels": [
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/attributeName": "addr",
+                "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/patientRole/addr",
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+            }
+        }
+    ],
+    "edges": [
+        {
+            "from": 0,
+            "to": 13,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 0,
+            "to": 2,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 0,
+            "to": 3,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 0,
+            "to": 4,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 0,
+            "to": 5,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 6,
+            "to": 7,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 6,
+            "to": 8,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 6,
+            "to": 9,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 10,
+            "to": 11,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 10,
+            "to": 12,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 13,
+            "to": 6,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 1,
+            "to": 14,
+            "label": "https://lschema.org/has"
+        },
+        {
+            "from": 1,
+            "to": 15,
+            "label": "https://lschema.org/has"
+        }
+    ]
+}

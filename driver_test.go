@@ -1,166 +1,192 @@
 package neo4j
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"log"
 	"testing"
 
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/cloudprivacylabs/opencypher"
 	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-type expectedStruct struct {
-	sources []neo4jNode
-	targets []neo4jNode
-	edges   []neo4jEdge
-}
-
-var expected = []expectedStruct{
-	{
-		sources: []neo4jNode{
-			{id: 60, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"ls:entitySchema": "Schema for a city"}},
-		},
-		targets: []neo4jNode{
-			{id: 61, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "San Francisco"}},
-			{id: 62, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "Denver"}},
-		},
-		edges: []neo4jEdge{
-			{id: 28, props: map[string]interface{}{"type": "city"}, startId: 60, endId: 61},
-			{id: 29, props: map[string]interface{}{"type": "city"}, startId: 60, endId: 62},
-		},
-	},
-	{
-		sources: []neo4jNode{
-			{id: 61, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "San Francisco"}},
-			{id: 62, labels: []string{ls.DocumentNodeTerm}, props: map[string]interface{}{"value": "Denver"}},
-		},
-	},
-}
-
-func getMockFindNeighbor(expected []expectedStruct) func(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
-	seq := -1
-	return func(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
-		seq++
-		x := expected[seq]
-		return x.sources, x.targets, x.edges, nil
-	}
+func TestLsaNeo4j(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "LsaNeo4j Suite")
 }
 
 func selectEntity(node graph.Node) bool {
 	return true
 }
 
-type transaction struct{}
+var _ = Describe("Driver", func() {
+	const username = "neo4j"
+	const pwd = "password"
+	const uri = "neo4j://34.213.163.7"
+	const port = 7687
+	const db = "neo4j"
 
-func (transaction) Run(cypher string, params map[string]interface{}) (neo4j.Result, error) {
-	return nil, nil
-}
-func (transaction) Commit() error   { return nil }
-func (transaction) Rollback() error { return nil }
-func (transaction) Close() error    { return nil }
+	var ctx context.Context
+	var neo4jContainer testcontainers.Container
+	var session *Session
+	var driver neo4j.Driver
+	var tx neo4j.Transaction
 
-func TestLoadEntityNodes(t *testing.T) {
 	var cfg Config
-	if err := cmdutil.ReadJSONOrYAML("lsaneo/config.yaml", &cfg); err != nil {
-		t.Errorf("Could not read file: %s", "lsaneo/config.yaml")
-	}
-	InitNamespaceTrie(&cfg)
-	tx := transaction{}
-	roots := make([]int64, 0, len(expected[0].sources))
-	for _, node := range expected[0].sources {
-		roots = append(roots, node.id)
-	}
-	grph := ls.NewDocumentGraph()
-	err := loadEntityNodes(tx, grph, roots, cfg, getMockFindNeighbor(expected), selectEntity)
-	ectx := opencypher.NewEvalContext(grph)
-	v, err := opencypher.ParseAndEvaluate("MATCH (n)-[e]->(m) return n,m,e", ectx)
-	if err != nil {
-		t.Error()
-	}
+	var grph graph.Graph
+	var eids []uint64
+	var err error
 
-	rs := v.Get().(opencypher.ResultSet)
-	expectedGraph := ls.NewDocumentGraph()
+	BeforeEach(func() {
+		ctx = context.Background()
+		var err error
+		neo4jContainer, err = startContainer(ctx, username, pwd)
+		Expect(err).To(BeNil(), "Container should start")
+		//port, err := neo4jContainer.MappedPort(ctx, "7687")
+		Expect(err).To(BeNil(), "Port should be resolved")
+		address := fmt.Sprintf("%s:%d", uri, port)
+		driver, err = neo4j.NewDriver(address, neo4j.BasicAuth(username, pwd, ""))
+		Expect(err).To(BeNil(), "Driver should be created")
+		err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
+		Expect(err).To(BeNil(), "Could not read file: %s", "lsaneo/lsaneo.config.yaml")
+		InitNamespaceTrie(&cfg)
+		grph, err = cmdutil.ReadJSONGraph([]string{"examples/test.json"}, nil)
+		Expect(err).To(BeNil(), "Could not read file: %s", "examples/test.json")
+	})
 
-	x := rs.Rows[0]["1"].Get().(graph.Node)
-	y := rs.Rows[0]["2"].Get().(graph.Node)
-	edge := rs.Rows[0]["3"].Get().([]graph.Edge)
-	src := expectedGraph.NewNode(x.GetLabels().Slice(), ls.CloneProperties(x))
-	target := expectedGraph.NewNode(y.GetLabels().Slice(), ls.CloneProperties(y))
-	expectedGraph.NewEdge(src, target, edge[0].GetLabel(), ls.CloneProperties(edge[0]))
+	AfterEach(func() {
+		Close(driver, "Driver")
+		Expect(neo4jContainer.Terminate(ctx)).To(BeNil(), "Container should stop")
+	})
 
-	b := rs.Rows[1]["2"].Get().(graph.Node)
-	e := rs.Rows[1]["3"].Get().([]graph.Edge)
-	n := expectedGraph.NewNode(y.GetLabels().Slice(), ls.CloneProperties(b))
-	expectedGraph.NewEdge(src, n, edge[0].GetLabel(), ls.CloneProperties(e[0]))
+	It("Post to database", func() {
+		drv := NewDriver(driver, db)
+		session = drv.NewSession()
+		defer session.Close()
+		tx, err = session.BeginTransaction()
+		Expect(err).To(BeNil(), "must be valid transaction")
+		eids, _ = SaveGraph(session, tx, grph, selectEntity, cfg, 0)
+	})
 
-	gotSources := make([]graph.Node, 0)
-	expectedSources := make([]graph.Node, 0)
-	for nodeItr := grph.GetNodes(); nodeItr.Next(); {
-		gotSources = append(gotSources, nodeItr.Node())
-	}
-	for nodeItr := expectedGraph.GetNodes(); nodeItr.Next(); {
-		expectedSources = append(expectedSources, nodeItr.Node())
-	}
-	for g := range gotSources {
-		matched := false
-		for e := range expectedSources {
-			eq := graph.CheckIsomorphism(gotSources[g].GetGraph(), expectedSources[e].GetGraph(), func(n1, n2 graph.Node) bool {
-				// If only one of the source nodes match, return false
-				if n1 == gotSources[g] {
+	It("Load from database", func() {
+		drv := NewDriver(driver, db)
+		session = drv.NewSession()
+		defer session.Close()
+		tx, err = session.BeginTransaction()
+		Expect(err).To(BeNil(), "must be valid transaction")
+		expectedGraph := ls.NewDocumentGraph()
+		_, err := loadEntityNodes(tx, expectedGraph, eids, cfg, findNeighbors, selectEntity)
+		Expect(err).To(BeNil(), "unable to load nodes connected to entity", err)
+
+		// graph isomorphism
+		gotSources := make([]graph.Node, 0)
+		expectedSources := make([]graph.Node, 0)
+		edgeSources := make([]graph.Edge, 0)
+		expectedEdgeSources := make([]graph.Edge, 0)
+		for nodeItr := grph.GetNodes(); nodeItr.Next(); {
+			gotSources = append(gotSources, nodeItr.Node())
+
+		}
+		for nodeItr := expectedGraph.GetNodes(); nodeItr.Next(); {
+			expectedSources = append(expectedSources, nodeItr.Node())
+		}
+		for edgeItr := grph.GetEdges(); edgeItr.Next(); {
+			edge := edgeItr.Edge()
+			edgeSources = append(edgeSources, edge)
+		}
+		for edgeItr := expectedGraph.GetEdges(); edgeItr.Next(); {
+			edge := edgeItr.Edge()
+			expectedEdgeSources = append(expectedEdgeSources, edge)
+		}
+
+		Expect(len(gotSources)).To(Equal(len(expectedSources)), "mismatch number of nodes")
+		Expect(len(edgeSources)).To(Equal(len(expectedEdgeSources)), "mismatch number of edges %d, %d", len(edgeSources), len(expectedEdgeSources))
+
+		for g := range gotSources {
+			matched := false
+			for e := range expectedSources {
+				eq := graph.CheckIsomorphism(gotSources[g].GetGraph(), expectedSources[e].GetGraph(), func(n1, n2 graph.Node) bool {
+					// If only one of the source nodes match, return false
+					if n1 == gotSources[g] {
+						if n2 == expectedSources[e] {
+							return true
+						}
+						return false
+					}
 					if n2 == expectedSources[e] {
+						return false
+					}
+
+					// Expected properties must be a subset
+					propertiesOK := true
+					n2.ForEachProperty(func(k string, v interface{}) bool {
+						pv, ok := v.(*ls.PropertyValue)
+						if !ok {
+							return true
+						}
+						v2, ok := n1.GetProperty(k)
+						if !ok {
+							log.Printf("Error at %s: %v: Property does not exist", k, v)
+							propertiesOK = false
+							return false
+						}
+						pv2, ok := v2.(*ls.PropertyValue)
+						if !ok {
+							log.Printf("Error at %s: %v: Not property value", k, v)
+							propertiesOK = false
+							return false
+						}
+						if !pv2.IsEqual(pv) {
+							log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
+							propertiesOK = false
+							return false
+						}
 						return true
-					}
-					return false
-				}
-				if n2 == expectedSources[e] {
-					return false
-				}
-				// Expected properties must be a subset
-				propertiesOK := true
-				n2.ForEachProperty(func(k string, v interface{}) bool {
-					pv, ok := v.(*ls.PropertyValue)
-					if !ok {
-						return true
-					}
-					v2, ok := n1.GetProperty(k)
-					if !ok {
-						t.Logf("Error at %s: %v: Property does not exist", k, v)
-						propertiesOK = false
+					})
+					if !propertiesOK {
+						log.Printf("Properties not same")
 						return false
 					}
-					pv2, ok := v2.(*ls.PropertyValue)
-					if !ok {
-						t.Logf("Error at %s: %v: Not property value", k, v)
-						propertiesOK = false
-						return false
-					}
-					if !pv2.IsEqual(pv) {
-						t.Logf("Error at %s: %v: Values are not equal", k, v)
-						propertiesOK = false
-						return false
-					}
+					log.Printf("True\n")
 					return true
+				}, func(e1, e2 graph.Edge) bool {
+					return ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))
 				})
-				if !propertiesOK {
-					t.Logf("Properties not same")
-					return false
+				if eq {
+					matched = true
+					break
 				}
-				t.Logf("True\n")
-				return true
-			}, func(e1, e2 graph.Edge) bool {
-				return ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))
-			})
-			if eq {
-				matched = true
-				break
+			}
+			if !matched {
+				m := ls.JSONMarshaler{}
+				result, _ := m.Marshal(grph)
+				expected, _ := m.Marshal(expectedGraph)
+				log.Fatalf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
 			}
 		}
-		if !matched {
-			m := ls.JSONMarshaler{}
-			result, _ := m.Marshal(grph)
-			expected, _ := m.Marshal(expectedGraph)
-			t.Errorf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
-		}
+	})
+})
+
+func Close(closer io.Closer, resourceName string) {
+	Expect(closer.Close()).To(BeNil(), "%s should be closed", resourceName)
+}
+
+func startContainer(ctx context.Context, user, pwd string) (testcontainers.Container, error) {
+	request := testcontainers.ContainerRequest{
+		Image:        "neo4j:latest",
+		ExposedPorts: []string{"7687/tcp"},
+		Env:          map[string]string{"NEO4J_AUTH": fmt.Sprintf("%s/%s", user, pwd)},
+		WaitingFor:   wait.ForLog("Bolt enabled"),
 	}
+	return testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: request,
+		Started:          true,
+	})
 }

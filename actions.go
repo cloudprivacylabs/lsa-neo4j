@@ -2,171 +2,169 @@ package neo4j
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
-type createEdgeToSourceAndTarget struct {
-	Config
-	edge graph.Edge
+var DEFAULT_BATCH_SIZE = 1000
+
+type JobQueue struct {
+	createNodes []graph.Node
+	createEdges []graph.Edge
+	deleteNodes []uint64
+	deleteEdges []uint64
 }
 
-func (c createEdgeToSourceAndTarget) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
+type DeleteEntity struct {
+	Config
+	graph.Graph
+	entityId uint64
+}
+
+type CreateEntity struct {
+	Config
+	graph.Graph
+	graph.Node
+}
+
+func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[graph.Node]uint64, batchSize int) error {
+	if batchSize == 0 {
+		batchSize = DEFAULT_BATCH_SIZE
+	}
 	vars := make(map[string]interface{})
-	query := fmt.Sprintf("MATCH (f) WITH f MATCH (t) WHERE ID(f)=%d AND ID(t)=%d CREATE (f)-[%s %s]->(t)",
-		nodeIds[c.edge.GetFrom()],
-		nodeIds[c.edge.GetTo()],
-		c.MakeLabels([]string{c.edge.GetLabel()}),
-		c.MakeProperties(c.edge, vars))
-	return query, vars
-}
+	for len(q.deleteNodes) > 0 {
+		batch := len(q.deleteNodes)
+		if batch > batchSize {
+			batch = batchSize
+		}
+		// delete nodes in batches
+		_, err := tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[:batch]})
+		if err != nil {
+			return err
+		}
+		q.deleteNodes = q.deleteNodes[batch:]
+	}
+	// TODO: Delete Edges
+	for len(q.deleteEdges) > 0 {
 
-func (c createEdgeToSourceAndTarget) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query, vars := c.GetOCStmt(nodeIds)
-	_, err := tx.Run(query, vars)
-	if err != nil {
-		return err
+	}
+	for len(q.createNodes) > 0 {
+		batch := len(q.createNodes)
+		if batch > batchSize {
+			batch = batchSize
+		}
+		// create nodes in batches
+		query := buildCreateQuery(q.createNodes[:batch], cfg, vars)
+		idrec, err := tx.Run(query, vars)
+		if err != nil {
+			return err
+		}
+		records, err := idrec.Single()
+		if err != nil {
+			return err
+		}
+		// track database IDs into nodeMap
+		for i, rec := range records.Values {
+			nodeMap[q.createNodes[i]] = uint64(rec.(int64))
+		}
+		// dequeue nodes based on batch size
+		q.createNodes = q.createNodes[batch:]
+	}
+	for len(q.createEdges) > 0 {
+		batch := len(q.createEdges)
+		if batch > batchSize {
+			batch = batchSize
+		}
+		// create edges in batches
+		query := buildConnectQuery(q.createEdges[:batch], cfg, nodeMap)
+		q.createEdges = q.createEdges[batch:]
+		_, err := tx.Run(query, vars)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-type createTargetFromSource struct {
-	Config
-	edge graph.Edge
-}
-
-func (c createTargetFromSource) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
-	vars := make(map[string]interface{})
-	query := fmt.Sprintf("MATCH (from) WHERE ID(from) = %d CREATE (from)-[%s %s]->(to %s %s) RETURN to",
-		nodeIds[c.edge.GetFrom()],
-		c.MakeLabels([]string{c.edge.GetLabel()}),
-		c.MakeProperties(c.edge, vars),
-		c.MakeLabels(c.edge.GetTo().GetLabels().Slice()),
-		c.MakeProperties(c.edge.GetTo(), vars))
-	return query, vars
-}
-
-func (c createTargetFromSource) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query, vars := c.GetOCStmt(nodeIds)
-	idrec, err := tx.Run(query, vars)
+// DeleteEntity.Queue will find all connected nodes to the given entity in the database and delete them
+func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue, selectEntity func(graph.Node) bool) error {
+	ids, err := loadEntityNodes(tx, d.Graph, []uint64{d.entityId}, d.Config, findNeighbors, selectEntity)
 	if err != nil {
 		return err
 	}
-	rec, err := idrec.Single()
-	if err != nil {
-		return err
+	for _, id := range ids {
+		if id != 0 {
+			q.deleteNodes = append(q.deleteNodes, uint64(id))
+		}
 	}
-	nd := rec.Values[0].(neo4j.Node)
-	nodeIds[c.edge.GetTo()] = nd.Id
 	return nil
 }
 
-type createSourceFromTarget struct {
-	Config
-	edge graph.Edge
-}
-
-func (c createSourceFromTarget) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
-	vars := make(map[string]interface{})
-	query := fmt.Sprintf("MATCH (to) WHERE ID(to) = %d CREATE (to)<-[%s %s]-(from %s %s) RETURN from",
-		nodeIds[c.edge.GetTo()],
-		c.MakeLabels([]string{c.edge.GetLabel()}),
-		c.MakeProperties(c.edge, vars),
-		c.MakeLabels(c.edge.GetFrom().GetLabels().Slice()),
-		c.MakeProperties(c.edge.GetFrom(), vars))
-	return query, vars
-}
-
-func (c createSourceFromTarget) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query, vars := c.GetOCStmt(nodeIds)
-	idrec, err := tx.Run(query, vars)
-	if err != nil {
-		return err
-	}
-	rec, err := idrec.Single()
-	if err != nil {
-		return err
-	}
-	nd := rec.Values[0].(neo4j.Node)
-	nodeIds[c.edge.GetFrom()] = nd.Id
+// CreateEntity.Queue will find all connected nodes to the given entity and create, stopping at different entity boundaries
+func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
+	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
+		if !n.GetLabels().Has(ls.DocumentNodeTerm) {
+			return true
+		}
+		q.createNodes = append(q.createNodes, n)
+		return true
+	}, func(e graph.Edge) ls.EdgeFuncResult {
+		to := e.GetTo()
+		// Edge must go to a document node
+		if !to.GetLabels().Has(ls.DocumentNodeTerm) {
+			return ls.SkipEdgeResult
+		}
+		// If edge goes to a different entity with ID, we should stop here
+		if _, ok := to.GetProperty(ls.EntitySchemaTerm); ok {
+			if _, ok := to.GetProperty(ls.EntityIDTerm); ok {
+				q.createEdges = append(q.createEdges, e)
+				return ls.SkipEdgeResult
+			}
+		}
+		q.createEdges = append(q.createEdges, e)
+		return ls.FollowEdgeResult
+	}, false)
 	return nil
 }
 
-type createNodePair struct {
-	Config
-	edge graph.Edge
+// query to create nodes
+func buildCreateQuery(nodes []graph.Node, c Config, vars map[string]interface{}) string {
+	sb := strings.Builder{}
+	for ix, node := range nodes {
+		prop := c.MakeProperties(node, vars)
+		labels := c.MakeLabels(node.GetLabels().Slice())
+		sb.WriteString(fmt.Sprintf("(n%d%s %s)", ix, labels, prop))
+		// Add a comma until the end of query
+		if ix < len(nodes)-1 {
+			sb.WriteString(",")
+		}
+	}
+	builder := strings.Builder{}
+	for ix := range nodes {
+		builder.WriteString(fmt.Sprintf("ID(n%d)", ix))
+		// Add a comma until the end of query
+		if ix < len(nodes)-1 {
+			builder.WriteString(",")
+		}
+	}
+	return fmt.Sprintf("CREATE %s RETURN %s", sb.String(), builder.String())
 }
 
-func (c createNodePair) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
-	vars := make(map[string]interface{})
-	fromLabelsClause := c.MakeLabels(c.edge.GetFrom().GetLabels().Slice())
-	toLabelsClause := c.MakeLabels(c.edge.GetTo().GetLabels().Slice())
-	fromPropertiesClause := c.MakeProperties(c.edge.GetFrom(), vars)
-	toPropertiesClause := c.MakeProperties(c.edge.GetTo(), vars)
-
-	var query string
-	if c.edge.GetFrom() == c.edge.GetTo() {
-		query = fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(n) RETURN n",
-			fromLabelsClause, fromPropertiesClause,
-			c.MakeLabels([]string{c.edge.GetLabel()}),
-			c.MakeProperties(c.edge, vars))
-	} else {
-		query = fmt.Sprintf("CREATE (n %s %s)-[%s %s]->(m %s %s) RETURN n, m",
-			fromLabelsClause, fromPropertiesClause,
-			c.MakeLabels([]string{c.edge.GetLabel()}),
-			c.MakeProperties(c.edge, vars),
-			toLabelsClause, toPropertiesClause)
+// query to create edges and connect existing nodes in the database
+func buildConnectQuery(edges []graph.Edge, c Config, hm map[graph.Node]uint64) string {
+	sb := strings.Builder{}
+	for ix, edge := range edges {
+		from := hm[edge.GetFrom()]
+		to := hm[edge.GetTo()]
+		label := c.MakeLabels([]string{edge.GetLabel()})
+		sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d CREATE (n%d)-[%s]->(m%d) ", ix, ix, ix, from, ix, to, ix, label, ix))
+		// Add UNION until the end of query
+		if ix < len(edges)-1 {
+			sb.WriteString("UNION ")
+		}
 	}
-	return query, vars
-}
-
-// "CREATE (n :`Person`:`ls:documentNode` {`ls:entityId`:$p0,`ls:entitySchema`:$p1,`https://lschema.org/entityId`:$p2,`https://lschema.org/entitySchema`:$p3})-[:` ` ]->(m :`ls:documentNode` {`value`:$p4}) RETURN n, m"
-
-func (c createNodePair) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query, vars := c.GetOCStmt(nodeIds)
-	idrec, err := tx.Run(query, vars)
-	if err != nil {
-		return err
-	}
-	rec, err := idrec.Single()
-	if err != nil {
-		return err
-	}
-	if len(rec.Values) > 1 {
-		nodeIds[c.edge.GetFrom()] = rec.Values[0].(neo4j.Node).Id
-		nodeIds[c.edge.GetTo()] = rec.Values[1].(neo4j.Node).Id
-		return nil
-	}
-	nodeIds[c.edge.GetFrom()] = rec.Values[0].(neo4j.Node).Id
-	nodeIds[c.edge.GetTo()] = rec.Values[0].(neo4j.Node).Id
-	return nil
-}
-
-type createNode struct {
-	Config
-	node graph.Node
-}
-
-func (c createNode) GetOCStmt(nodeIds map[graph.Node]int64) (string, map[string]interface{}) {
-	nodeVars := make(map[string]interface{})
-	labelsClause := c.MakeLabels(c.node.GetLabels().Slice())
-	propertiesClause := c.MakeProperties(c.node, nodeVars)
-	query := fmt.Sprintf("CREATE (n %s %s) RETURN n", labelsClause, propertiesClause)
-	return query, nodeVars
-}
-
-func (c createNode) Run(tx neo4j.Transaction, nodeIds map[graph.Node]int64) error {
-	query, vars := c.GetOCStmt(nodeIds)
-	idrec, err := tx.Run(query, vars)
-	if err != nil {
-		return err
-	}
-	rec, err := idrec.Single()
-	if err != nil {
-		return err
-	}
-	nd := rec.Values[0].(neo4j.Node)
-	nodeIds[c.node] = nd.Id
-	return nil
+	return sb.String()
 }
