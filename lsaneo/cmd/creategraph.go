@@ -7,6 +7,7 @@ import (
 
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
+	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/spf13/cobra"
 )
 
@@ -52,7 +53,8 @@ var (
 				if err != nil {
 					return err
 				}
-				_, err = neo.SaveGraph(session, tx, g, cfg, batchSize)
+
+				_, err = neo.SaveGraph(session, tx, g, func(graph.Node) bool { return true }, cfg, batchSize)
 				if err != nil {
 					tx.Rollback()
 					return err

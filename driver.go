@@ -59,7 +59,7 @@ func (s *Session) Logf(format string, a ...interface{}) {
 }
 
 // SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j IDs of the entity nodes
-func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config Config, batch int) ([]uint64, error) {
+func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, selectEntity func(graph.Node) bool, config Config, batch int) ([]uint64, error) {
 	eids := make([]uint64, 0)
 	mappedEntities := make(map[graph.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
@@ -141,16 +141,16 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, config 
 		}
 		if _, exists := updates[id]; exists {
 			d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity]}
-			if err := d.Queue(tx, jobs); err != nil {
+			if err := d.Queue(tx, jobs, selectEntity); err != nil {
 				return nil, err
 			}
-			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
+			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
 			if err := c.Queue(tx, jobs); err != nil {
 				return nil, err
 			}
 
 		} else if _, exists = creates[id]; exists {
-			c := &CreateEntity{Config: config, Graph: grph, Node: entity, vars: make(map[string]interface{})}
+			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
 			if err := c.Queue(tx, jobs); err != nil {
 				return nil, err
 			}

@@ -9,9 +9,7 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
-type neo4jAction interface {
-	Queue(neo4j.Transaction, *JobQueue) error
-}
+var DEFAULT_BATCH_SIZE = 1000
 
 type JobQueue struct {
 	createNodes []graph.Node
@@ -30,38 +28,37 @@ type CreateEntity struct {
 	Config
 	graph.Graph
 	graph.Node
-	vars map[string]interface{}
 }
 
 func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[graph.Node]uint64, batchSize int) error {
-	const DEFAULT_BATCH_SIZE = 1000
 	if batchSize == 0 {
 		batchSize = DEFAULT_BATCH_SIZE
 	}
 	vars := make(map[string]interface{})
-	for ix := 0; ix < len(q.deleteNodes); ix += batchSize {
-		var err error
-		if ix+batchSize >= len(q.deleteNodes) {
-			_, err = tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[ix:]})
-		} else {
-			_, err = tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[ix : ix+batchSize]})
+	for len(q.deleteNodes) > 0 {
+		batch := len(q.deleteNodes)
+		if batch > batchSize {
+			batch = batchSize
 		}
+		// delete nodes in batches
+		_, err := tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[:batch]})
 		if err != nil {
 			return err
 		}
+		q.deleteNodes = q.deleteNodes[batch:]
 	}
 	// TODO: Delete Edges
-	for ix := 0; ix < len(q.deleteEdges); ix += batchSize {
+	for len(q.deleteEdges) > 0 {
 
 	}
-	for ix := 0; ix < len(q.createNodes); ix += batchSize {
-		var createQuery string
-		if ix+batchSize >= len(q.createNodes) {
-			createQuery = buildCreateQuery(q.createNodes[ix:], cfg, vars)
-		} else {
-			createQuery = buildCreateQuery(q.createNodes[ix:ix+batchSize], cfg, vars)
+	for len(q.createNodes) > 0 {
+		batch := len(q.createNodes)
+		if batch > batchSize {
+			batch = batchSize
 		}
-		idrec, err := tx.Run(createQuery, vars)
+		// create nodes in batches
+		query := buildCreateQuery(q.createNodes[:batch], cfg, vars)
+		idrec, err := tx.Run(query, vars)
 		if err != nil {
 			return err
 		}
@@ -69,31 +66,32 @@ func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[graph.Node]
 		if err != nil {
 			return err
 		}
+		// track database IDs into nodeMap
 		for i, rec := range records.Values {
-			nodeMap[q.createNodes[i+ix]] = uint64(rec.(int64))
+			nodeMap[q.createNodes[i]] = uint64(rec.(int64))
 		}
-
+		// dequeue nodes based on batch size
+		q.createNodes = q.createNodes[batch:]
 	}
-	for ix := 0; ix < len(q.createEdges); ix += batchSize {
-		var connectQuery string
-		if ix+batchSize >= len(q.createEdges) {
-			connectQuery = buildConnectQuery(q.createEdges[ix:], cfg, nodeMap)
-		} else {
-			connectQuery = buildConnectQuery(q.createEdges[ix:ix+batchSize], cfg, nodeMap)
+	for len(q.createEdges) > 0 {
+		batch := len(q.createEdges)
+		if batch > batchSize {
+			batch = batchSize
 		}
-		_, err := tx.Run(connectQuery, vars)
+		// create edges in batches
+		query := buildConnectQuery(q.createEdges[:batch], cfg, nodeMap)
+		q.createEdges = q.createEdges[batch:]
+		_, err := tx.Run(query, vars)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
-func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
-	ids, err := loadEntityNodes(tx, d.Graph, []uint64{d.entityId}, d.Config, findNeighbors, func(n graph.Node) bool {
-		return true
-	})
+// DeleteEntity.Queue will find all connected nodes to the given entity in the database and delete them
+func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue, selectEntity func(graph.Node) bool) error {
+	ids, err := loadEntityNodes(tx, d.Graph, []uint64{d.entityId}, d.Config, findNeighbors, selectEntity)
 	if err != nil {
 		return err
 	}
@@ -105,18 +103,11 @@ func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	return nil
 }
 
+// CreateEntity.Queue will find all connected nodes to the given entity and create, stopping at different entity boundaries
 func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
 		if !n.GetLabels().Has(ls.DocumentNodeTerm) {
 			return true
-		}
-		if _, exists := n.GetProperty(ls.EntitySchemaTerm); exists {
-			id := ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm)).AsString()
-			if id != "" {
-				if c.Node != n {
-					return false
-				}
-			}
 		}
 		q.createNodes = append(q.createNodes, n)
 		return true
@@ -139,38 +130,40 @@ func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 	return nil
 }
 
+// query to create nodes
 func buildCreateQuery(nodes []graph.Node, c Config, vars map[string]interface{}) string {
 	sb := strings.Builder{}
 	for ix, node := range nodes {
 		prop := c.MakeProperties(node, vars)
 		labels := c.MakeLabels(node.GetLabels().Slice())
+		sb.WriteString(fmt.Sprintf("(n%d%s %s)", ix, labels, prop))
+		// Add a comma until the end of query
 		if ix < len(nodes)-1 {
-			sb.WriteString(fmt.Sprintf("(n%d%s %s),", ix, labels, prop))
-		} else {
-			sb.WriteString(fmt.Sprintf("(n%d%s %s) ", ix, labels, prop))
+			sb.WriteString(",")
 		}
 	}
 	builder := strings.Builder{}
 	for ix := range nodes {
+		builder.WriteString(fmt.Sprintf("ID(n%d)", ix))
+		// Add a comma until the end of query
 		if ix < len(nodes)-1 {
-			builder.WriteString(fmt.Sprintf("ID(n%d),", ix))
-		} else {
-			builder.WriteString(fmt.Sprintf("ID(n%d)", ix))
+			builder.WriteString(",")
 		}
 	}
 	return fmt.Sprintf("CREATE %s RETURN %s", sb.String(), builder.String())
 }
 
+// query to create edges and connect existing nodes in the database
 func buildConnectQuery(edges []graph.Edge, c Config, hm map[graph.Node]uint64) string {
 	sb := strings.Builder{}
 	for ix, edge := range edges {
 		from := hm[edge.GetFrom()]
 		to := hm[edge.GetTo()]
 		label := c.MakeLabels([]string{edge.GetLabel()})
+		sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d CREATE (n%d)-[%s]->(m%d) ", ix, ix, ix, from, ix, to, ix, label, ix))
+		// Add UNION until the end of query
 		if ix < len(edges)-1 {
-			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d CREATE (n%d)-[%s]->(m%d) UNION ", ix, ix, ix, from, ix, to, ix, label, ix))
-		} else {
-			sb.WriteString(fmt.Sprintf("MATCH (n%d) MATCH (m%d) WHERE ID(n%d)=%d AND ID(m%d)=%d CREATE (n%d)-[%s]->(m%d) ", ix, ix, ix, from, ix, to, ix, label, ix))
+			sb.WriteString("UNION ")
 		}
 	}
 	return sb.String()
