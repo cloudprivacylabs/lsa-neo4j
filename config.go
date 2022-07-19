@@ -1,15 +1,19 @@
 package neo4j
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/cloudprivacylabs/opencypher/graph"
 )
 
 type Config struct {
-	TermMappings      map[string]string `yaml:"termMappings"`
-	NamespaceMappings map[string]string `yaml:"namespaceMappings"`
-	trie              *Trie
+	TermMappings         map[string]string `yaml:"termMappings"`
+	NamespaceMappings    map[string]string `yaml:"namespaceMappings"`
+	PropertyTypeMappings map[string]string `yaml:"propertyTypeMappings"`
+	trie                 *Trie
 }
 
 type withProperty interface {
@@ -37,6 +41,13 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 }
 
 func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) string {
+	var subject withProperty
+	switch x.(type) {
+	case graph.Node:
+		subject = x.(graph.Node)
+	case graph.Edge:
+		subject = x.(graph.Edge)
+	}
 	propMap := make(map[string]*ls.PropertyValue)
 	for k, v := range ls.PropertiesAsMap(x) {
 		short := cfg.Map(k)
@@ -44,7 +55,7 @@ func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) 
 			propMap[short] = v
 		}
 	}
-	props := makeProperties(txVars, propMap, nil)
+	props := makeProperties(cfg, subject, txVars, propMap, nil)
 	return props
 }
 
@@ -58,6 +69,33 @@ func (cfg Config) MakeLabels(types []string) string {
 	}
 	labels := makeLabels(nil, mapped)
 	return labels
+}
+
+func (cfg Config) PropertyMap(tp, val string) interface{} {
+	if _, exists := cfg.PropertyTypeMappings[cfg.Map(tp)]; exists {
+		cnvrt := cfg.PropertyTypeMappings[cfg.Map(tp)]
+		switch cnvrt {
+		case "json:boolean":
+			boolVal, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("Error parsing boolean value: %s, %w", val, err)
+			}
+			return boolVal
+		case "ls:boolean":
+			boolVal, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("Error parsing boolean value: %s, %w", val, err)
+			}
+			return boolVal
+		case "json:number":
+			intVal, err := strconv.ParseInt(val, 10, 64)
+			if err != nil {
+				return fmt.Errorf("Error parsing boolean value: %s, %w", val, err)
+			}
+			return intVal
+		}
+	}
+	return val
 }
 
 func (cfg Config) Map(fullName string) string {

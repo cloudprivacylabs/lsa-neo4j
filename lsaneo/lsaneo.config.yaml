@@ -16,6 +16,11 @@ termMappings:
   low: low
   root: root
 
+# low, high json:number
+propertyTypeMappings:
+  ls:attributeIndex: json:number
+  negationInd: json:boolean
+  inversionInd: ls:boolean
 
 namespaceMappings:
   https://lschema.org/: ls

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/cloudprivacylabs/lsa/pkg/types"
 	"github.com/cloudprivacylabs/opencypher/graph"
-
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
@@ -404,9 +404,92 @@ func makeLabels(vars map[string]interface{}, types []string) string {
 	return out.String()
 }
 
-func makeProperties(vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
+const (
+	JSON_BOOLEAN  = "json:boolean"
+	JSON_NUMBER   = "json:number"
+	JSON_DATE     = "json:date"
+	JSON_DATETIME = "json:dateTime"
+	LS_BOOLEAN    = "ls:boolean"
+	UNIX_TIME     = "unix:time"
+	XSD_DATE      = "xsd:date"
+	XSD_DATETIME  = "xsd:dateTime"
+)
+
+func setNativeProperties(x withProperty, c Config) error {
+	node := x.(graph.Node)
+
+	if node.HasLabel(ls.AttributeTypeValue) {
+		v, err := ls.GetNodeValue(node)
+		if err != nil {
+			return err
+		}
+		vt, ok := node.GetProperty(ls.ValueTypeTerm)
+		if !ok {
+			node.SetProperty(ls.NodeValueTerm, v)
+		} else {
+			t := vt.(*ls.PropertyValue).AsString()
+			if !ok {
+				return err
+			}
+			var va ls.ValueAccessor
+			var iface interface{}
+			switch t {
+			case JSON_BOOLEAN:
+				va = ls.GetValueAccessor(types.JSONBooleanTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				node.SetProperty(ls.NodeValueTerm, iface)
+			case UNIX_TIME:
+				va = ls.GetValueAccessor(types.UnixTimeTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.UnixTime)
+				neo4jNative := neo4j.LocalTimeOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case XSD_DATE:
+				va = ls.GetValueAccessor(types.XSDDateTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.Date)
+				neo4jNative := neo4j.DateOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case XSD_DATETIME:
+				va = ls.GetValueAccessor(types.XSDDateTimeTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.DateTime)
+				neo4jNative := neo4j.LocalDateTimeOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case JSON_DATE:
+				va = ls.GetValueAccessor(types.JSONDateTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.Date)
+				neo4jNative := neo4j.DateOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case JSON_DATETIME:
+				va = ls.GetValueAccessor(types.JSONDateTimeTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.DateTime)
+				neo4jNative := neo4j.LocalDateTimeOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			}
+		}
+	}
+	node.ForEachProperty(func(s string, i interface{}) bool {
+		if _, ok := c.PropertyTypeMappings[c.Map(s)]; ok {
+			native := c.PropertyMap(s, fmt.Sprintf("%v", i))
+			node.SetProperty(s, native)
+			return true
+		}
+		return true
+	})
+	return nil
+}
+
+func makeProperties(c Config, subject withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
 	out := strings.Builder{}
 	first := true
+
+	node := subject.(graph.Node)
+	if err := setNativeProperties(node, c); err != nil {
+		return fmt.Sprintf("Error setting native node properties %v", node)
+	}
 
 	buildProperties := func(m map[string]*ls.PropertyValue) {
 		for k, v := range m {
@@ -425,7 +508,20 @@ func makeProperties(vars map[string]interface{}, properties map[string]*ls.Prope
 			tname := fmt.Sprintf("p%d", len(vars))
 			out.WriteString(tname)
 			if v.IsString() {
-				vars[tname] = v.AsString()
+				switch k {
+				case c.Map(ls.AttributeIndexTerm):
+					vars[tname] = v.AsInt()
+				case c.Map(ls.NodeValueTerm):
+					val, _ := node.GetProperty(ls.NodeValueTerm)
+					vars[tname] = val
+				default:
+					if _, exists := c.PropertyTypeMappings[k]; exists {
+						val, _ := node.GetProperty(c.Expand(k))
+						vars[tname] = val
+					} else {
+						vars[tname] = v.AsString()
+					}
+				}
 			} else if v.IsStringSlice() {
 				vars[tname] = v.AsInterfaceSlice()
 			}
