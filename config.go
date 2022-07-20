@@ -88,9 +88,16 @@ func (cfg Config) PropertyMap(tp, val string) interface{} {
 			}
 			return boolVal
 		case "json:number":
+			if strings.Contains(val, ".") {
+				floatVal, err := strconv.ParseFloat(val, 64)
+				if err != nil {
+					return fmt.Errorf("Error parsing float value: %s, %w", val, err)
+				}
+				return floatVal
+			}
 			intVal, err := strconv.ParseInt(val, 10, 64)
 			if err != nil {
-				return fmt.Errorf("Error parsing boolean value: %s, %w", val, err)
+				return fmt.Errorf("Error parsing integer value: %s, %w", val, err)
 			}
 			return intVal
 		}

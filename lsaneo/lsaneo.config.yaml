@@ -11,6 +11,7 @@ termMappings:
   https://lschema.org/entitySchema: ls:entitySchema
   https://lschema.org/xml/ns: ls:xml/ns
   https://lschema.org/conditional: ls:conditional
+  https://lschema.org/floatTest: ls:floatTest
   extension: extension
   high: high
   low: low
@@ -19,8 +20,9 @@ termMappings:
 # low, high json:number
 propertyTypeMappings:
   ls:attributeIndex: json:number
+  ls:floatTest: json:number
   negationInd: json:boolean
-  inversionInd: ls:boolean
+  inversionInd: xsd:boolean
 
 namespaceMappings:
   https://lschema.org/: ls

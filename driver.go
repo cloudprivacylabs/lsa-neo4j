@@ -8,6 +8,7 @@ package neo4j
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -261,6 +262,13 @@ func MakeProperties(input map[string]interface{}) map[string]*ls.PropertyValue {
 	ret := make(map[string]*ls.PropertyValue)
 	for k, v := range input {
 		switch v.(type) {
+		case bool:
+			ret[k] = ls.StringPropertyValue(fmt.Sprintf("%v", v.(bool)))
+		case float64:
+			f := strconv.FormatFloat(v.(float64), 'f', -1, 64)
+			ret[k] = ls.StringPropertyValue(f)
+		case int:
+			ret[k] = ls.IntPropertyValue(v.(int))
 		case string:
 			ret[k] = ls.StringPropertyValue(v.(string))
 		case []interface{}:
@@ -405,14 +413,19 @@ func makeLabels(vars map[string]interface{}, types []string) string {
 }
 
 const (
-	JSON_BOOLEAN  = "json:boolean"
-	JSON_NUMBER   = "json:number"
-	JSON_DATE     = "json:date"
-	JSON_DATETIME = "json:dateTime"
-	LS_BOOLEAN    = "ls:boolean"
-	UNIX_TIME     = "unix:time"
-	XSD_DATE      = "xsd:date"
-	XSD_DATETIME  = "xsd:dateTime"
+	JSON_BOOLEAN    = "json:boolean"
+	JSON_NUMBER     = "json:number"
+	JSON_DATE       = "json:date"
+	JSON_DATETIME   = "json:dateTime"
+	JSON_TIME       = "json:time" //
+	LS_BOOLEAN      = "ls:boolean"
+	LS_DATE         = "ls:date" //
+	UNIX_TIME       = "unix:time"
+	XSD_DATE        = "xsd:date"
+	XSD_DATETIME    = "xsd:dateTime"
+	XSD_TIME        = "xsd:time"       //
+	XSD_GYEAR_MONTH = "xsd:gYearMonth" //
+	XSD_GMONTH_DAY  = "xsd:gMonthDay"  //
 )
 
 func setNativeProperties(x withProperty, c Config) error {
@@ -421,7 +434,7 @@ func setNativeProperties(x withProperty, c Config) error {
 	if node.HasLabel(ls.AttributeTypeValue) {
 		v, err := ls.GetNodeValue(node)
 		if err != nil {
-			return err
+			panic(fmt.Errorf("Error getting node value for: %v, %w", node, err))
 		}
 		vt, ok := node.GetProperty(ls.ValueTypeTerm)
 		if !ok {
@@ -434,10 +447,12 @@ func setNativeProperties(x withProperty, c Config) error {
 			var va ls.ValueAccessor
 			var iface interface{}
 			switch t {
-			case JSON_BOOLEAN:
-				va = ls.GetValueAccessor(types.JSONBooleanTerm)
-				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-				node.SetProperty(ls.NodeValueTerm, iface)
+			// case LS_DATE:
+			// 	va = ls.GetValueAccessor(types.PatternDateTerm)
+			// 	iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+			// 	native := iface.(types.DateTime)
+			// 	neo4jNative := neo4j.LocalDateTimeOf(native.ToTime())
+			// 	node.SetProperty(ls.NodeValueTerm, neo4jNative)
 			case UNIX_TIME:
 				va = ls.GetValueAccessor(types.UnixTimeTerm)
 				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
@@ -456,6 +471,24 @@ func setNativeProperties(x withProperty, c Config) error {
 				native := iface.(types.DateTime)
 				neo4jNative := neo4j.LocalDateTimeOf(native.ToTime())
 				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case XSD_TIME:
+				va = ls.GetValueAccessor(types.XSDTimeTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.TimeOfDay)
+				neo4jNative := neo4j.LocalTimeOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case XSD_GYEAR_MONTH:
+				va = ls.GetValueAccessor(types.XSDGYearMonthTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.Date)
+				neo4jNative := neo4j.DateOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case XSD_GMONTH_DAY:
+				va = ls.GetValueAccessor(types.XSDGMonthDayTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.Date)
+				neo4jNative := neo4j.DateOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
 			case JSON_DATE:
 				va = ls.GetValueAccessor(types.JSONDateTerm)
 				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
@@ -468,6 +501,16 @@ func setNativeProperties(x withProperty, c Config) error {
 				native := iface.(types.DateTime)
 				neo4jNative := neo4j.LocalDateTimeOf(native.ToTime())
 				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case JSON_TIME:
+				va = ls.GetValueAccessor(types.JSONTimeTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				native := iface.(types.TimeOfDay)
+				neo4jNative := neo4j.LocalTimeOf(native.ToTime())
+				node.SetProperty(ls.NodeValueTerm, neo4jNative)
+			case JSON_BOOLEAN:
+				va = ls.GetValueAccessor(types.JSONBooleanTerm)
+				iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
+				node.SetProperty(ls.NodeValueTerm, iface)
 			}
 		}
 	}
