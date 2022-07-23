@@ -261,21 +261,37 @@ func findNeighbors(tx neo4j.Transaction, ids []uint64) ([]neo4jNode, []neo4jNode
 func MakePropertiesLoad(node graph.Node, input map[string]interface{}, cfg Config) map[string]*ls.PropertyValue {
 	ret := make(map[string]*ls.PropertyValue)
 	for k, v := range input {
-		if k == cfg.Map(ls.NodeValueTerm) {
-			continue
-		}
-		if va := ls.GetValueAccessor(cfg.PropertyTypeMappings[k]); va != nil {
-			raw, ok := ls.GetRawNodeValue(node)
-			if !ok {
-				return nil
+		// check if there is a type for property in config, otherwise convert to string and store it
+		vt := cfg.Map(cfg.PropertyTypeMappings[k])
+		if vt != "" {
+			va := ls.GetValueAccessor(vt)
+			switch val := v.(type) {
+			case bool, neo4j.Time, neo4j.LocalTime, neo4j.LocalDateTime, neo4j.Date:
+				if va != nil {
+					form, err := va.FormatNativeValue(val, val, node)
+					if err != nil {
+						panic(fmt.Errorf("cannot format native value for %v, %w", v, err))
+					}
+					ret[k] = ls.StringPropertyValue(form)
+				} else {
+					ret[k] = ls.StringPropertyValue(fmt.Sprintf("%v", val))
+				}
+			case float64:
+				if va != nil {
+					form, err := va.FormatNativeValue(val, val, node)
+					if err != nil {
+						panic(fmt.Errorf("cannot format native value for %v, %w", v, err))
+					}
+					ret[k] = ls.StringPropertyValue(form)
+				} else {
+					f := strconv.FormatFloat(v.(float64), 'f', -1, 64)
+					ret[k] = ls.StringPropertyValue(f)
+				}
+			default:
+				ret[k] = ls.StringPropertyValue(fmt.Sprintf("%v", v))
 			}
-			val, err := va.FormatNativeValue(raw, v, node)
-			if err != nil {
-				return nil
-			}
-			ret[k] = ls.StringPropertyValue(val)
 		} else {
-			switch v.(type) {
+			switch val := v.(type) {
 			case bool:
 				ret[k] = ls.StringPropertyValue(fmt.Sprintf("%v", v.(bool)))
 			case float64:
@@ -292,26 +308,8 @@ func MakePropertiesLoad(node graph.Node, input map[string]interface{}, cfg Confi
 					sl = append(sl, val.(string))
 				}
 				ret[k] = ls.StringSlicePropertyValue(sl)
-			}
-		}
-	}
-	return ret
-}
-
-func MakePropertiesSave(node graph.Node, input map[string]*ls.PropertyValue, cfg Config) map[string]interface{} {
-	ret := make(map[string]interface{})
-	for k, v := range input {
-		if k == ls.NodeValueTerm {
-			continue
-		}
-		if va := ls.GetValueAccessor(cfg.PropertyTypeMappings[cfg.Map(k)]); va != nil {
-			val, err := va.GetNativeValue(v.AsString(), node)
-			if err != nil {
-				return nil
-			}
-			switch v := val.(type) {
 			case neo4j.LocalDateTime:
-				x := v.Time()
+				x := val.Time()
 				tm := types.DateTime{
 					Month:        int(x.Month()),
 					Year:         x.Year(),
@@ -323,9 +321,12 @@ func MakePropertiesSave(node graph.Node, input map[string]*ls.PropertyValue, cfg
 					Nanoseconds:  int64(x.Nanosecond()),
 					Location:     x.Location(),
 				}
-				ret[k] = tm
+				// ret[k] = ls.StringPropertyValue(fmt.Sprintf("%v", tm))
+				if err := ls.SetNodeValue(node, tm); err != nil {
+					panic(fmt.Errorf("Error setting node value for %v, %w", node, err))
+				}
 			case neo4j.LocalTime:
-				x := v.Time()
+				x := val.Time()
 				tm := types.TimeOfDay{
 					Seconds:      int64(x.Second()),
 					Milliseconds: int64(x.Second() / 1000),
@@ -334,23 +335,23 @@ func MakePropertiesSave(node graph.Node, input map[string]*ls.PropertyValue, cfg
 					Nanoseconds:  int64(x.Nanosecond()),
 					Location:     x.Location(),
 				}
-				ret[k] = tm
+				// ret[k] = ls.StringPropertyValue(fmt.Sprintf("%v", tm))
+				if err := ls.SetNodeValue(node, tm); err != nil {
+					panic(fmt.Errorf("Error setting node value for %v, %w", node, err))
+				}
 			case neo4j.Date:
-				x := v.Time()
+				x := val.Time()
 				tm := types.Date{
 					Month:    int(x.Month()),
 					Day:      x.Day(),
 					Year:     x.Year(),
 					Location: x.Location(),
 				}
-				ret[k] = tm
-			default:
-				ret[k] = v
-
-			} //else {
-			// 	switch v {
-
-			// 	}
+				// ret[k] = ls.StringPropertyValue(fmt.Sprintf("%v", tm))
+				if err := ls.SetNodeValue(node, tm); err != nil {
+					panic(fmt.Errorf("Error setting node value for %v, %w", node, err))
+				}
+			}
 		}
 	}
 	return ret
@@ -485,128 +486,52 @@ func makeLabels(vars map[string]interface{}, types []string) string {
 	return out.String()
 }
 
-// setNativeProperties will set node's properties to be represented in the database
-func setNativeProperties(x withProperty, c Config) error {
-	node := x.(graph.Node)
-	// props := MakePropertiesSave(node, ls.PropertiesAsMap(node), c)
-	// fmt.Println(props)
-
+// getNeo4jType will get native neo4j type based on given value to be represented in the database
+func getNeo4jType(node graph.Node, val interface{}, c Config) interface{} {
 	if node.HasLabel(ls.AttributeTypeValue) {
 		v, err := ls.GetNodeValue(node)
 		if err != nil {
 			panic(fmt.Errorf("Error getting node value for: %v, %w", node, err))
 		}
-		var va ls.ValueAccessor
-		var iface interface{}
-		fmt.Println(v)
-		switch v.(type) {
-
-		// case bool, float32, float64, int8, int16, int, int64, string:
-		// 	if err := ls.SetNodeValue(node, v); err != nil {
-		// 		return nil
-		// 	}
-		case types.TimeOfDay:
-		case types.Date:
-		case types.DateTime:
-		case types.GDay:
-		case types.GMonth:
-		case types.GYear:
-		case types.GYearMonth:
-		case types.GMonthDay:
-		case types.UnixTimeNano:
-
-		case types.PatternDateTimeParser:
-		case types.PatternDateParser:
-			va = ls.GetValueAccessor(types.PatternDateTerm)
-			iface, _ := va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.DateTime)
-			neo4jNative := neo4j.LocalDateTimeOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.UnixTime:
-			va = ls.GetValueAccessor(types.UnixTimeTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.UnixTime)
-			neo4jNative := neo4j.LocalTimeOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.XSDDateParser:
-			va = ls.GetValueAccessor(types.XSDDateTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.Date)
-			neo4jNative := neo4j.DateOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.XSDDateTimeParser:
-			va = ls.GetValueAccessor(types.XSDDateTimeTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.DateTime)
-			neo4jNative := neo4j.LocalDateTimeOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.XSDTimeParser:
-			va = ls.GetValueAccessor(types.XSDTimeTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.TimeOfDay)
-			neo4jNative := neo4j.LocalTimeOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.XSDGYearMonthParser:
-			va = ls.GetValueAccessor(types.XSDGYearMonthTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.Date)
-			neo4jNative := neo4j.DateOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.XSDGMonthDayParser:
-			va = ls.GetValueAccessor(types.XSDGMonthDayTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.Date)
-			neo4jNative := neo4j.DateOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.XSDGYearParser:
-		case types.XSDGMonthParser:
-		case types.XSDGDayParser:
-		case types.XMLBooleanParser:
+		switch val := v.(type) {
+		case bool, float32, float64, int8, int16, int, int64, string:
+			return val
 		case types.Measure:
-		case types.JSONDateParser:
-			va = ls.GetValueAccessor(types.JSONDateTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.Date)
-			neo4jNative := neo4j.DateOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.JSONDateTimeParser:
-			va = ls.GetValueAccessor(types.JSONDateTimeTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.DateTime)
-			neo4jNative := neo4j.LocalDateTimeOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.JSONTimeParser:
-			va = ls.GetValueAccessor(types.JSONTimeTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			native := iface.(types.TimeOfDay)
-			neo4jNative := neo4j.LocalTimeOf(native.ToTime())
-			node.SetProperty(ls.NodeValueTerm, neo4jNative)
-		case types.JSONBooleanParser:
-			va = ls.GetValueAccessor(types.JSONBooleanTerm)
-			iface, _ = va.GetNativeValue(fmt.Sprintf("%v", v), node)
-			node.SetProperty(ls.NodeValueTerm, iface)
-		}
+			f, err := strconv.ParseFloat(val.Value, 64)
+			if err != nil {
+				return err
+			}
+			return f
+		case types.TimeOfDay:
+			return neo4j.LocalTimeOf(val.ToTime())
+		case types.Date:
+			return neo4j.DateOf(val.ToTime())
+		case types.DateTime:
+			return neo4j.LocalDateTimeOf(val.ToTime())
+		case types.GDay:
+			t := time.Date(0, 0, int(val), 0, 0, 0, 0, nil)
+			return neo4j.DateOf(t)
+		case types.GYear:
+			t := time.Date(int(val), 0, 0, 0, 0, 0, 0, nil)
+			return neo4j.DateOf(t)
+		case types.GYearMonth:
+			return neo4j.DateOf(time.Date(val.Year, time.Month(val.Month), 0, 0, 0, 0, 0, nil))
+		case types.GMonthDay:
+			return neo4j.DateOf(time.Date(0, time.Month(val.Month), val.Day, 0, 0, 0, 0, nil))
+		case types.UnixTime:
+			return neo4j.LocalTimeOf(time.Unix(val.Seconds, 0))
+		case types.UnixTimeNano:
+			return neo4j.LocalTimeOf(time.Unix(0, val.Nanoseconds))
 
-	}
-	node.ForEachProperty(func(s string, i interface{}) bool {
-		if _, ok := c.PropertyTypeMappings[c.Map(s)]; ok {
-			native := c.PropertyMap(s, fmt.Sprintf("%v", i))
-			node.SetProperty(s, native)
-			return true
 		}
-		return true
-	})
+	}
 	return nil
 }
 
 func makeProperties(c Config, subject withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
 	out := strings.Builder{}
 	first := true
-
 	node := subject.(graph.Node)
-	if err := setNativeProperties(node, c); err != nil {
-		return fmt.Sprintf("Error setting native node properties %v", node)
-	}
 
 	buildProperties := func(m map[string]*ls.PropertyValue) {
 		for k, v := range m {
@@ -629,12 +554,14 @@ func makeProperties(c Config, subject withProperty, vars map[string]interface{},
 				case c.Map(ls.AttributeIndexTerm):
 					vars[tname] = v.AsInt()
 				case c.Map(ls.NodeValueTerm):
-					val, _ := node.GetProperty(ls.NodeValueTerm)
-					vars[tname] = val
+					val, _ := ls.GetNodeValue(node)
+					n4jNative := getNeo4jType(node, val, c)
+					vars[tname] = n4jNative
 				default:
 					if _, exists := c.PropertyTypeMappings[k]; exists {
 						val, _ := node.GetProperty(c.Expand(k))
-						vars[tname] = val
+						native := c.PropertyMap(k, val.(*ls.PropertyValue).AsString())
+						vars[tname] = native
 					} else {
 						vars[tname] = v.AsString()
 					}
