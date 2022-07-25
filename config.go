@@ -2,7 +2,6 @@ package neo4j
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
@@ -71,36 +70,15 @@ func (cfg Config) MakeLabels(types []string) string {
 	return labels
 }
 
-func (cfg Config) PropertyMap(tp, val string) interface{} {
-	if _, exists := cfg.PropertyTypeMappings[cfg.Map(tp)]; exists {
-		cnvrt := cfg.PropertyTypeMappings[cfg.Map(tp)]
-		switch cnvrt {
-		case "json:boolean":
-			boolVal, err := strconv.ParseBool(val)
-			if err != nil {
-				return fmt.Errorf("Error parsing boolean value: %s, %w", val, err)
-			}
-			return boolVal
-		case "ls:boolean":
-			boolVal, err := strconv.ParseBool(val)
-			if err != nil {
-				return fmt.Errorf("Error parsing boolean value: %s, %w", val, err)
-			}
-			return boolVal
-		case "json:number":
-			if strings.Contains(val, ".") {
-				floatVal, err := strconv.ParseFloat(val, 64)
-				if err != nil {
-					return fmt.Errorf("Error parsing float value: %s, %w", val, err)
-				}
-				return floatVal
-			}
-			intVal, err := strconv.ParseInt(val, 10, 64)
-			if err != nil {
-				return fmt.Errorf("Error parsing integer value: %s, %w", val, err)
-			}
-			return intVal
+func (cfg Config) SavePropertyNativeType(node graph.Node, tp, val string) interface{} {
+	if _, exists := cfg.PropertyTypeMappings[cfg.Expand(tp)]; exists {
+		x := cfg.PropertyTypeMappings[cfg.Expand(tp)]
+		va := ls.GetValueAccessor(x)
+		native, err := va.GetNativeValue(val, node)
+		if err != nil {
+			panic(fmt.Errorf("Cannot get native value for %v, %w", node, err))
 		}
+		return native
 	}
 	return val
 }

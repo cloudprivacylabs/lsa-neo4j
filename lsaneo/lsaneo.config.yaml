@@ -19,8 +19,8 @@ termMappings:
 
 # low, high json:number
 propertyTypeMappings:
-  ls:attributeIndex: json:number
-  ls:floatTest: json:number
+  https://lschema.org/attributeIndex: json:number
+  https://lschema.org/floatTest: ls:double
   negationInd: json:boolean
   inversionInd: xsd:boolean
 
