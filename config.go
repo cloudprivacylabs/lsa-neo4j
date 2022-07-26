@@ -9,10 +9,10 @@ import (
 )
 
 type Config struct {
-	TermMappings         map[string]string `yaml:"termMappings"`
-	NamespaceMappings    map[string]string `yaml:"namespaceMappings"`
-	PropertyTypeMappings map[string]string `yaml:"propertyTypeMappings"`
-	trie                 *Trie
+	TermMappings      map[string]string `yaml:"termMappings"`
+	NamespaceMappings map[string]string `yaml:"namespaceMappings"`
+	PropertyTypes     map[string]string `yaml:"propertyTypeMappings"`
+	trie              *Trie
 }
 
 type withProperty interface {
@@ -40,13 +40,6 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 }
 
 func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) string {
-	var subject withProperty
-	switch x.(type) {
-	case graph.Node:
-		subject = x.(graph.Node)
-	case graph.Edge:
-		subject = x.(graph.Edge)
-	}
 	propMap := make(map[string]*ls.PropertyValue)
 	for k, v := range ls.PropertiesAsMap(x) {
 		short := cfg.Map(k)
@@ -54,7 +47,7 @@ func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) 
 			propMap[short] = v
 		}
 	}
-	props := makeProperties(cfg, subject, txVars, propMap, nil)
+	props := buildDBPropertiesForSave(cfg, x, txVars, propMap, nil)
 	return props
 }
 
@@ -70,10 +63,9 @@ func (cfg Config) MakeLabels(types []string) string {
 	return labels
 }
 
-func (cfg Config) SavePropertyNativeType(node graph.Node, tp, val string) interface{} {
-	if _, exists := cfg.PropertyTypeMappings[cfg.Expand(tp)]; exists {
-		x := cfg.PropertyTypeMappings[cfg.Expand(tp)]
-		va := ls.GetValueAccessor(x)
+func (cfg Config) SavePropertyNativeType(node graph.Node, expandedPropertyKey, val string) interface{} {
+	if _, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
+		va := ls.GetValueAccessor(cfg.PropertyTypes[expandedPropertyKey])
 		native, err := va.GetNativeValue(val, node)
 		if err != nil {
 			panic(fmt.Errorf("Cannot get native value for %v, %w", node, err))
