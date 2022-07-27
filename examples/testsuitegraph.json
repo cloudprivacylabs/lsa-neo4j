@@ -38,7 +38,7 @@
                 "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/Patient/schema",
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/ClinicalDocument/recordTarget/patientRole",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
-                "https://lschema.org/floatTest":"0.00000000000000000000000000000000007"
+                "https://lschema.org/floatTest":"0.07"
             }
         },
         {
@@ -298,7 +298,7 @@
                 "templateId": "2.16.840.1.113883.10.20.22.2.22",
                 "https://lschema.org/valueType": "xsd:time",
                 "https://lschema.org/value": "15:04:05Z",
-                "https://lschema.org/floatTest":"99.99999"
+                "https://lschema.org/floatTest":"99.999"
             }
         },
         {
@@ -334,7 +334,7 @@
                 "https://lschema.org/attributeName": "addr",
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/patientRole/addr",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
-                "https://lschema.org/floatTest":"0.0000001",
+                "https://lschema.org/floatTest":"0.1",
                 "https://lschema.org/valueType": "xsd:gMonthDay",
                 "https://lschema.org/value": "02-01"
             }

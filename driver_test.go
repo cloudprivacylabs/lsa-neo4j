@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"testing"
 
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
@@ -57,8 +58,8 @@ var _ = Describe("Driver", func() {
 		err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 		Expect(err).To(BeNil(), "Could not read file: %s", "lsaneo/lsaneo.config.yaml")
 		InitNamespaceTrie(&cfg)
-		grph, err = cmdutil.ReadJSONGraph([]string{"examples/testsuitegraph.json"}, nil)
-		Expect(err).To(BeNil(), "Could not read file: %s", "examples/testsuitegraph.json")
+		grph, err = cmdutil.ReadJSONGraph([]string{"examples/test.json"}, nil)
+		Expect(err).To(BeNil(), "Could not read file: %s", "examples/test.json")
 	})
 
 	AfterEach(func() {
@@ -144,9 +145,11 @@ var _ = Describe("Driver", func() {
 							return false
 						}
 						if !pv2.IsEqual(pv) {
-							log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
-							propertiesOK = false
-							return false
+							if strings.ToLower(pv2.AsString()) != strings.ToLower(pv.AsString()) {
+								log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
+								propertiesOK = false
+								return false
+							}
 						}
 						return true
 					})
