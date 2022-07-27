@@ -17,7 +17,12 @@
                 "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/ClinicalDocument/schema",
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/ClinicalDocument",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
-                "https://lschema.org/floatTest":"0.7"
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ]
             }
         },
         {
@@ -38,7 +43,12 @@
                 "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/Patient/schema",
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/ClinicalDocument/recordTarget/patientRole",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
-                "https://lschema.org/floatTest":"0.07"
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ]
             }
         },
         {
@@ -55,7 +65,13 @@
                 "https://lschema.org/attributeName": "id",
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/ClinicalDocument/id",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
-                "root": "0001"
+                "root": "0001",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ]
             }
         },
         {
@@ -75,7 +91,13 @@
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/Component/section/AllergySection",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
                 "templateId": "2.16.840.1.113883.10.20.22.2.6.1",
-                "typeCode": "DRIV"
+                "typeCode": "DRIV",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ]
             }
         },
         {
@@ -95,7 +117,13 @@
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/Component/section/MedicationSection",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
                 "templateId": "2.16.840.1.113883.10.20.22.2.1.1",
-                "typeCode": "DRIV"
+                "typeCode": "DRIV",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ]
             }
         },
         {
@@ -118,7 +146,19 @@
                 "https://lschema.org/valueType": "json:boolean",
                 "https://lschema.org/value": "false",
                 "negationInd": "false",
-                "templateId": "2.16.840.1.113883.10.20.22.2.5.1"
+                "templateId": "2.16.840.1.113883.10.20.22.2.5.1",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ],
+                "https://lschema.org/boolTest":[
+                    "true",
+                    "true",
+                    "true",
+                    "true"
+                ]
             }
         },
         {
@@ -141,13 +181,28 @@
                     "0f9fb7e6-3ba9-420d-b767-022b4de408d7"
                 ],
                 "https://lschema.org/entityIdFields": [
+                    "0.01",
+                    "0.01",
+                    "0.01",
                     "https://hl7.org/ccda/v3/encounter/id/root",
                     "https://hl7.org/ccda/v3/encounter/id/extension"
                 ],
                 "https://lschema.org/entitySchema": "https://hl7.org/ccda/v3/Encounter/schema",
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/EncounderSection/entry/encounter",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
-                "moodCode": "EVN"
+                "moodCode": "EVN",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ],
+                "https://lschema.org/boolTest":[
+                    "true",
+                    "true",
+                    "true",
+                    "true"
+                ]
             }
         },
         {
@@ -165,7 +220,19 @@
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/encounter/id",
                 "https://lschema.org/valueType": "unix:time",
                 "https://lschema.org/value": "500",
-                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ],
+                "https://lschema.org/boolTest":[
+                    "true",
+                    "true",
+                    "true",
+                    "true"
+                ]
             }
         },
         {
@@ -189,7 +256,19 @@
                 "https://lschema.org/valueType": "xsd:date",
                 "https://lschema.org/value": "2006-01-02",
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/encounter/code",
-                "https://lschema.org/xml/ns": "urn:hl7-org:v3"
+                "https://lschema.org/xml/ns": "urn:hl7-org:v3",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ],
+                "https://lschema.org/boolTest":[
+                    "true",
+                    "true",
+                    "true",
+                    "true"
+                ]
             }
         },
         {
@@ -211,7 +290,19 @@
                 "https://lschema.org/valueType": "xsd:dateTime",
                 "https://lschema.org/value": "2006-01-02T15:04:05Z",
                 "negationInd": "true",
-                "low": "20150507"
+                "low": "20150507",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ],
+                "https://lschema.org/boolTest":[
+                    "true",
+                    "true",
+                    "true",
+                    "true"
+                ]
             }
         },
         {
@@ -235,7 +326,19 @@
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
                 "https://lschema.org/valueType": "json:date",
                 "https://lschema.org/value": "2006-01-02",
-                "negationInd": "true"
+                "negationInd": "true",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ],
+                "https://lschema.org/boolTest":[
+                    "true",
+                    "true",
+                    "true",
+                    "true"
+                ]
             }
         },
         {
@@ -255,7 +358,19 @@
                 "https://lschema.org/valueType": "json:dateTime",
                 "https://lschema.org/value": "2006-01-02Z0700",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
-                "inversionInd": "True"
+                "inversionInd": "True",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ],
+                "https://lschema.org/boolTest":[
+                    "true",
+                    "true",
+                    "true",
+                    "true"
+                ]
             }
         },
         {
@@ -334,7 +449,12 @@
                 "https://lschema.org/attributeName": "addr",
                 "https://lschema.org/schemaNodeId": "https://hl7.org/ccda/v3/patientRole/addr",
                 "https://lschema.org/xml/ns": "urn:hl7-org:v3",
-                "https://lschema.org/floatTest":"0.1",
+                "https://lschema.org/floatTest":[
+                    "0.7",
+                    "0.07",
+                    "7.0",
+                    "0.70"
+                ],
                 "https://lschema.org/valueType": "xsd:gMonthDay",
                 "https://lschema.org/value": "02-01"
             }

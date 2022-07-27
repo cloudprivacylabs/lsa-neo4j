@@ -11,7 +11,7 @@ import (
 type Config struct {
 	TermMappings      map[string]string `yaml:"termMappings"`
 	NamespaceMappings map[string]string `yaml:"namespaceMappings"`
-	PropertyTypes     map[string]string `yaml:"propertyTypeMappings"`
+	PropertyTypes     map[string]string `yaml:"propertyTypes"`
 	trie              *Trie
 }
 
@@ -42,7 +42,7 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) string {
 	propMap := make(map[string]*ls.PropertyValue)
 	for k, v := range ls.PropertiesAsMap(x) {
-		short := cfg.Map(k)
+		short := cfg.Shorten(k)
 		if short != "" {
 			propMap[short] = v
 		}
@@ -54,7 +54,7 @@ func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) 
 func (cfg Config) MakeLabels(types []string) string {
 	var mapped []string
 	for _, t := range types {
-		short := cfg.Map(t)
+		short := cfg.Shorten(t)
 		if short != "" {
 			mapped = append(mapped, short)
 		}
@@ -63,7 +63,8 @@ func (cfg Config) MakeLabels(types []string) string {
 	return labels
 }
 
-func (cfg Config) SavePropertyNativeType(node graph.Node, expandedPropertyKey, val string) interface{} {
+// GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
+func (cfg Config) GetNativePropertyValue(node graph.Node, expandedPropertyKey, val string) interface{} {
 	if _, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
 		va := ls.GetValueAccessor(cfg.PropertyTypes[expandedPropertyKey])
 		native, err := va.GetNativeValue(val, node)
@@ -75,7 +76,7 @@ func (cfg Config) SavePropertyNativeType(node graph.Node, expandedPropertyKey, v
 	return val
 }
 
-func (cfg Config) Map(fullName string) string {
+func (cfg Config) Shorten(fullName string) string {
 	if _, exists := cfg.TermMappings[fullName]; exists {
 		return cfg.TermMappings[fullName]
 	}
