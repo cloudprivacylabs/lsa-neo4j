@@ -511,8 +511,6 @@ func neo4jValueToNativeValue(val interface{}) interface{} {
 			Location: x.Location(),
 		}
 		return tm
-	default:
-		return val
 	}
 	return val
 }
