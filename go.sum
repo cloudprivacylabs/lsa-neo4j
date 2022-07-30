@@ -127,6 +127,8 @@ github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220715212745-1cfd0a04aa35 h1:DG
 github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220715212745-1cfd0a04aa35/go.mod h1:25dUyWIgxCnllqTetYvPblM2xsWED+BGSpsznEkLSig=
 github.com/cloudprivacylabs/opencypher v1.0.0-beta-3.0.20220708033305-81bc98f9c293 h1:nxDxdvs768B5+6FiePcGnfj1b199bF1d21f79YtGlJ4=
 github.com/cloudprivacylabs/opencypher v1.0.0-beta-3.0.20220708033305-81bc98f9c293/go.mod h1:qEWSpb/GEgFzHqSMI2RD3OxruB4upIbWJcXrI60PFKI=
+github.com/cloudprivacylabs/opencypher v1.0.0-beta-4 h1:Fe/gNxKw1VFM3Rfu0uOmmu6sT/OgKVJnN3ipFRSur9g=
+github.com/cloudprivacylabs/opencypher v1.0.0-beta-4/go.mod h1:qEWSpb/GEgFzHqSMI2RD3OxruB4upIbWJcXrI60PFKI=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/cockroachdb/datadriven v0.0.0-20190809214429-80d97fb3cbaa/go.mod h1:zn76sxSg3SzpJ0PPJaLDCu+Bu0Lg3sKTORVIj19EIF8=
 github.com/containerd/aufs v0.0.0-20200908144142-dab0cbea06f4/go.mod h1:nukgQABAEopAHvB6j7cnP5zJ+/3aVcE7hCYqvIwAHyE=
