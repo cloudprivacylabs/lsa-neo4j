@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudprivacylabs/lsa/layers/cmd/pipeline"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/lsa/pkg/types"
 	"github.com/cloudprivacylabs/opencypher/graph"
@@ -57,6 +58,23 @@ func (s *Session) Close() {
 
 func (s *Session) Logf(format string, a ...interface{}) {
 	fmt.Println(fmt.Sprintf(format+":%v", a))
+}
+
+type PlSession struct {
+	S         *Session
+	Tx        neo4j.Transaction
+	Cfg       Config
+	BatchSize int
+}
+
+// pipeline
+func (ps PlSession) Run(pl *pipeline.PipelineContext) error {
+	_, err := pl.NextInput()
+	if err != nil {
+		return err
+	}
+	_, err = SaveGraph(ps.S, ps.Tx, pl.GetGraphRW(), func(graph.Node) bool { return true }, ps.Cfg, ps.BatchSize)
+	return nil
 }
 
 // SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j IDs of the entity nodes
@@ -271,15 +289,6 @@ func SetNodeValueAfterLoad(cfg Config, node graph.Node, input map[string]interfa
 // BuildNodePropertiesAfterLoad is during the loading of nodes from database. This function sets all node properties
 // to PropertyValues, excluding properties that are assigned to NodeValueTerm
 func BuildNodePropertiesAfterLoad(node graph.Node, input map[string]interface{}, cfg Config) {
-	// buildArray := func(arr []interface{}) []string {
-	// 	slProps := make([]string, 0)
-	// 	for _, val := range arr {
-	// 		native := neo4jValueToNativeValue(val)
-	// 		form := fmt.Sprintf("%v", native)
-	// 		slProps = append(slProps, form)
-	// 	}
-	// 	return slProps
-	// }
 
 	var buildNodeProperties func(key string, v interface{})
 	buildNodeProperties = func(key string, v interface{}) {
