@@ -23,6 +23,7 @@ require (
 	github.com/Microsoft/hcsshim v0.8.23 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210803070921-b358b509191a // indirect
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
+	github.com/bserdar/jsonom v0.0.0-20211005020717-9af6d87a0e9f // indirect
 	github.com/bserdar/jsonstream v0.0.0-20190428032403-9f1769267072 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
 	github.com/containerd/cgroups v1.0.1 // indirect
@@ -57,6 +58,8 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.1 // indirect
+	github.com/santhosh-tekuri/jsonschema/v3 v3.0.1 // indirect
+	github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tkuchiki/go-timezone v0.2.0 // indirect
