@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/lsa/pkg/types"
@@ -265,16 +266,6 @@ func SetNodeValueAfterLoad(cfg Config, node graph.Node, input map[string]interfa
 // BuildNodePropertiesAfterLoad is during the loading of nodes from database. This function sets all node properties
 // to PropertyValues, excluding properties that are assigned to NodeValueTerm
 func BuildNodePropertiesAfterLoad(node graph.Node, input map[string]interface{}, cfg Config) {
-	// buildArray := func(arr []interface{}) []string {
-	// 	slProps := make([]string, 0)
-	// 	for _, val := range arr {
-	// 		native := neo4jValueToNativeValue(val)
-	// 		form := fmt.Sprintf("%v", native)
-	// 		slProps = append(slProps, form)
-	// 	}
-	// 	return slProps
-	// }
-
 	var buildNodeProperties func(key string, v interface{})
 	buildNodeProperties = func(key string, v interface{}) {
 		switch v.(type) {
