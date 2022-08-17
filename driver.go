@@ -9,7 +9,6 @@ package neo4j
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/opencypher/graph"
@@ -65,8 +64,6 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, selectE
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]graph.Node, 0)
 	allNodes := make(map[graph.Node]struct{})
-
-	start := time.Now()
 
 	for nodeItr := grph.GetNodesWithProperty(ls.EntityIDTerm); nodeItr.Next(); {
 		node := nodeItr.Node()
@@ -160,9 +157,6 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, selectE
 	if err := jobs.Run(tx, config, mappedEntities, batch); err != nil {
 		return nil, err
 	}
-
-	duration := time.Since(start)
-	fmt.Println(fmt.Sprintf("time elapsed for graph creation: %v", duration))
 
 	// Link nodes
 	for node := range allNodes {
