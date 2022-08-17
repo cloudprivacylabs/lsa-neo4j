@@ -40,8 +40,8 @@ func TestNamespace(t *testing.T) {
 		if !reflect.DeepEqual([]string{x, y}, tt.exp) {
 			t.Errorf("Got %v, expected %v", []string{x, y}, tt.exp)
 		}
-		if !reflect.DeepEqual(cfg.Map(tt.pre), tt.mapped) {
-			t.Errorf("Got %v, expected %v", cfg.Map(tt.pre), tt.mapped)
+		if !reflect.DeepEqual(cfg.Shorten(tt.pre), tt.mapped) {
+			t.Errorf("Got %v, expected %v", cfg.Shorten(tt.pre), tt.mapped)
 		}
 	}
 	for _, tt := range shortToExpand {

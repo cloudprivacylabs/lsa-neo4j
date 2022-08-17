@@ -8,11 +8,12 @@ package neo4j
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/cloudprivacylabs/lsa/pkg/types"
 	"github.com/cloudprivacylabs/opencypher/graph"
-
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
@@ -176,7 +177,7 @@ func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootId
 
 func (s *Session) LoadEntityNodesByEntityId(tx neo4j.Transaction, grph graph.Graph, rootIds []string, config Config, selectEntity func(graph.Node) bool) error {
 
-	idTerm := config.Map(ls.EntityIDTerm)
+	idTerm := config.Shorten(ls.EntityIDTerm)
 	res, err := tx.Run(fmt.Sprintf("match (root) where root.`%s` in $ids return id(root)", idTerm), map[string]interface{}{"ids": rootIds})
 	if err != nil {
 		return err
@@ -251,22 +252,83 @@ func findNeighbors(tx neo4j.Transaction, ids []uint64) ([]neo4jNode, []neo4jNode
 	return sources, targets, edges, nil
 }
 
-func MakeProperties(input map[string]interface{}) map[string]*ls.PropertyValue {
-	ret := make(map[string]*ls.PropertyValue)
-	for k, v := range input {
+// Called before SetNodeValue, input contains neo4j native values
+func SetNodeValueAfterLoad(cfg Config, node graph.Node, input map[string]interface{}) interface{} {
+	// check if value type exists in config
+	v, ok := input[cfg.Shorten(ls.NodeValueTerm)]
+	if !ok {
+		return nil
+	}
+	return neo4jValueToNativeValue(v)
+}
+
+// BuildNodePropertiesAfterLoad is during the loading of nodes from database. This function sets all node properties
+// to PropertyValues, excluding properties that are assigned to NodeValueTerm
+func BuildNodePropertiesAfterLoad(node graph.Node, input map[string]interface{}, cfg Config) {
+	// buildArray := func(arr []interface{}) []string {
+	// 	slProps := make([]string, 0)
+	// 	for _, val := range arr {
+	// 		native := neo4jValueToNativeValue(val)
+	// 		form := fmt.Sprintf("%v", native)
+	// 		slProps = append(slProps, form)
+	// 	}
+	// 	return slProps
+	// }
+
+	var buildNodeProperties func(key string, v interface{})
+	buildNodeProperties = func(key string, v interface{}) {
 		switch v.(type) {
+		case bool:
+			node.SetProperty(key, ls.StringPropertyValue(fmt.Sprintf("%v", v.(bool))))
+		case float64:
+			f := strconv.FormatFloat(v.(float64), 'f', -1, 64)
+			node.SetProperty(key, ls.StringPropertyValue(f))
+		case int:
+			node.SetProperty(key, ls.IntPropertyValue(v.(int)))
 		case string:
-			ret[k] = ls.StringPropertyValue(v.(string))
+			node.SetProperty(key, ls.StringPropertyValue(v.(string)))
 		case []interface{}:
 			isl := v.([]interface{})
-			sl := make([]string, 0, len(isl))
+			slProps := make([]string, 0, len(isl))
 			for _, val := range isl {
-				sl = append(sl, val.(string))
+				form := fmt.Sprintf("%v", val)
+				slProps = append(slProps, form)
 			}
-			ret[k] = ls.StringSlicePropertyValue(sl)
+			node.SetProperty(key, ls.StringSlicePropertyValue(slProps))
 		}
 	}
-	return ret
+
+	for k, v := range input {
+		expandedKey := cfg.Expand(k)
+		// check if there is a type for property in config, otherwise convert to string and store it
+		if expandedKey == ls.NodeValueTerm {
+			continue
+		}
+		vt := cfg.Shorten(cfg.PropertyTypes[expandedKey])
+		if vt != "" && k != expandedKey {
+			va := ls.GetValueAccessor(vt)
+			_, ok := v.([]interface{})
+			if ok {
+				si := make([]string, 0, len(v.([]interface{})))
+				for _, vi := range v.([]interface{}) {
+					form, err := va.FormatNativeValue(vi, nil, node)
+					if err != nil {
+						panic(fmt.Errorf("Cannot format native value for %v, %w", node, err))
+					}
+					si = append(si, form)
+				}
+				node.SetProperty(expandedKey, ls.StringSlicePropertyValue(si))
+			} else {
+				form, err := va.FormatNativeValue(v, nil, node)
+				if err != nil {
+					panic(fmt.Errorf("Cannot format native value for %v, %w", node, err))
+				}
+				node.SetProperty(expandedKey, ls.StringPropertyValue(form))
+			}
+		} else {
+			buildNodeProperties(expandedKey, v)
+		}
+	}
 }
 
 func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(graph.Node) bool) ([]int64, error) {
@@ -291,7 +353,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 		}
 		for _, srcNode := range srcNodes {
 			if _, seen := visitedNode[srcNode.id]; !seen {
-				src := grph.NewNode(srcNode.labels, srcNode.props)
+				src := grph.NewNode(srcNode.labels, nil)
 				labels := make([]string, 0, len(srcNode.labels))
 				for _, lbl := range srcNode.labels {
 					labels = append(labels, config.Expand(lbl))
@@ -301,16 +363,20 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 					ss.Add(ls.DocumentNodeTerm)
 				}
 				src.SetLabels(graph.NewStringSet(labels...))
-				tmp := MakeProperties(srcNode.props)
-				for k, v := range tmp {
-					src.SetProperty(config.Expand(k), v)
+				// Set properties and node value
+				BuildNodePropertiesAfterLoad(src, srcNode.props, config)
+				nv := SetNodeValueAfterLoad(config, src, srcNode.props)
+				if nv != nil {
+					if err := ls.SetNodeValue(src, nv); err != nil {
+						panic(fmt.Errorf("Cannot set node value for %w %v", err, src))
+					}
 				}
 				visitedNode[srcNode.id] = src
 			}
 		}
 		for _, node := range adjNodes {
 			if _, seen := visitedNode[node.id]; !seen {
-				nd := grph.NewNode(node.labels, node.props)
+				nd := grph.NewNode(node.labels, nil)
 				labels := make([]string, 0, len(node.labels))
 				for _, lbl := range node.labels {
 					labels = append(labels, config.Expand(lbl))
@@ -320,16 +386,20 @@ func loadEntityNodes(tx neo4j.Transaction, grph graph.Graph, rootIds []uint64, c
 					ss.Add(ls.DocumentNodeTerm)
 				}
 				nd.SetLabels(ss)
-				tmp := MakeProperties(node.props)
-				for k, v := range tmp {
-					nd.SetProperty(config.Expand(k), v)
+				// Set properties and node value
+				BuildNodePropertiesAfterLoad(nd, node.props, config)
+				nv := SetNodeValueAfterLoad(config, nd, node.props)
+				if nv != nil {
+					if err := ls.SetNodeValue(nd, nv); err != nil {
+						panic(fmt.Errorf("Cannot set node value for %w %v", err, nd))
+					}
 				}
 				visitedNode[node.id] = nd
 				if selectEntity != nil && selectEntity(nd) {
 					queue = append(queue, uint64(node.id))
 				}
 			}
-			if _, ok := node.props[config.Map(ls.EntitySchemaTerm)]; !ok {
+			if _, ok := node.props[config.Shorten(ls.EntitySchemaTerm)]; !ok {
 				queue = append(queue, uint64(node.id))
 			}
 		}
@@ -352,7 +422,7 @@ func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config)
 	if len(ids) == 0 {
 		return entityDBIds, entityIds, nil
 	}
-	idTerm := config.Map(ls.EntityIDTerm)
+	idTerm := config.Shorten(ls.EntityIDTerm)
 	query := fmt.Sprintf("MATCH (n) WHERE n.`%s` IS NOT NULL RETURN ID(n), n.`%s`", idTerm, idTerm)
 	idrec, err := tx.Run(query, map[string]interface{}{"ids": ids})
 	if err != nil {
@@ -398,12 +468,92 @@ func makeLabels(vars map[string]interface{}, types []string) string {
 	return out.String()
 }
 
-func makeProperties(vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
+// neo4jValueToNativeValue converts a neo4j value to a native go value
+func neo4jValueToNativeValue(val interface{}) interface{} {
+	switch val := val.(type) {
+	case neo4j.LocalDateTime:
+		x := val.Time()
+		tm := types.DateTime{
+			Month:        int(x.Month()),
+			Year:         x.Year(),
+			Day:          x.Day(),
+			Seconds:      int64(x.Second()),
+			Minute:       int64(x.Minute()),
+			Milliseconds: int64(x.Second() / 1000),
+			Hour:         int64(x.Hour()),
+			Nanoseconds:  int64(x.Nanosecond()),
+			Location:     x.Location(),
+		}
+		return tm
+	case neo4j.LocalTime:
+		x := val.Time()
+		tm := types.TimeOfDay{
+			Seconds:      int64(x.Second()),
+			Milliseconds: int64(x.Second() / 1000),
+			Hour:         int64(x.Hour()),
+			Minute:       int64(x.Minute()),
+			Nanoseconds:  int64(x.Nanosecond()),
+			Location:     x.Location(),
+		}
+		return tm
+	case neo4j.Date:
+		x := val.Time()
+		tm := types.Date{
+			Month:    int(x.Month()),
+			Day:      x.Day(),
+			Year:     x.Year(),
+			Location: x.Location(),
+		}
+		return tm
+	}
+	return val
+}
+
+// nativeValueToNeo4jValue will get native neo4j type based on given value to be represented in the database
+func nativeValueToNeo4jValue(val interface{}) interface{} {
+	switch val := val.(type) {
+	case bool, float32, float64, int8, int16, int, int64, string:
+		return val
+	case types.Measure:
+		f, err := strconv.ParseFloat(val.Value, 64)
+		if err != nil {
+			return err
+		}
+		return f
+	case types.TimeOfDay:
+		return neo4j.LocalTimeOf(val.ToTime())
+	case types.Date:
+		return neo4j.DateOf(val.ToTime())
+	case types.DateTime:
+		return neo4j.LocalDateTimeOf(val.ToTime())
+	case types.GDay:
+		t := time.Date(0, 0, int(val), 0, 0, 0, 0, nil)
+		return neo4j.DateOf(t)
+	case types.GYear:
+		t := time.Date(int(val), 0, 0, 0, 0, 0, 0, nil)
+		return neo4j.DateOf(t)
+	case types.GYearMonth:
+		return neo4j.DateOf(time.Date(val.Year, time.Month(val.Month), 0, 0, 0, 0, 0, time.UTC))
+	case types.GMonthDay:
+		return neo4j.DateOf(time.Date(0, time.Month(val.Month), val.Day, 0, 0, 0, 0, time.UTC))
+	case types.UnixTime:
+		return neo4j.LocalTimeOf(time.Unix(val.Seconds, 0))
+	case types.UnixTimeNano:
+		return neo4j.LocalTimeOf(time.Unix(0, val.Nanoseconds))
+
+	}
+	return nil
+}
+
+// buildDBPropertiesForSave writes the properties that will be ran by the query
+func buildDBPropertiesForSave(c Config, subject withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
 	out := strings.Builder{}
 	first := true
+	node := subject.(graph.Node)
 
 	buildProperties := func(m map[string]*ls.PropertyValue) {
 		for k, v := range m {
+			expandedKey := c.Expand(k)
 			if v == nil {
 				continue
 			}
@@ -419,9 +569,34 @@ func makeProperties(vars map[string]interface{}, properties map[string]*ls.Prope
 			tname := fmt.Sprintf("p%d", len(vars))
 			out.WriteString(tname)
 			if v.IsString() {
-				vars[tname] = v.AsString()
+				switch k {
+				case c.Shorten(ls.AttributeIndexTerm):
+					vars[tname] = v.AsInt()
+				case c.Shorten(ls.NodeValueTerm):
+					val, _ := ls.GetNodeValue(node)
+					n4jNative := nativeValueToNeo4jValue(val)
+					vars[tname] = n4jNative
+				default:
+					if _, exists := c.PropertyTypes[expandedKey]; exists {
+						val, _ := node.GetProperty(expandedKey)
+						native := c.GetNativePropertyValue(node, expandedKey, val.(*ls.PropertyValue).AsString())
+						vars[tname] = native
+					} else {
+						vars[tname] = v.AsString()
+					}
+				}
 			} else if v.IsStringSlice() {
-				vars[tname] = v.AsInterfaceSlice()
+				vsl := v.AsInterfaceSlice()
+				nsl := make([]interface{}, 0, len(vsl))
+				for _, vn := range vsl {
+					if _, exists := c.PropertyTypes[expandedKey]; exists {
+						native := c.GetNativePropertyValue(node, expandedKey, vn.(string))
+						nsl = append(nsl, native)
+					} else {
+						nsl = append(nsl, vn)
+					}
+				}
+				vars[tname] = nsl
 			}
 		}
 	}

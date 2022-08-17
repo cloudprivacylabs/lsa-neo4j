@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"testing"
 
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
@@ -113,6 +114,9 @@ var _ = Describe("Driver", func() {
 			matched := false
 			for e := range expectedSources {
 				eq := graph.CheckIsomorphism(gotSources[g].GetGraph(), expectedSources[e].GetGraph(), func(n1, n2 graph.Node) bool {
+					if !n1.GetLabels().IsEqual(n2.GetLabels()) {
+						return false
+					}
 					// If only one of the source nodes match, return false
 					if n1 == gotSources[g] {
 						if n2 == expectedSources[e] {
@@ -144,9 +148,11 @@ var _ = Describe("Driver", func() {
 							return false
 						}
 						if !pv2.IsEqual(pv) {
-							log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
-							propertiesOK = false
-							return false
+							if strings.ToLower(pv2.AsString()) != strings.ToLower(pv.AsString()) {
+								log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
+								propertiesOK = false
+								return false
+							}
 						}
 						return true
 					})
@@ -157,7 +163,7 @@ var _ = Describe("Driver", func() {
 					log.Printf("True\n")
 					return true
 				}, func(e1, e2 graph.Edge) bool {
-					return ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))
+					return e1.GetLabel() == e2.GetLabel() && ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))
 				})
 				if eq {
 					matched = true
