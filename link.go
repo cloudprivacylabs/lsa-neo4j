@@ -172,9 +172,9 @@ func linkEntities(tx neo4j.Transaction, config Config, entityRoot graph.Node, sp
 		nodeLabelsClause := config.MakeLabels([]string{spec.targetEntity})
 		var fkVal *ls.PropertyValue
 		if len(fk) == 1 {
-			fkVal = ls.StringPropertyValue(fk[0])
+			fkVal = ls.StringPropertyValue(ls.EntityIDTerm, fk[0])
 		} else {
-			fkVal = ls.StringSlicePropertyValue(fk)
+			fkVal = ls.StringSlicePropertyValue(ls.EntityIDTerm, fk)
 		}
 		nodePropertiesClause := config.MakeProperties(mapWithProperty(map[string]interface{}{
 			ls.EntityIDTerm: fkVal,

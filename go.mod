@@ -1,11 +1,11 @@
 module github.com/cloudprivacylabs/lsa-neo4j
 
-go 1.17
+go 1.18
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220715212745-1cfd0a04aa35
-	github.com/cloudprivacylabs/opencypher v1.0.0-beta-4
+	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220823024644-fce562bc61a3
+	github.com/cloudprivacylabs/opencypher v1.0.0-beta-4.0.20220819163823-d5cb12aaab5d
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
@@ -41,6 +41,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/sys/mount v0.2.0 // indirect
 	github.com/moby/sys/mountinfo v0.5.0 // indirect
@@ -57,6 +58,7 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.1 // indirect
+	github.com/santhosh-tekuri/jsonschema/v3 v3.0.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tkuchiki/go-timezone v0.2.0 // indirect

@@ -270,14 +270,14 @@ func BuildNodePropertiesAfterLoad(node graph.Node, input map[string]interface{},
 	buildNodeProperties = func(key string, v interface{}) {
 		switch v.(type) {
 		case bool:
-			node.SetProperty(key, ls.StringPropertyValue(fmt.Sprintf("%v", v.(bool))))
+			node.SetProperty(key, ls.StringPropertyValue(key, fmt.Sprintf("%v", v.(bool))))
 		case float64:
 			f := strconv.FormatFloat(v.(float64), 'f', -1, 64)
-			node.SetProperty(key, ls.StringPropertyValue(f))
+			node.SetProperty(key, ls.StringPropertyValue(key, f))
 		case int:
-			node.SetProperty(key, ls.IntPropertyValue(v.(int)))
+			node.SetProperty(key, ls.IntPropertyValue(key, v.(int)))
 		case string:
-			node.SetProperty(key, ls.StringPropertyValue(v.(string)))
+			node.SetProperty(key, ls.StringPropertyValue(key, v.(string)))
 		case []interface{}:
 			isl := v.([]interface{})
 			slProps := make([]string, 0, len(isl))
@@ -285,7 +285,7 @@ func BuildNodePropertiesAfterLoad(node graph.Node, input map[string]interface{},
 				form := fmt.Sprintf("%v", val)
 				slProps = append(slProps, form)
 			}
-			node.SetProperty(key, ls.StringSlicePropertyValue(slProps))
+			node.SetProperty(key, ls.StringSlicePropertyValue(key, slProps))
 		}
 	}
 
@@ -308,13 +308,13 @@ func BuildNodePropertiesAfterLoad(node graph.Node, input map[string]interface{},
 					}
 					si = append(si, form)
 				}
-				node.SetProperty(expandedKey, ls.StringSlicePropertyValue(si))
+				node.SetProperty(expandedKey, ls.StringSlicePropertyValue(expandedKey, si))
 			} else {
 				form, err := va.FormatNativeValue(v, nil, node)
 				if err != nil {
 					panic(fmt.Errorf("Cannot format native value for %v, %w", node, err))
 				}
-				node.SetProperty(expandedKey, ls.StringPropertyValue(form))
+				node.SetProperty(expandedKey, ls.StringPropertyValue(expandedKey, form))
 			}
 		} else {
 			buildNodeProperties(expandedKey, v)
