@@ -540,7 +540,6 @@ func nativeValueToNeo4jValue(val interface{}) interface{} {
 func buildDBPropertiesForSave(c Config, subject withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
 	out := strings.Builder{}
 	first := true
-	node := subject.(graph.Node)
 
 	buildProperties := func(m map[string]*ls.PropertyValue) {
 		for k, v := range m {
@@ -564,12 +563,14 @@ func buildDBPropertiesForSave(c Config, subject withProperty, vars map[string]in
 				case c.Shorten(ls.AttributeIndexTerm):
 					vars[tname] = v.AsInt()
 				case c.Shorten(ls.NodeValueTerm):
+					node := subject.(graph.Node)
 					val, _ := ls.GetNodeValue(node)
 					n4jNative := nativeValueToNeo4jValue(val)
 					vars[tname] = n4jNative
 				default:
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
-						val, _ := node.GetProperty(expandedKey)
+						val, _ := subject.GetProperty(expandedKey)
+						node, _ := subject.(graph.Node)
 						native := c.GetNativePropertyValue(node, expandedKey, val.(*ls.PropertyValue).AsString())
 						vars[tname] = native
 					} else {
@@ -579,6 +580,7 @@ func buildDBPropertiesForSave(c Config, subject withProperty, vars map[string]in
 			} else if v.IsStringSlice() {
 				vsl := v.AsInterfaceSlice()
 				nsl := make([]interface{}, 0, len(vsl))
+				node, _ := subject.(graph.Node)
 				for _, vn := range vsl {
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
 						native := c.GetNativePropertyValue(node, expandedKey, vn.(string))
