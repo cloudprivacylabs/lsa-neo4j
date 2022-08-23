@@ -20,7 +20,8 @@
             }
         },
         {
-            "n":1,
+            "n":2,
+            "identity": 2,
             "labels": [
                     "https://lschema.org/DocumentNode"
                 ],
@@ -30,6 +31,7 @@
         }
     ],
     "edges": [
-        { "from": 0, "to": 1, "label": " " }
+        { "from": 0, "to": 1, "label": "city" },
+        { "from": 0, "to": 2, "label": "city" }
     ]
 }
