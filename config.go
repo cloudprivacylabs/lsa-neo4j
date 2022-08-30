@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/cloudprivacylabs/opencypher/graph"
 )
 
 type Config struct {
@@ -70,7 +70,7 @@ func (cfg Config) MakeLabels(types []string) string {
 }
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
-func (cfg Config) GetNativePropertyValue(node graph.Node, expandedPropertyKey, val string) interface{} {
+func (cfg Config) GetNativePropertyValue(node *lpg.Node, expandedPropertyKey, val string) interface{} {
 	if _, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
 		va := ls.GetValueAccessor(cfg.PropertyTypes[expandedPropertyKey])
 		native, err := va.GetNativeValue(val, node)

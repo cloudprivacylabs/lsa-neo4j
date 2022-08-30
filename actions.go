@@ -4,33 +4,33 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
 var DEFAULT_BATCH_SIZE = 1000
 
 type JobQueue struct {
-	createNodes []graph.Node
-	createEdges []graph.Edge
+	createNodes []*lpg.Node
+	createEdges []*lpg.Edge
 	deleteNodes []uint64
 	deleteEdges []uint64
 }
 
 type DeleteEntity struct {
 	Config
-	graph.Graph
+	*lpg.Graph
 	entityId uint64
 }
 
 type CreateEntity struct {
 	Config
-	graph.Graph
-	graph.Node
+	*lpg.Graph
+	*lpg.Node
 }
 
-func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[graph.Node]uint64, batchSize int) error {
+func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[*lpg.Node]uint64, batchSize int) error {
 	if batchSize == 0 {
 		batchSize = DEFAULT_BATCH_SIZE
 	}
@@ -90,7 +90,7 @@ func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[graph.Node]
 }
 
 // DeleteEntity.Queue will find all connected nodes to the given entity in the database and delete them
-func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue, selectEntity func(graph.Node) bool) error {
+func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue, selectEntity func(*lpg.Node) bool) error {
 	ids, err := loadEntityNodes(tx, d.Graph, []uint64{d.entityId}, d.Config, findNeighbors, selectEntity)
 	if err != nil {
 		return err
@@ -105,13 +105,13 @@ func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue, selectEntity fun
 
 // CreateEntity.Queue will find all connected nodes to the given entity and create, stopping at different entity boundaries
 func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
-	ls.IterateDescendants(c.Node, func(n graph.Node) bool {
+	ls.IterateDescendants(c.Node, func(n *lpg.Node) bool {
 		if !n.GetLabels().Has(ls.DocumentNodeTerm) {
 			return true
 		}
 		q.createNodes = append(q.createNodes, n)
 		return true
-	}, func(e graph.Edge) ls.EdgeFuncResult {
+	}, func(e *lpg.Edge) ls.EdgeFuncResult {
 		to := e.GetTo()
 		// Edge must go to a document node
 		if !to.GetLabels().Has(ls.DocumentNodeTerm) {
@@ -131,7 +131,7 @@ func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
 }
 
 // query to create nodes
-func buildCreateQuery(nodes []graph.Node, c Config, vars map[string]interface{}) string {
+func buildCreateQuery(nodes []*lpg.Node, c Config, vars map[string]interface{}) string {
 	sb := strings.Builder{}
 	for ix, node := range nodes {
 		prop := c.MakeProperties(node, vars)
@@ -154,7 +154,7 @@ func buildCreateQuery(nodes []graph.Node, c Config, vars map[string]interface{})
 }
 
 // query to create edges and connect existing nodes in the database
-func buildConnectQuery(edges []graph.Edge, c Config, hm map[graph.Node]uint64) string {
+func buildConnectQuery(edges []*lpg.Edge, c Config, hm map[*lpg.Node]uint64) string {
 	sb := strings.Builder{}
 	for ix, edge := range edges {
 		from := hm[edge.GetFrom()]
