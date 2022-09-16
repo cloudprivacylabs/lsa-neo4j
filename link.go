@@ -100,7 +100,7 @@ func (spec linkSpec) getForeignKeys(entityRoot *lpg.Node) ([][]string, error) {
 	return fks, nil
 }
 
-func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]uint64) error {
+func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]uint64) error {
 	links := make([]linkSpec, 0)
 	// Does the entity have any outstanding links we need to work on?
 	var itrErr error
@@ -131,7 +131,7 @@ func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot *lpg.
 		return itrErr
 	}
 	for _, link := range links {
-		if err := linkEntities(tx, config, entityRoot, link, nodeMap); err != nil {
+		if err := linkEntities(ctx, tx, config, entityRoot, link, nodeMap); err != nil {
 			return err
 		}
 	}
@@ -145,7 +145,7 @@ func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot *lpg.
 	return linkToThisEntity(id)
 }
 
-func linkEntities(tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]uint64) error {
+func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]uint64) error {
 	foreignKeys, err := spec.getForeignKeys(entityRoot)
 	if err != nil {
 		return err
@@ -185,6 +185,7 @@ func linkEntities(tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spe
 		} else {
 			query = fmt.Sprintf(`match (source %s %s) with source match (target) where ID(target)=%d create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, nodeMap[linkToNode], config.MakeLabels([]string{spec.label}))
 		}
+		ctx.GetLogger().Debug(map[string]interface{}{"linkEntity": query, "params": params})
 		_, err := tx.Run(query, params)
 		if err != nil {
 			return err

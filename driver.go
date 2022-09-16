@@ -60,7 +60,8 @@ func (s *Session) Logf(format string, a ...interface{}) {
 }
 
 // SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j IDs of the entity nodes
-func SaveGraph(session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEntity func(*lpg.Node) bool, config Config, batch int) ([]uint64, error) {
+func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEntity func(*lpg.Node) bool, config Config, batch int) ([]uint64, error) {
+	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "start"})
 	eids := make([]uint64, 0)
 	mappedEntities := make(map[*lpg.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
@@ -83,10 +84,14 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEn
 		}
 	}
 
+	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "collectedEntityNodes", "nEntityNodes": len(entities)})
+
 	entityDBIds, entityIds, err := session.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
 		return nil, err
 	}
+
+	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "getEntityIDs", "entityDBIds": entityDBIds})
 
 	// map DB ids
 	for nodeItr := grph.GetNodes(); nodeItr.Next(); {
@@ -111,6 +116,8 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEn
 			}
 		}
 	}
+
+	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "mappedDBIds", "mappedEntities": mappedEntities})
 
 	updates := make(map[string]struct{})
 	creates := make(map[string]struct{})
@@ -156,14 +163,15 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEn
 
 		}
 	}
-	if err := jobs.Run(tx, config, mappedEntities, batch); err != nil {
+	if err := jobs.Run(ctx, tx, config, mappedEntities, batch); err != nil {
 		return nil, err
 	}
 
+	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "linking"})
 	// Link nodes
 	for node := range allNodes {
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-			if err := LinkNodesForNewEntity(tx, config, node, mappedEntities); err != nil {
+			if err := LinkNodesForNewEntity(ctx, tx, config, node, mappedEntities); err != nil {
 				return nil, err
 			}
 		}
