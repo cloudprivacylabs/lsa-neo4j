@@ -59,6 +59,70 @@ func (s *Session) Logf(format string, a ...interface{}) {
 	fmt.Println(fmt.Sprintf(format+":%v", a))
 }
 
+// Insert creates or adds to a graph on a database; does not check existing nodes
+func Insert(session *Session, tx neo4j.Transaction, grph graph.Graph, selectEntity func(graph.Node) bool, config Config, batch int) ([]uint64, error) {
+	eids := make([]uint64, 0)
+	mappedEntities := make(map[graph.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
+	nonemptyEntityNodeIds := make([]string, 0)
+	entities := make([]graph.Node, 0)
+	allNodes := make(map[graph.Node]struct{})
+
+	for nodeItr := grph.GetNodesWithProperty(ls.EntityIDTerm); nodeItr.Next(); {
+		node := nodeItr.Node()
+		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
+			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
+			ids := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsStringSlice()
+			if len(ids) > 0 {
+				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, strings.Join(ids, ","))
+				entities = append(entities, node)
+			}
+			if id != "" {
+				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, id)
+				entities = append(entities, node)
+			}
+		}
+	}
+
+	creates := make(map[string]struct{})
+	for _, id := range nonemptyEntityNodeIds {
+		creates[id] = struct{}{}
+	}
+
+	jobs := &JobQueue{
+		createNodes: make([]graph.Node, 0),
+		createEdges: make([]graph.Edge, 0),
+	}
+	for _, entity := range entities {
+		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
+		ids := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsStringSlice()
+		if id == "" {
+			if len(ids) < 0 {
+				continue
+			}
+			id = strings.Join(ids, ",")
+		} else if _, exists := creates[id]; exists {
+			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
+			if err := c.Queue(tx, jobs); err != nil {
+				return nil, err
+			}
+
+		}
+	}
+	if err := jobs.Run(tx, config, mappedEntities, batch); err != nil {
+		return nil, err
+	}
+
+	// Link nodes
+	for node := range allNodes {
+		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
+			if err := LinkNodesForNewEntity(tx, config, node, mappedEntities); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return eids, nil
+}
+
 // SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j IDs of the entity nodes
 func SaveGraph(session *Session, tx neo4j.Transaction, grph graph.Graph, selectEntity func(graph.Node) bool, config Config, batch int) ([]uint64, error) {
 	eids := make([]uint64, 0)
