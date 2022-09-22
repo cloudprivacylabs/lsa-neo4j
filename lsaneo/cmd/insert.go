@@ -65,3 +65,10 @@ var (
 		},
 	}
 )
+
+func init() {
+	rootCmd.AddCommand(initGraphCmd)
+	initGraphCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
+	initGraphCmd.Flags().String("cfg", "", "configuration spec for node properties and labels (default: lsaneo.config.yaml)")
+	initGraphCmd.Flags().Int("batch", 0, "batching size for creation of nodes and edges")
+}
