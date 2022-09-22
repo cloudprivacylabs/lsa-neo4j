@@ -5,9 +5,9 @@ import (
 	"errors"
 	"os"
 
+	"github.com/cloudprivacylabs/lpg"
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
-	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +53,7 @@ var (
 					return err
 				}
 
-				_, err = neo.Insert(session, tx, g, func(graph.Node) bool { return true }, cfg, batchSize)
+				_, err = neo.Insert(session, tx, g, func(lpg.Node) bool { return true }, cfg, batchSize)
 				if err != nil {
 					tx.Rollback()
 					return err

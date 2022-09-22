@@ -123,12 +123,12 @@ github.com/cilium/ebpf v0.2.0/go.mod h1:To2CFviqOWL/M0gIMsvSMlqe7em/l1ALkX1PyjrX
 github.com/cilium/ebpf v0.4.0/go.mod h1:4tRaxcgiL706VnOzHOdBlY8IEAIdxINsQBcU4xJJXRs=
 github.com/cilium/ebpf v0.6.2/go.mod h1:4tRaxcgiL706VnOzHOdBlY8IEAIdxINsQBcU4xJJXRs=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
-github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220715212745-1cfd0a04aa35 h1:DGd3i9lZtn0lLm/iTjB9hxcvgnEu06y9uQvJpTot/XY=
-github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220715212745-1cfd0a04aa35/go.mod h1:25dUyWIgxCnllqTetYvPblM2xsWED+BGSpsznEkLSig=
-github.com/cloudprivacylabs/opencypher v1.0.0-beta-3.0.20220708033305-81bc98f9c293 h1:nxDxdvs768B5+6FiePcGnfj1b199bF1d21f79YtGlJ4=
-github.com/cloudprivacylabs/opencypher v1.0.0-beta-3.0.20220708033305-81bc98f9c293/go.mod h1:qEWSpb/GEgFzHqSMI2RD3OxruB4upIbWJcXrI60PFKI=
-github.com/cloudprivacylabs/opencypher v1.0.0-beta-4 h1:Fe/gNxKw1VFM3Rfu0uOmmu6sT/OgKVJnN3ipFRSur9g=
-github.com/cloudprivacylabs/opencypher v1.0.0-beta-4/go.mod h1:qEWSpb/GEgFzHqSMI2RD3OxruB4upIbWJcXrI60PFKI=
+github.com/cloudprivacylabs/lpg v1.0.8 h1:I1qzyPpH0CLSoUTgrKU930+bUS32VBLIUvS0HETI0Pc=
+github.com/cloudprivacylabs/lpg v1.0.8/go.mod h1:3bLpI1OIk3h/ZVfGhq3sdULexmVbd7qANVhVSYbvCe8=
+github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220921235515-0d9d41065773 h1:POf5WZJ+SAvFnhy5ibksC2L4PtRuWvc89cK04rvUP8k=
+github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220921235515-0d9d41065773/go.mod h1:BXW45l1dy5LDsPrbCv2YQ0OX11gbk1bEw0A1uTlglLU=
+github.com/cloudprivacylabs/opencypher v1.0.0-beta-7.0.20220920225214-cab0c9322e95 h1:N8chnp0twK5omAEkWkqJ7WqoPfaeYnLffQ10JvEpv9Q=
+github.com/cloudprivacylabs/opencypher v1.0.0-beta-7.0.20220920225214-cab0c9322e95/go.mod h1:hHIgITNUzUjtcPrdD7YvAVv18tIoCyPnXOlMWd2p0/A=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/cockroachdb/datadriven v0.0.0-20190809214429-80d97fb3cbaa/go.mod h1:zn76sxSg3SzpJ0PPJaLDCu+Bu0Lg3sKTORVIj19EIF8=
 github.com/containerd/aufs v0.0.0-20200908144142-dab0cbea06f4/go.mod h1:nukgQABAEopAHvB6j7cnP5zJ+/3aVcE7hCYqvIwAHyE=
@@ -274,8 +274,8 @@ github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25Kn
 github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153/go.mod h1:/Zj4wYkgs4iZTTu3o/KG3Itv/qCCa8VVMlb3i9OVuzc=
 github.com/emicklei/go-restful v0.0.0-20170410110728-ff4f55a20633/go.mod h1:otzb+WCGbkyDHkqmQmT5YD2WR4BBwUdeQoFo8l/7tVs=
 github.com/emicklei/go-restful v2.9.5+incompatible/go.mod h1:otzb+WCGbkyDHkqmQmT5YD2WR4BBwUdeQoFo8l/7tVs=
-github.com/emirpasic/gods v1.18.0 h1:voaQ8lgxXz4FMIm08RiGs9Nx//PvUUI0FcIXK5xRi6w=
-github.com/emirpasic/gods v1.18.0/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
+github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
+github.com/emirpasic/gods v1.18.1/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
 github.com/envoyproxy/go-control-plane v0.9.0/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1mIlRU8Am5FuJP05cCM98=
@@ -494,6 +494,7 @@ github.com/mitchellh/cli v1.0.0/go.mod h1:hNIlj7HEI86fIcpObd7a0FcrxTWetlwJDGcceT
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=
 github.com/mitchellh/copystructure v1.2.0/go.mod h1:qLl+cE2AmVv+CoeAwDPye/v+N2HKCj9FbZEVFJRxO9s=
 github.com/mitchellh/go-homedir v1.0.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
+github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=
 github.com/mitchellh/go-homedir v1.1.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
 github.com/mitchellh/go-testing-interface v1.0.0/go.mod h1:kRemZodwjscx+RGhAo8eIhFbs2+BFgRtFPeD/KE+zxI=
 github.com/mitchellh/gox v0.4.0/go.mod h1:Sd9lOJ0+aimLBi73mGofS1ycjY8lL3uZM3JPS42BGNg=
@@ -646,6 +647,7 @@ github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFR
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8/go.mod h1:Z0q5wiBQGYcxhMZ6gUqHn6pYNLypFAvaL3UvgZLR0U4=
+github.com/santhosh-tekuri/jsonschema/v3 v3.0.1 h1:tQVL4vmtH0NYlua++DZCaCUCIs8JdnxKB1Fto2BiEfY=
 github.com/santhosh-tekuri/jsonschema/v3 v3.0.1/go.mod h1:oOUSf2vgwmcYO4CkIJnEKle02MmEeI3cyItX+fxgpzg=
 github.com/santhosh-tekuri/jsonschema/v5 v5.0.0/go.mod h1:FKdcjfQW6rpZSnxxUvEA5H/cDPdvJ/SZJQLWWXWGrZ0=
 github.com/satori/go.uuid v1.2.0/go.mod h1:dA0hQrYB0VpLJoorglMZABFdXlWrHn1NEOzdhQKdks0=

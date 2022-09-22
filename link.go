@@ -3,8 +3,8 @@ package neo4j
 import (
 	"fmt"
 
+	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/cloudprivacylabs/opencypher/graph"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
@@ -22,10 +22,10 @@ type linkSpec struct {
 	linkNode string
 	// If true, the reference can have more than one links
 	multi bool
-	node  graph.Node
+	node  *lpg.Node
 }
 
-func getLinkSpec(docNode graph.Node) *linkSpec {
+func getLinkSpec(docNode *lpg.Node) *linkSpec {
 	if docNode == nil {
 		return nil
 	}
@@ -54,15 +54,15 @@ func getLinkSpec(docNode graph.Node) *linkSpec {
 	return &ret
 }
 
-func (spec linkSpec) getForeignKeys(entityRoot graph.Node) ([][]string, error) {
+func (spec linkSpec) getForeignKeys(entityRoot *lpg.Node) ([][]string, error) {
 	if len(spec.fkFields) == 0 {
 		v, _ := ls.GetRawNodeValue(spec.node)
 		return [][]string{{v}}, nil
 	}
 	// There can be multiple instances of a foreign key in an
 	// entity. ForeignKeyNdoes[i] keeps all the nodes for spec.FK[i]
-	foreignKeyNodes := make([][]graph.Node, len(spec.fkFields))
-	ls.IterateDescendants(entityRoot, func(n graph.Node) bool {
+	foreignKeyNodes := make([][]*lpg.Node, len(spec.fkFields))
+	ls.IterateDescendants(entityRoot, func(n *lpg.Node) bool {
 		attrId := ls.AsPropertyValue(n.GetProperty(ls.SchemaNodeIDTerm)).AsString()
 		if len(attrId) == 0 {
 			return true
@@ -100,11 +100,11 @@ func (spec linkSpec) getForeignKeys(entityRoot graph.Node) ([][]string, error) {
 	return fks, nil
 }
 
-func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot graph.Node, nodeMap map[graph.Node]uint64) error {
+func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]uint64) error {
 	links := make([]linkSpec, 0)
 	// Does the entity have any outstanding links we need to work on?
 	var itrErr error
-	ls.IterateDescendants(entityRoot, func(node graph.Node) bool {
+	ls.IterateDescendants(entityRoot, func(node *lpg.Node) bool {
 		if !node.GetLabels().Has(ls.DocumentNodeTerm) {
 			return true
 		}
@@ -113,7 +113,7 @@ func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot graph
 			links = append(links, *spec)
 		}
 		return true
-	}, func(edge graph.Edge) ls.EdgeFuncResult {
+	}, func(edge *lpg.Edge) ls.EdgeFuncResult {
 		to := edge.GetTo()
 		// Edge must go to a document node
 		if !to.GetLabels().Has(ls.DocumentNodeTerm) {
@@ -145,15 +145,15 @@ func LinkNodesForNewEntity(tx neo4j.Transaction, config Config, entityRoot graph
 	return linkToThisEntity(id)
 }
 
-func linkEntities(tx neo4j.Transaction, config Config, entityRoot graph.Node, spec linkSpec, nodeMap map[graph.Node]uint64) error {
+func linkEntities(tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]uint64) error {
 	foreignKeys, err := spec.getForeignKeys(entityRoot)
 	if err != nil {
 		return err
 	}
 
-	var linkToNode graph.Node
+	var linkToNode *lpg.Node
 	if len(spec.linkNode) > 0 {
-		ls.WalkNodesInEntity(entityRoot, func(n graph.Node) bool {
+		ls.WalkNodesInEntity(entityRoot, func(n *lpg.Node) bool {
 			if ls.IsInstanceOf(n, spec.linkNode) {
 				linkToNode = n
 				return false
@@ -172,9 +172,9 @@ func linkEntities(tx neo4j.Transaction, config Config, entityRoot graph.Node, sp
 		nodeLabelsClause := config.MakeLabels([]string{spec.targetEntity})
 		var fkVal *ls.PropertyValue
 		if len(fk) == 1 {
-			fkVal = ls.StringPropertyValue(fk[0])
+			fkVal = ls.StringPropertyValue(ls.ReferenceLinkNodeTerm, fk[0])
 		} else {
-			fkVal = ls.StringSlicePropertyValue(fk)
+			fkVal = ls.StringSlicePropertyValue(ls.ReferenceLinkNodeTerm, fk)
 		}
 		nodePropertiesClause := config.MakeProperties(mapWithProperty(map[string]interface{}{
 			ls.EntityIDTerm: fkVal,
