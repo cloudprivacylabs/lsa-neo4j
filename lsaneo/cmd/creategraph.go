@@ -8,6 +8,7 @@ import (
 	"github.com/cloudprivacylabs/lpg"
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
+	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +55,7 @@ var (
 					return err
 				}
 
-				_, err = neo.SaveGraph(session, tx, g, func(*lpg.Node) bool { return true }, cfg, batchSize)
+				_, err = neo.SaveGraph(ls.DefaultContext(), session, tx, g, func(*lpg.Node) bool { return true }, cfg, batchSize)
 				if err != nil {
 					tx.Rollback()
 					return err

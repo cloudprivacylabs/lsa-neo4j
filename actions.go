@@ -30,7 +30,7 @@ type CreateEntity struct {
 	*lpg.Node
 }
 
-func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[*lpg.Node]uint64, batchSize int) error {
+func (q *JobQueue) Run(ctx *ls.Context, tx neo4j.Transaction, cfg Config, nodeMap map[*lpg.Node]uint64, batchSize int) error {
 	if batchSize == 0 {
 		batchSize = DEFAULT_BATCH_SIZE
 	}
@@ -41,6 +41,7 @@ func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[*lpg.Node]u
 			batch = batchSize
 		}
 		// delete nodes in batches
+		ctx.GetLogger().Debug(map[string]interface{}{"delete nodes": q.deleteNodes[:batch]})
 		_, err := tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[:batch]})
 		if err != nil {
 			return err
@@ -58,6 +59,7 @@ func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[*lpg.Node]u
 		}
 		// create nodes in batches
 		query := buildCreateQuery(q.createNodes[:batch], cfg, vars)
+		ctx.GetLogger().Debug(map[string]interface{}{"createNodes": query, "vars": vars})
 		idrec, err := tx.Run(query, vars)
 		if err != nil {
 			return err
@@ -66,6 +68,7 @@ func (q *JobQueue) Run(tx neo4j.Transaction, cfg Config, nodeMap map[*lpg.Node]u
 		if err != nil {
 			return err
 		}
+		ctx.GetLogger().Debug(map[string]interface{}{"createNodes": "done", "records": records.Values})
 		// track database IDs into nodeMap
 		for i, rec := range records.Values {
 			nodeMap[q.createNodes[i]] = uint64(rec.(int64))

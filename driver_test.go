@@ -73,7 +73,7 @@ var _ = Describe("Driver", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 		Expect(err).To(BeNil(), "must be valid transaction")
-		eids, _ = SaveGraph(session, tx, grph, selectEntity, cfg, 0)
+		eids, _ = SaveGraph(ls.DefaultContext(), session, tx, grph, selectEntity, cfg, 0)
 	})
 
 	It("Load from database", func() {

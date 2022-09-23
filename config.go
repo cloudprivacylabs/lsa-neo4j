@@ -17,6 +17,7 @@ type Config struct {
 
 type withProperty interface {
 	ForEachProperty(func(string, interface{}) bool) bool
+	GetProperty(string) (interface{}, bool)
 }
 
 type mapWithProperty map[string]interface{}
@@ -28,6 +29,11 @@ func (m mapWithProperty) ForEachProperty(f func(string, interface{}) bool) bool 
 		}
 	}
 	return true
+}
+
+func (m mapWithProperty) GetProperty(key string) (interface{}, bool) {
+	x, ok := m[key]
+	return x, ok
 }
 
 func InitNamespaceTrie(cfg *Config) *Trie {
