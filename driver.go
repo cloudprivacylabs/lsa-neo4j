@@ -100,7 +100,8 @@ func Insert(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.G
 				continue
 			}
 			id = strings.Join(ids, ",")
-		} else if _, exists := creates[id]; exists {
+		}
+		if _, exists := creates[id]; exists {
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
 			if err := c.Queue(tx, jobs); err != nil {
 				return nil, err
