@@ -217,7 +217,6 @@ func SaveGraph(session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEn
 			if err := c.Queue(tx, jobs); err != nil {
 				return nil, err
 			}
-
 		}
 	}
 	if err := jobs.Run(tx, config, mappedEntities, batch); err != nil {
