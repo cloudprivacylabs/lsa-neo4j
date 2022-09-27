@@ -194,7 +194,74 @@ func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRo
 	return nil
 }
 
-func linkToThisEntity(ID []string) error {
+func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, ID []string) error {
 	// TODO: Search for all nodes with Ref to this entity, and link them
+	var nodeToBeLinked *lpg.Node
+	var spec *linkSpec
+	var nodeLabels string
+	ls.IterateDescendants(entityRoot, func(node *lpg.Node) bool {
+		if !node.GetLabels().Has(ls.DocumentNodeTerm) {
+			return true
+		}
+		for _, id := range ID {
+			if _, ok := node.GetProperty(id); ok {
+				nodeToBeLinked = node
+				s := getLinkSpec(node)
+				if s != nil {
+					spec = s
+				}
+				return false
+			}
+		}
+		return true
+	}, func(edge *lpg.Edge) ls.EdgeFuncResult {
+		to := edge.GetTo()
+		// Edge must go to a document node
+		if !to.GetLabels().Has(ls.DocumentNodeTerm) {
+			return ls.SkipEdgeResult
+		}
+		// If edge goes to a different entity with ID, we should stop here
+		if _, ok := to.GetProperty(ls.EntitySchemaTerm); ok {
+			if _, ok := to.GetProperty(ls.EntityIDTerm); ok {
+				return ls.SkipEdgeResult
+			}
+		}
+		return ls.FollowEdgeResult
+	}, false)
+
+	// search DB for nodes that has a reference to nodeToBeLinked
+	// 	idrec, err := tx.Run(fmt.Sprintf("MATCH (n) WHERE n.`%s` IN $ids return n", ls.ReferenceFKFor, ID), map[string]interface{}{"ids": ID})
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	// find entity root of each node that has ls.ReferenceFKFor property and create link to nodeToBeLinked
+	// 	seenEntities := make(map[int64]struct{})
+	// fkFor:
+	// 	for idrec.Next() {
+	// 		// record := idrec.Record()
+	// 		// fkForNode := record.Values[0].(neo4j.Node)
+	// 		// all entity roots
+	// nodeLabelsClause := config.MakeLabels([]string{spec.targetEntity})
+	vars := make(map[string]interface{})
+	nodeLabels = config.MakeLabels(nodeToBeLinked.GetLabels().Slice())
+	prop := config.MakeProperties(nodeToBeLinked, vars)
+	erootsRec, err := tx.Run(fmt.Sprintf("MATCH (n)-[]->m WHERE (n.`%s`) IS NOT NULL AND (m.`%s`) IS NOT NULL AND m.`%s` IN $ids RETURN n", ls.EntitySchemaTerm, ls.ReferenceFKFor), map[string]interface{}{"ids": ID})
+	if err != nil {
+		return err
+	}
+	for erootsRec.Next() {
+		rec := erootsRec.Record()
+		eRoot := rec.Values[0].(neo4j.Node)
+		// err := linkEntities(ctx, tx, config, entityRoot, *spec, nodeMap)
+		if err != nil {
+			return err
+		}
+		_, err := tx.Run(fmt.Sprintf("CREATE (n)-[%s]->(m%s %s) WHERE ID(n) = %d", config.MakeLabels([]string{spec.label}), nodeLabels, prop, eRoot.Id), vars)
+		if err != nil {
+			return err
+		}
+	}
+	// }
+	// }
 	return nil
 }
