@@ -13,16 +13,15 @@ import (
 )
 
 var (
-	createGraphCmd = &cobra.Command{
-		Use:   "create",
-		Short: "Create a graph on the db",
+	initGraphCmd = &cobra.Command{
+		Use:   "insert",
+		Short: "Create a graph on the db, this function will not check existing nodes",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
 			inputFormat, _ := cmd.Flags().GetString("input")
 			batchSize, _ := cmd.Flags().GetInt("batch")
 			var cfg neo.Config
-
 			if cfgfile, _ := cmd.Flags().GetString("cfg"); len(cfgfile) == 0 {
 				err := cmdutil.ReadJSONOrYAML("lsaneo.config.yaml", &cfg)
 				if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -55,7 +54,7 @@ var (
 					return err
 				}
 
-				_, err = neo.SaveGraph(ls.DefaultContext(), session, tx, g, func(*lpg.Node) bool { return true }, cfg, batchSize)
+				_, err = neo.Insert(ls.DefaultContext(), session, tx, g, func(lpg.Node) bool { return true }, cfg, batchSize)
 				if err != nil {
 					tx.Rollback()
 					return err
@@ -69,8 +68,8 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(createGraphCmd)
-	createGraphCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
-	createGraphCmd.Flags().String("cfg", "", "configuration spec for node properties and labels (default: lsaneo.config.yaml)")
-	createGraphCmd.Flags().Int("batch", 0, "batching size for creation of nodes and edges")
+	rootCmd.AddCommand(initGraphCmd)
+	initGraphCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
+	initGraphCmd.Flags().String("cfg", "", "configuration spec for node properties and labels (default: lsaneo.config.yaml)")
+	initGraphCmd.Flags().Int("batch", 0, "batching size for creation of nodes and edges")
 }

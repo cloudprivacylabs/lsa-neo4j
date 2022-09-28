@@ -23,7 +23,7 @@ func TestLsaNeo4j(t *testing.T) {
 	RunSpecs(t, "LsaNeo4j Suite")
 }
 
-func selectEntity(node graph.Node) bool {
+func selectEntity(node *lpg.Node) bool {
 	return true
 }
 
@@ -41,7 +41,7 @@ var _ = Describe("Driver", func() {
 	var tx neo4j.Transaction
 
 	var cfg Config
-	var grph graph.Graph
+	var grph *lpg.Graph
 	var eids []uint64
 	var err error
 
@@ -73,7 +73,7 @@ var _ = Describe("Driver", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 		Expect(err).To(BeNil(), "must be valid transaction")
-		eids, _ = SaveGraph(session, tx, grph, selectEntity, cfg, 0)
+		eids, _ = SaveGraph(ls.DefaultContext(), session, tx, grph, selectEntity, cfg, 0)
 	})
 
 	It("Load from database", func() {
@@ -87,10 +87,10 @@ var _ = Describe("Driver", func() {
 		Expect(err).To(BeNil(), "unable to load nodes connected to entity", err)
 
 		// graph isomorphism
-		gotSources := make([]graph.Node, 0)
-		expectedSources := make([]graph.Node, 0)
-		edgeSources := make([]graph.Edge, 0)
-		expectedEdgeSources := make([]graph.Edge, 0)
+		gotSources := make([]*lpg.Node, 0)
+		expectedSources := make([]*lpg.Node, 0)
+		edgeSources := make([]*lpg.Edge, 0)
+		expectedEdgeSources := make([]*lpg.Edge, 0)
 		for nodeItr := grph.GetNodes(); nodeItr.Next(); {
 			gotSources = append(gotSources, nodeItr.Node())
 
@@ -113,7 +113,7 @@ var _ = Describe("Driver", func() {
 		for g := range gotSources {
 			matched := false
 			for e := range expectedSources {
-				eq := graph.CheckIsomorphism(gotSources[g].GetGraph(), expectedSources[e].GetGraph(), func(n1, n2 graph.Node) bool {
+				eq := lpg.CheckIsomorphism(gotSources[g].GetGraph(), expectedSources[e].GetGraph(), func(n1, n2 *lpg.Node) bool {
 					if !n1.GetLabels().IsEqual(n2.GetLabels()) {
 						return false
 					}
@@ -162,7 +162,7 @@ var _ = Describe("Driver", func() {
 					}
 					log.Printf("True\n")
 					return true
-				}, func(e1, e2 graph.Edge) bool {
+				}, func(e1, e2 *lpg.Edge) bool {
 					return e1.GetLabel() == e2.GetLabel() && ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))
 				})
 				if eq {

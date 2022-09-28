@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/cloudprivacylabs/lpg v0.0.0-20220827171343-7333d1da9859
 	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220830171454-ddedfd046069
-	github.com/cloudprivacylabs/opencypher v1.0.0-beta-6
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
@@ -13,7 +13,11 @@ require (
 	github.com/testcontainers/testcontainers-go v0.13.0
 )
 
-require gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+require (
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/santhosh-tekuri/jsonschema/v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+)
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -25,7 +29,7 @@ require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/bserdar/jsonstream v0.0.0-20190428032403-9f1769267072 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
-	github.com/cloudprivacylabs/lpg v0.0.0-20220827171343-7333d1da9859 // indirect
+	github.com/cloudprivacylabs/opencypher v1.0.0-beta-6 // indirect
 	github.com/containerd/cgroups v1.0.1 // indirect
 	github.com/containerd/containerd v1.5.9 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
@@ -42,7 +46,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/sys/mount v0.2.0 // indirect
 	github.com/moby/sys/mountinfo v0.5.0 // indirect
@@ -59,7 +62,6 @@ require (
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.1 // indirect
-	github.com/santhosh-tekuri/jsonschema/v3 v3.0.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tkuchiki/go-timezone v0.2.0 // indirect
