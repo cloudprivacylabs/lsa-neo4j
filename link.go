@@ -246,7 +246,7 @@ func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, enti
 					return errors.New("cannot find entity node")
 				}
 				// edge may be either outgoing/incoming
-				eNodesRec, err := tx.Run(fmt.Sprintf("MATCH (n)-[*%d]-(m) WHERE ID(n) = %d AND m.`%s` IS NOT NULL", depth, fkNode.Id, ls.EntitySchemaTerm), vars)
+				eNodesRec, err := tx.Run(fmt.Sprintf("MATCH (n)-[*%d]-(m) WHERE ID(n) = %d AND m.`%s` IS NOT NULL RETURN m", depth, fkNode.Id, ls.EntitySchemaTerm), vars)
 				if err != nil {
 					return err
 				}
