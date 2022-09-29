@@ -143,7 +143,7 @@ func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config,
 		return nil
 	}
 	id := ls.AsPropertyValue(idTerm, ok).MustStringSlice()
-	return linkToThisEntity(id)
+	return linkToThisEntity(ctx, tx, config, entityRoot, id)
 }
 
 func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]uint64) error {
@@ -197,49 +197,86 @@ func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRo
 
 func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, ID []string) error {
 	// TODO: Search for all nodes with Ref to this entity, and link them
-	// nodeLabelsClause := config.MakeLabels([]string{spec.targetEntity})
 	vars := make(map[string]interface{})
 	nodeLabels := config.MakeLabels(entityRoot.GetLabels().Slice())
 	prop := config.MakeProperties(entityRoot, vars)
-	// return only the entity roots with associated foreign key value
-	// MATCH (n {`https://lschema.org/Reference/fkFor`: "https://dartnet.info/graphModel/Person"}) return n == MATCH (n {`%s`: %s}) return n
-	// MATCH (n {`https://lschema.org/Reference/fkFor`: "https://dartnet.info/graphModel/Person"})-[]->(m {`https://lschema.org/Reference/fkVal`: "sdf"}) return m == MATCH (n {`%s`: %s})-[]->(m {`%s`: $ids}) return m
 	schemaNodeId, ok := entityRoot.GetProperty(ls.SchemaNodeIDTerm)
 	if !ok {
 		return errors.New("invalid schema node, given entity root must contain schema node id property")
 	}
-	// query := fmt.Sprintf("MATCH (n {`%s`: %s})-[]->(m {`%s`: $ids}) return m", ls.ReferenceFKFor, schemaNodeId.(*ls.PropertyValue).AsString(), ls.ReferenceFK)
-	// erootsRec, err := tx.Run(fmt.Sprintf("MATCH (n)-[]->m WHERE (n.`%s`) IS NOT NULL AND (m.`%s`) IS NOT NULL AND m.`%s` IN $ids RETURN n", ls.EntitySchemaTerm, ls.ReferenceFKFor), map[string]interface{}{"ids": ID})
-	// if err != nil {
-	// 	return err
-	// }
-	eRootsRec, err := tx.Run(fmt.Sprintf("MATCH (n {`%s`: %s})-[]->(m {`%s`: $ids}) return m, n", ls.ReferenceFKFor, schemaNodeId.(*ls.PropertyValue).AsString(), ls.ReferenceFK), map[string]interface{}{"ids": ID})
-	if err != nil {
-		return err
+	var fkNodesRec neo4j.Result
+	var err error
+	if len(ID) > 1 {
+		fkNodesRec, err = tx.Run(fmt.Sprintf("MATCH (n {`%s`: %s}) AND n.`%s` in $ids return n", ls.ReferenceFKFor, schemaNodeId.(*ls.PropertyValue).AsString(), ls.ReferenceFK), map[string]interface{}{"ids": ID})
+		if err != nil {
+			return err
+		}
+	} else {
+		fkNodesRec, err = tx.Run(fmt.Sprintf("MATCH (n {`%s`: %s, `%s`: $ids}) return n", ls.ReferenceFKFor, schemaNodeId.(*ls.PropertyValue).AsString(), ls.ReferenceFK), map[string]interface{}{"ids": ID})
+		if err != nil {
+			return err
+		}
 	}
-	for eRootsRec.Next() {
-		rec := eRootsRec.Record()
-		eRoot := rec.Values[0].(neo4j.Node)
-		valNode := rec.Values[1].(neo4j.Node)
+	for fkNodesRec.Next() {
+		rec := fkNodesRec.Record()
+		fkNode := rec.Values[0].(neo4j.Node)
 		dirTo := false
-		if valNode.Props[ls.ReferenceDirectionTerm] == "to" {
+		if fkNode.Props[ls.ReferenceDirectionTerm] == "to" {
 			dirTo = true
 		}
-
-		// err := linkEntities(ctx, tx, config, entityRoot, *spec, nodeMap)
-		if dirTo {
-			_, err := tx.Run(fmt.Sprintf("CREATE (n)-[%s]->(m%s %s) WHERE ID(n) = %d", config.MakeLabels([]string{ls.HasTerm}), nodeLabels, prop, eRoot.Id), vars)
-			if err != nil {
-				return err
+		// if fkNode is entity root, connect directly to new node
+		if _, ok := fkNode.Props[ls.EntitySchemaTerm]; ok {
+			if dirTo {
+				_, err := tx.Run(fmt.Sprintf("CREATE (n)-[%s]->(m%s %s) WHERE ID(n) = %d", config.MakeLabels([]string{ls.HasTerm}), nodeLabels, prop, fkNode.Id), vars)
+				if err != nil {
+					return err
+				}
+			} else {
+				_, err := tx.Run(fmt.Sprintf("CREATE (m%s %s)-[%s]->(n) WHERE ID(n) = %d", nodeLabels, prop, config.MakeLabels([]string{ls.HasTerm}), fkNode.Id), vars)
+				if err != nil {
+					return err
+				}
 			}
 		} else {
-			_, err := tx.Run(fmt.Sprintf("CREATE (m%s %s)-[%s]->(n) WHERE ID(n) = %d", nodeLabels, prop, config.MakeLabels([]string{ls.HasTerm}), eRoot.Id), vars)
-			if err != nil {
-				return err
+			// otherwise find nearest entity node
+			const MAX_DEPTH = 10
+			var depth int = 1
+			for {
+				if depth >= MAX_DEPTH {
+					return errors.New("cannot find entity node")
+				}
+				// edge may be either outgoing/incoming
+				eNodesRec, err := tx.Run(fmt.Sprintf("MATCH (n)-[*%d]-(m) WHERE ID(n) = %d AND m.`%s` IS NOT NULL", depth, fkNode.Id, ls.EntitySchemaTerm), vars)
+				if err != nil {
+					return err
+				}
+				rec := eNodesRec.Record()
+				if err != nil {
+					return err
+				}
+				if rec == nil {
+					depth++
+					continue
+				}
+				if len(rec.Values) > 1 {
+					return errors.New("mulitple entity nodes found")
+				}
+				eNode := rec.Values[0].(neo4j.Node)
+				// connect found entity root to new node
+				if dirTo {
+					_, err := tx.Run(fmt.Sprintf("CREATE (n)-[%s]->(m%s %s) WHERE ID(n) = %d", config.MakeLabels([]string{ls.HasTerm}), nodeLabels, prop, eNode.Id), vars)
+					if err != nil {
+						return err
+					}
+				} else {
+					_, err := tx.Run(fmt.Sprintf("CREATE (m%s %s)-[%s]->(n) WHERE ID(n) = %d", nodeLabels, prop, config.MakeLabels([]string{ls.HasTerm}), eNode.Id), vars)
+					if err != nil {
+						return err
+					}
+				}
+				break
 			}
 		}
 	}
-	// }
-	// }
 	return nil
 }
