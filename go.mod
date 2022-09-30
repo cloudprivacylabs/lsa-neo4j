@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/cloudprivacylabs/lpg v1.0.8
-	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220928161525-72e031d99728
+	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220930162948-3724bfdf6d24
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
@@ -15,7 +15,6 @@ require (
 
 require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/santhosh-tekuri/jsonschema/v3 v3.0.1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
 
