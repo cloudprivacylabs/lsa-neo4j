@@ -205,18 +205,18 @@ func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, enti
 	}
 	var fkNodesRec neo4j.Result
 	var err error
-	entityID, _ := entityRoot.GetProperty(ls.SchemaNodeIDTerm)
+	entityLabels := ls.FilterNonLayerTypes(entityRoot.GetLabels().Slice())
 	if len(ID) > 1 {
 		fkNodesRec, err = tx.Run(fmt.Sprintf(
-			"MATCH (n) WHERE n.`%s` = %s MATCH (n) WHERE ALL(cmp IN $ids WHERE cmp IN SPLIT(n.`%s`, %s)) RETURN n",
-			config.Shorten(ls.ReferenceFKFor), quoteStringLiteral(entityID.(*ls.PropertyValue).AsString()), config.Shorten(ls.ReferenceFK), quoteStringLiteral(",")),
-			map[string]interface{}{"ids": ID[0]},
+			"MATCH (n) WHERE n.`%s` IN $labels MATCH (n) WHERE ALL(cmp IN $ids WHERE cmp IN SPLIT(n.`%s`, %s)) RETURN n",
+			config.Shorten(ls.ReferenceFKFor), config.Shorten(ls.ReferenceFK), quoteStringLiteral(",")),
+			map[string]interface{}{"ids": ID[0], "labels": entityLabels},
 		)
 	} else {
 		fkNodesRec, err = tx.Run(fmt.Sprintf(
-			"MATCH (n) WHERE n.`%s`= %s AND n.`%s` = $ids RETURN n",
-			config.Shorten(ls.ReferenceFKFor), quoteStringLiteral(entityID.(*ls.PropertyValue).AsString()), config.Shorten(ls.ReferenceFK)),
-			map[string]interface{}{"ids": ID[0]},
+			"MATCH (n) WHERE n.`%s` IN $labels AND n.`%s` = $ids RETURN n",
+			config.Shorten(ls.ReferenceFKFor), config.Shorten(ls.ReferenceFK)),
+			map[string]interface{}{"ids": ID[0], "labels": entityLabels},
 		)
 	}
 	if err != nil {
