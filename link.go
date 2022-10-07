@@ -1,6 +1,7 @@
 package neo4j
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -142,7 +143,7 @@ func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config,
 		return nil
 	}
 	id := ls.AsPropertyValue(idTerm, ok).MustStringSlice()
-	return linkToThisEntity(id)
+	return linkToThisEntity(ctx, tx, config, entityRoot, id, nodeMap)
 }
 
 func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]uint64) error {
@@ -194,7 +195,93 @@ func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRo
 	return nil
 }
 
-func linkToThisEntity(ID []string) error {
+// ID is entity id of entity root
+func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, ID []string, nodeMap map[*lpg.Node]uint64) error {
 	// TODO: Search for all nodes with Ref to this entity, and link them
+	vars := make(map[string]interface{})
+	_, ok := entityRoot.GetProperty(ls.EntitySchemaTerm)
+	if !ok {
+		return errors.New("invalid schema node, given entity root must contain schema node id property")
+	}
+	var fkNodesRec neo4j.Result
+	var err error
+	entityLabels := ls.FilterNonLayerTypes(entityRoot.GetLabels().Slice())
+	if len(ID) > 1 {
+		fkNodesRec, err = tx.Run(fmt.Sprintf(
+			"MATCH (n) WHERE n.`%s` IN $labels MATCH (n) WHERE ALL(cmp IN $ids WHERE cmp IN SPLIT(n.`%s`, %s)) RETURN n",
+			config.Shorten(ls.ReferenceFKFor), config.Shorten(ls.ReferenceFK), quoteStringLiteral(",")),
+			map[string]interface{}{"ids": ID[0], "labels": entityLabels},
+		)
+	} else {
+		fkNodesRec, err = tx.Run(fmt.Sprintf(
+			"MATCH (n) WHERE n.`%s` IN $labels AND n.`%s` = $ids RETURN n",
+			config.Shorten(ls.ReferenceFKFor), config.Shorten(ls.ReferenceFK)),
+			map[string]interface{}{"ids": ID[0], "labels": entityLabels},
+		)
+	}
+	if err != nil {
+		return err
+	}
+	for fkNodesRec.Next() {
+		rec := fkNodesRec.Record()
+		fkNode := rec.Values[0].(neo4j.Node)
+		dirTo := false
+		if fkNode.Props[ls.ReferenceDirectionTerm] == "to" || fkNode.Props[ls.ReferenceDirectionTerm] == "toTarget" {
+			dirTo = true
+		}
+		// if fkNode is entity root, connect directly to new node
+		if _, ok := fkNode.Props[ls.EntitySchemaTerm]; ok {
+			if dirTo {
+				// MATCH (n), (m) WHERE ID(n) = %d AND m.`%s` = ID CREATE (n)-[%s]->(m)
+				_, err := tx.Run(fmt.Sprintf("MATCH (n) MATCH (m) WHERE ID(n) = %d AND ID(m) = %d CREATE (n)-[%s]->(m)", fkNode.Id, int64(nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+				if err != nil {
+					return err
+				}
+			} else {
+				_, err := tx.Run(fmt.Sprintf("MATCH (n) MATCH (m) WHERE ID(n) = %d AND ID(m) = %d CREATE (n)<-[%s]-(m)", fkNode.Id, int64(nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			// otherwise find nearest entity node
+			const MAX_DEPTH = 10
+			var depth int = 1
+			for {
+				if depth >= MAX_DEPTH {
+					return errors.New("cannot find entity node")
+				}
+				eNodesRec, err := tx.Run(fmt.Sprintf("MATCH (n)<-[*%d]-(m) WHERE ID(n) = %d AND m.`%s` IS NOT NULL RETURN m", depth, fkNode.Id, ls.EntitySchemaTerm), vars)
+				if err != nil {
+					return err
+				}
+				singleRec, err := eNodesRec.Collect()
+				if err != nil {
+					return err
+				}
+				if singleRec == nil {
+					depth++
+					continue
+				}
+				if len(singleRec) > 1 {
+					return errors.New("mulitple entity nodes found")
+				}
+				eNode := singleRec[0].Values[0].(neo4j.Node)
+				// connect found entity root to new node
+				if dirTo {
+					_, err := tx.Run(fmt.Sprintf("MATCH (n) MATCH (m) WHERE ID(n) = %d AND ID(m) = %d CREATE (n)-[%s]->(m)", eNode.Id, int64(nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+					if err != nil {
+						return err
+					}
+				} else {
+					_, err := tx.Run(fmt.Sprintf("MATCH (n) MATCH (m) WHERE ID(n) = %d AND ID(m) = %d CREATE (n)<-[%s]-(m)", eNode.Id, int64(nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+					if err != nil {
+						return err
+					}
+				}
+				break
+			}
+		}
+	}
 	return nil
 }
