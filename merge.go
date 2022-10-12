@@ -12,9 +12,9 @@ func merge(g1, g2 *lpg.Graph) (*lpg.Graph, error) {
 	return nil, nil
 }
 
-func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) (*lpg.Graph, map[*lpg.Node]int64, error) {
+func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) (map[*lpg.Node]int64, error) {
 	if len(rootIds) == 0 {
-		return nil, nil, fmt.Errorf("Empty entity schema nodes")
+		return nil, fmt.Errorf("Empty entity schema nodes")
 	}
 	// neo4j IDs
 	visitedNode := make(map[int64]*lpg.Node)
@@ -27,7 +27,7 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
 		queue = queue[len(queue):]
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if len(srcNodes) == 0 || (len(adjNodes) == 0 && len(adjRelationships) == 0) {
 			break
@@ -96,5 +96,5 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64
 		mappedIds[n] = id
 		dbIds = append(dbIds, id)
 	}
-	return grph, mappedIds, nil
+	return mappedIds, nil
 }

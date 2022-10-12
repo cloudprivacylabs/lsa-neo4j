@@ -1,13 +1,15 @@
 {
+    "description": "expected graph from the merge of pre-existing DB graph (merge_01) and in-memory graph (merge_02)",
     "nodes": [
        {
             "n":0,
             "labels": [
                     "https://lschema.org/DocumentNode",
+                    "https://lschema.org/Object",
                     "Person"
                 ],
             "properties": {
-                "https://lschema.org/entityId": "0",
+                "https://lschema.org/entityId": "entityId",
                 "https://lschema.org/entitySchema": "Schema for person"
             }
         },
@@ -15,13 +17,11 @@
             "n":1,
             "labels": [
                 "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value",
                 "test"
                 ],
             "properties": { 
-                "value": {
-                    "A": "1",
-                    "B": "2"
-                }
+                "value": ["1","2","A","B","C"]
             }
         },
         {
