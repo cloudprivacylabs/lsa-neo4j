@@ -21,7 +21,7 @@
                 "test"
                 ],
             "properties": { 
-                "value": ["1","2","A","B","C"]
+                "value": ["A","B","C"]
             }
         },
         {
