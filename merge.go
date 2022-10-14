@@ -1,7 +1,6 @@
 package neo4j
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -55,43 +54,119 @@ func compareNativeEdge(e1, e2 *lpg.Edge) bool {
 	return e1.GetLabel() == e2.GetLabel() && ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))
 }
 
-func merge(memGraph, dbGraph *lpg.Graph, memGraphIds, dbGraphIds map[*lpg.Node]int64, memEdges, dbEdges map[*lpg.Edge]int64) (*lpg.Graph, []string, error) {
-	grph := lpg.NewGraph()
-	ops := make([]string, 0)
-
-	for memNode, _ := range memGraphIds {
-		memEdgeItr := memNode.GetEdges(lpg.AnyEdge)
-		memEdge := memEdgeItr.Edge()
-		memParent := memEdgeItr.Edge().GetFrom()
-		// memChild := memEdgeItr.Edge().GetTo()
-		for dbNode, _ := range dbGraphIds {
-			dbEdgeItr := dbNode.GetEdges(lpg.AnyEdge)
-			dbEdge := dbEdgeItr.Edge()
-			dbParent := dbEdgeItr.Edge().GetFrom()
-			// dbChild := dbEdgeItr.Edge().GetTo()
-			p1, ok := memNode.GetProperty(ls.SchemaNodeIDTerm)
-			if !ok {
-				return nil, nil, errors.New("must have schema node id term")
-			}
-			p2, ok := dbNode.GetProperty(ls.SchemaNodeIDTerm)
-			if !ok {
-				return nil, nil, errors.New("must have schema node id term")
-			}
-			if ls.AsPropertyValue(p1, true).AsString() == ls.AsPropertyValue(p2, true).AsString() {
-				if memParent.GetLabels().IsEqual(dbParent.GetLabels()) && compareNativeEdge(memEdge, dbEdge) {
-					cmp := compareNativeNode(memNode, dbNode)
-					if !cmp {
-						ops = append(ops, writeQuery(memNode, dbGraphIds[dbNode]))
-					}
-				}
-			}
-		}
-	}
-
-	return grph, ops, nil
+type OperationQueue struct {
+	ops []operation
+	// updateNodes []updateNode
+	// createNodes []createNode
+	// updateEdges []createEdge
 }
 
-func writeQuery(n *lpg.Node, id int64) string {
+type operation interface {
+	writeQuery() string
+}
+
+type updateNode struct {
+	id     int64
+	labels []string
+	props  map[string]interface{}
+}
+
+type createNode struct {
+	id     int64
+	labels []string
+	props  map[string]interface{}
+}
+type createEdge struct {
+	id    int64
+	types []string
+	props map[string]interface{}
+}
+
+func merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) (*lpg.Graph, []operation, error) {
+	ops := make([]operation, 0)
+	memEntitiesMap := ls.GetEntityInfo(memGraph)
+	dbEntitiesMap := ls.GetEntityInfo(dbGraph)
+	findDBCounterpart := func(dbMap map[*lpg.Node]ls.EntityInfo, term, match string) *lpg.Node {
+		for n := range dbMap {
+			if ls.AsPropertyValue(n.GetProperty(term)).AsString() == match {
+				return n
+			}
+		}
+		return nil
+	}
+	for memEntity := range memEntitiesMap {
+		matchingDBEntity := findDBCounterpart(dbEntitiesMap, ls.EntitySchemaTerm, ls.AsPropertyValue(memEntity.GetProperty(ls.EntityIDTerm)).AsString())
+		if matchingDBEntity == nil {
+			ops = append(ops, nodeValuesToOperation(memEntity, createNodeOp))
+		} else {
+			ls.IterateDescendants(memEntity, func(n *lpg.Node) bool {
+				found := ls.IterateDescendants(matchingDBEntity, func(n2 *lpg.Node) bool {
+					cmp := compareNativeNode(n, n2)
+					if !cmp {
+						ops = append(ops, nodeValuesToOperation(n2, updateNodeOp))
+					}
+					return cmp
+				}, ls.FollowEdgesInEntity, false)
+				return found
+			}, ls.FollowEdgesInEntity, false)
+		}
+	}
+	return dbGraph, ops, nil
+}
+
+func getNodeProps(n *lpg.Node) map[string]interface{} {
+	res := make(map[string]interface{})
+	n.ForEachProperty(func(s string, i interface{}) bool {
+		res[s] = i
+		return true
+	})
+	return res
+}
+func getEdgeProps(e *lpg.Edge) map[string]interface{} {
+	res := make(map[string]interface{})
+	e.ForEachProperty(func(s string, i interface{}) bool {
+		res[s] = i
+		return true
+	})
+	return res
+}
+
+const (
+	createNodeOp int = iota
+	updateNodeOp
+	createEdgeOp
+)
+
+func nodeValuesToOperation(node *lpg.Node, op int) operation {
+	switch op {
+	case createNodeOp:
+		n := createNode{}
+		n.labels = node.GetLabels().Slice()
+		n.props = getNodeProps(node)
+		return n
+	case updateNodeOp:
+		n := updateNode{}
+		n.labels = node.GetLabels().Slice()
+		n.props = getNodeProps(node)
+		return n
+	}
+	return nil
+}
+
+func edgeValuesToOperation(edge *lpg.Edge, op int) operation {
+	e := createEdge{}
+	e.types = []string{edge.GetLabel()}
+	e.props = getEdgeProps(edge)
+	return e
+}
+
+func (un updateNode) writeQuery() string {
+	return fmt.Sprintf("MERGE (n)")
+}
+func (cn createNode) writeQuery() string {
+	return fmt.Sprintf("MERGE (n)")
+}
+func (ue createEdge) writeQuery() string {
 	return fmt.Sprintf("MERGE (n)")
 }
 
