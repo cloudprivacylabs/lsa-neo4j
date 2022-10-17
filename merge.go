@@ -3,6 +3,7 @@ package neo4j
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
@@ -15,44 +16,50 @@ var (
 )
 
 type delta struct {
+	id          int64
 	addLabel    []string
 	setProp     map[string]interface{}
 	removeLabel []string
-	removeProp  map[string]interface{}
+	removeProp  []string
 }
 
-func findLabelDiff(l1, l2 lpg.StringSet) delta {
-	ret := delta{}
-	for _, x := range l1.Slice() {
-		if !l2.Has(x) {
-			ret.addLabel = append(ret.addLabel, x)
+func (d delta) isUpdateEmpty() bool {
+	return len(d.addLabel) == 0 && len(d.setProp) == 0
+}
+
+func (d delta) isRemoveEmpty() bool {
+	return len(d.removeLabel) == 0 && len(d.removeProp) == 0
+}
+
+func findNodeLabelDiff(memLabels, dbLabels lpg.StringSet) []string {
+	ret := make([]string, 0)
+	for _, x := range memLabels.Slice() {
+		if !dbLabels.Has(x) {
+			ret = append(ret, x)
 		}
 	}
 	return ret
 }
 
 // compares two lpg nodes and returns a diff
-func compareGraphNode(n1, n2 *lpg.Node, operationType bool) []delta {
-	ret := make([]delta, 0)
-	if n2 == nil {
-		d := findLabelDiff(n1.GetLabels(), lpg.StringSet{})
-		d.setProp = ls.CloneProperties(n1)
-		ret = append(ret, d)
-		return ret
+func compareGraphNode(mem, db *lpg.Node, operationType bool) delta {
+	delta := delta{}
+	if db == nil {
+		delta.addLabel = mem.GetLabels().Slice()
+		delta.setProp = ls.CloneProperties(mem)
+		return delta
 	}
-	if !n1.GetLabels().IsEqual(n2.GetLabels()) {
-		ret = append(ret, findLabelDiff(n1.GetLabels(), n2.GetLabels()))
-	}
+	delta.addLabel = findNodeLabelDiff(mem.GetLabels(), db.GetLabels())
 	// Expected properties must be a subset
-	n2.ForEachProperty(func(k string, v interface{}) bool {
+	mem.ForEachProperty(func(k string, v interface{}) bool {
 		pv, ok := v.(*ls.PropertyValue)
 		if !ok {
 			return true
 		}
-		v2, ok := n1.GetProperty(k)
+		v2, ok := mem.GetProperty(k)
 		if !ok {
 			log.Printf("Error at %s: %v: Property does not exist", k, v)
-			ret = append(ret, delta{setProp: map[string]interface{}{k: pv}})
+			delta.setProp[k] = pv
 			return false
 		}
 		pv2, ok := v2.(*ls.PropertyValue)
@@ -62,59 +69,78 @@ func compareGraphNode(n1, n2 *lpg.Node, operationType bool) []delta {
 		}
 		if !pv2.IsEqual(pv) {
 			log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
-			ret = append(ret, delta{setProp: map[string]interface{}{k: pv2}})
+			delta.setProp[k] = pv2
 			return false
 		}
 		return true
 	})
-	return ret
-}
-
-// compares two native lpg nodes and returns a diff
-func compareGraphEdge(e1, e2 *lpg.Edge) []delta {
-	findEdgePropDiff := func(ed1, ed2 *lpg.Edge) []delta {
-		ret := make([]delta, 0)
-		ed2.ForEachProperty(func(k string, v interface{}) bool {
-			pv, ok := v.(*ls.PropertyValue)
-			if !ok {
-				return true
+	if operationType == overwriteOp {
+		for _, l := range db.GetLabels().Slice() {
+			if !mem.HasLabel(l) {
+				delta.removeLabel = append(delta.removeLabel, l)
 			}
-			v2, ok := ed1.GetProperty(k)
+		}
+		db.ForEachProperty(func(s string, i interface{}) bool {
+			_, ok := mem.GetProperty(s)
 			if !ok {
-				log.Printf("Error at %s: %v: Property does not exist", k, v)
-				ret = append(ret, delta{setProp: map[string]interface{}{k: pv}})
-				return false
-			}
-			pv2, ok := v2.(*ls.PropertyValue)
-			if !ok {
-				log.Printf("Error at %s: %v: Not property value", k, v)
-				return false
-			}
-			if !pv2.IsEqual(pv) {
-				log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
-				ret = append(ret, delta{setProp: map[string]interface{}{k: pv2}})
-				return false
+				delta.removeProp = append(delta.removeProp, s)
 			}
 			return true
 		})
-		return ret
 	}
-	ret := make([]delta, 0)
-	if e1.GetLabel() != e2.GetLabel() {
-		ret = append(ret, delta{addLabel: []string{e1.GetLabel(), e2.GetLabel()}})
+	return delta
+}
+
+// compares two native lpg nodes and returns a diff
+func compareGraphEdge(mem, db *lpg.Edge, operationType bool) delta {
+	delta := delta{}
+	if db == nil {
+		delta.addLabel = []string{mem.GetLabel()}
+		delta.setProp = ls.CloneProperties(mem)
 	}
-	if !ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2)) {
-		ret = append(ret, findEdgePropDiff(e1, e2)...)
+	if mem.GetLabel() != db.GetLabel() {
+		delta.addLabel = []string{mem.GetLabel()}
 	}
-	return ret
+	mem.ForEachProperty(func(k string, v interface{}) bool {
+		pv, ok := v.(*ls.PropertyValue)
+		if !ok {
+			return true
+		}
+		v2, ok := mem.GetProperty(k)
+		if !ok {
+			log.Printf("Error at %s: %v: Property does not exist", k, v)
+			delta.setProp[k] = pv
+			return false
+		}
+		pv2, ok := v2.(*ls.PropertyValue)
+		if !ok {
+			log.Printf("Error at %s: %v: Not property value", k, v)
+			return false
+		}
+		if !pv2.IsEqual(pv) {
+			log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
+			delta.setProp[k] = pv2
+			return false
+		}
+		return true
+	})
+	if operationType == overwriteOp {
+		if mem.GetLabel() != db.GetLabel() {
+			delta.removeLabel = append(delta.removeLabel, db.GetLabel())
+		}
+		db.ForEachProperty(func(s string, i interface{}) bool {
+			_, ok := mem.GetProperty(s)
+			if !ok {
+				delta.removeProp = append(delta.removeProp, s)
+			}
+			return true
+		})
+	}
+	return delta
 }
 
 type OperationQueue struct {
-	ops []operation
-}
-
-type operation interface {
-	writeQuery() string
+	ops []fmt.Stringer
 }
 
 type updateNode struct {
@@ -140,81 +166,71 @@ type updateEdge struct {
 	props map[string]interface{}
 }
 
-func buildQueriesFromOperations(ops []operation) []string {
+func buildQueriesFromOperations(ops []fmt.Stringer) []string {
 	res := make([]string, 0)
 	for _, op := range ops {
-		res = append(res, op.writeQuery())
+		res = append(res, op.String())
 	}
 	return res
 }
 
-func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) (*lpg.Graph, []operation, error) {
-	ops := make([]operation, 0)
+func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) (*lpg.Graph, []fmt.Stringer, error) {
+	ops := make([]fmt.Stringer, 0)
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph)
-	findDBCounterpart := func(n *lpg.Node, schemaName, id string) *lpg.Node {
-		if ls.AsPropertyValue(n.GetProperty(ls.EntitySchemaTerm)).AsString() == schemaName {
-			if ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm)).AsString() == id {
+	findDBCounterpart := func(n *lpg.Node, schemaPV, idPV *ls.PropertyValue) *lpg.Node {
+		if ls.AsPropertyValue(n.GetProperty(ls.EntitySchemaTerm)).IsEqual(schemaPV) {
+			if ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm)).IsEqual(idPV) {
 				return n
 			}
 		}
 		return nil
 	}
-	max := func(x, y int) int {
-		if x > y {
-			return x
-		}
-		return y
-	}
 	memEntities := make([]*lpg.Node, 0, len(memEntitiesMap))
-	dbEntities := make([]*lpg.Node, 0, len(dbEntitiesMap))
-	// align in order the matching entity roots i.e, first entity in mem slice should match first entity in db slice
+	dbEntities := make([]*lpg.Node, 0, len(memEntitiesMap))
+	// align by index matching entity roots i.e, first entity in mem slice should match first entity in db slice
 	for n := range memEntitiesMap {
-		schemaName := ls.AsPropertyValue(n.GetProperty(ls.EntitySchemaTerm)).AsString()
-		eid := ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm)).AsString()
+		schemaPV := ls.AsPropertyValue(n.GetProperty(ls.EntitySchemaTerm))
+		eidPV := ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm))
 		memEntities = append(memEntities, n)
 		for db := range dbEntitiesMap {
-			if findDBCounterpart(db, schemaName, eid) != nil {
+			if findDBCounterpart(db, schemaPV, eidPV) != nil {
 				dbEntities = append(dbEntities, db)
 				delete(dbEntitiesMap, db)
 			}
 		}
 	}
-	for ix := 0; ix < max(len(memEntities), len(dbEntities)); ix++ {
+	for ix := 0; ix < len(memEntities); ix++ {
 		if ix >= len(dbEntities) {
-			mergeEntity(memEntities[ix], nil, &ops)
+			mergeEntity(memEntities[ix], nil)
 		} else {
-			mergeEntity(memEntities[ix], dbEntities[ix], &ops)
+			mergeEntity(memEntities[ix], dbEntities[ix])
 		}
 	}
 	return dbGraph, ops, nil
 }
 
-func setDeltaToNode(dbNode *lpg.Node, delta []delta) {
-	allLabels := make([]string, 0)
-	for _, dx := range delta {
-		allLabels = append(allLabels, dx.addLabel...)
-		for k, v := range dx.setProp {
-			dbNode.SetProperty(k, v)
-		}
+func (dx delta) setDeltaToNode(dbNode *lpg.Node) {
+	for _, v := range dx.removeProp {
+		dbNode.RemoveProperty(v)
 	}
-	dbNode.SetLabels(lpg.NewStringSet(allLabels...))
-
+	for k, v := range dx.setProp {
+		dbNode.SetProperty(k, v)
+	}
+	dbNode.SetLabels(lpg.NewStringSet(dx.addLabel...))
 }
 
-func setDeltaToEdge(dbEdge *lpg.Edge, delta []delta) {
-	allLabels := make([]string, 0)
-	for _, dx := range delta {
-		allLabels = append(allLabels, dx.addLabel...)
-		for k, v := range dx.setProp {
-			dbEdge.SetProperty(k, v)
-		}
+func (dx delta) setDeltaToEdge(dbEdge *lpg.Edge) {
+	for _, v := range dx.removeProp {
+		dbEdge.RemoveProperty(v)
 	}
-	dbEdge.SetLabel(lpg.NewStringSet(allLabels...).String())
-
+	for k, v := range dx.setProp {
+		dbEdge.SetProperty(k, v)
+	}
+	dbEdge.SetLabel(strings.Join(dx.addLabel, ","))
 }
 
-func mergeEntity(memParent, dbParent *lpg.Node, ops *[]operation) bool {
+func mergeEntity(memParent, dbParent *lpg.Node) ([]delta, bool) {
 	memOutgoing := memParent.GetEdges(lpg.OutgoingEdge)
 	dbOutgoing := dbParent.GetEdges(lpg.OutgoingEdge)
 	var edgeFunc func(e *lpg.Edge) ls.EdgeFuncResult
@@ -229,7 +245,8 @@ func mergeEntity(memParent, dbParent *lpg.Node, ops *[]operation) bool {
 		case ls.FollowEdgeResult:
 			memNext := memOutgoing.GetTo()
 			dbNext := dbOutgoing.GetTo()
-			if !mergeEntity(memNext, dbNext, ops) {
+			_, ok := mergeEntity(memNext, dbNext)
+			if !ok {
 				return false
 			}
 		}
@@ -273,7 +290,7 @@ const (
 	updateEdgeOp
 )
 
-func nodeDeltasToOperation(node *lpg.Node, d []delta, op int) operation {
+func nodeDeltasToOperation(node *lpg.Node, d []delta, op int) fmt.Stringer {
 	switch op {
 	case createNodeOp:
 		n := createNode{}
@@ -301,7 +318,7 @@ func nodeDeltasToOperation(node *lpg.Node, d []delta, op int) operation {
 	return nil
 }
 
-func edgeDeltasToOperation(edge *lpg.Edge, d []delta, op int) operation {
+func edgeDeltasToOperation(edge *lpg.Edge, d []delta, op int) fmt.Stringer {
 	switch op {
 	case createEdgeOp:
 		e := createEdge{}
@@ -329,7 +346,7 @@ func edgeDeltasToOperation(edge *lpg.Edge, d []delta, op int) operation {
 	return nil
 }
 
-func nodeValuesToOperation(node *lpg.Node, op int) operation {
+func nodeValuesToOperation(node *lpg.Node, op int) fmt.Stringer {
 	switch op {
 	case createNodeOp:
 		n := createNode{}
@@ -345,24 +362,24 @@ func nodeValuesToOperation(node *lpg.Node, op int) operation {
 	return nil
 }
 
-func edgeValuesToOperation(edge *lpg.Edge, op int) operation {
+func edgeValuesToOperation(edge *lpg.Edge, op int) fmt.Stringer {
 	e := createEdge{}
 	e.types = []string{edge.GetLabel()}
 	e.props = ls.CloneProperties(edge)
 	return e
 }
 
-func (un updateNode) writeQuery() string {
+func (un updateNode) String() string {
 	return fmt.Sprintf("MERGE (n)")
 }
-func (cn createNode) writeQuery() string {
+func (cn createNode) String() string {
 	return fmt.Sprintf("MERGE (n)")
 }
-func (ce createEdge) writeQuery() string {
+func (ce createEdge) String() string {
 	return fmt.Sprintf("MERGE (n)")
 }
 
-func (ue updateEdge) writeQuery() string {
+func (ue updateEdge) String() string {
 	return fmt.Sprintf("MERGE (n)")
 }
 
