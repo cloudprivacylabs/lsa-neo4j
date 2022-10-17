@@ -3,16 +3,11 @@ package neo4j
 import (
 	"encoding/json"
 	"os"
+	"testing"
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 )
-
-type dbUpdateNode struct {
-	nodeID     int64
-	labels     []string
-	properties map[string]interface{}
-}
 
 // in db, ls.SchemaNodeIDTerm is "schemaNodeId"
 // func findNode(tx neo4j.Transaction, id int64, schemaNodeId string, parent, child *lpg.Node) (neo4j.Node, error) {
@@ -56,16 +51,21 @@ type dbUpdateNode struct {
 // }
 
 // testGraphMerge (without DB)
-func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []string, error) {
+func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []operation, error) {
 	dbGraph, dbNodeIds, dbEdgeIds, err := mockLoadGraph(dbGraphFile)
 	if err != nil {
 		return nil, nil, err
 	}
-	memGraph, memNodeIds, memEdgeIds, err := mockLoadGraph(memGraphFile)
+	f, err := os.Open(memGraphFile)
 	if err != nil {
 		return nil, nil, err
 	}
-	return merge(memGraph, dbGraph, dbNodeIds, memNodeIds, memEdgeIds, dbEdgeIds)
+	memGraph := lpg.NewGraph()
+	m := ls.JSONMarshaler{}
+	if err := m.Decode(memGraph, json.NewDecoder(f)); err != nil {
+		return nil, nil, err
+	}
+	return Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds)
 }
 
 func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
@@ -82,7 +82,6 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 	mockNodeIDs := make(map[*lpg.Node]int64)
 	for nodeItr := grph.GetNodes(); nodeItr.Next(); ix++ {
 		node := nodeItr.Node()
-		node.SetProperty(ls.NodeIDTerm, ix)
 		mockNodeIDs[node] = int64(ix)
 	}
 	ix = 0
@@ -92,6 +91,15 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 		mockEdgeIDs[edge] = int64(ix)
 	}
 	return grph, mockNodeIDs, mockEdgeIDs, nil
+}
+
+func testMergeQueries(t *testing.T) {
+	_, ops, err := testGraphMerge("examples/merge_02.json", "merge_02.json")
+	if err != nil {
+		t.Error(err)
+	}
+	queries := buildQueriesFromOperations(ops)
+
 }
 
 // func TestMerge(t *testing.T) {
