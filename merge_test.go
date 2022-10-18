@@ -2,7 +2,10 @@ package neo4j
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -51,7 +54,7 @@ import (
 // }
 
 // testGraphMerge (without DB)
-func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []operation, error) {
+func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []string, error) {
 	dbGraph, dbNodeIds, dbEdgeIds, err := mockLoadGraph(dbGraphFile)
 	if err != nil {
 		return nil, nil, err
@@ -93,13 +96,101 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 	return grph, mockNodeIDs, mockEdgeIDs, nil
 }
 
-func testMergeQueries(t *testing.T) {
-	_, ops, err := testGraphMerge("examples/merge_02.json", "merge_02.json")
+func TestMergeQueries(t *testing.T) {
+	dbGraph, ops, err := testGraphMerge("examples/merge_02.json", "examples/merge_01.json")
 	if err != nil {
 		t.Error(err)
 	}
-	queries := buildQueriesFromOperations(ops)
+	f, err := os.Open("examples/merge_03.json")
+	if err != nil {
+		t.Error(err)
+	}
+	expectedGraph := lpg.NewGraph()
+	m := ls.JSONMarshaler{}
+	if err := m.Decode(expectedGraph, json.NewDecoder(f)); err != nil {
+		t.Error(err)
+	}
+	gotSources := make([]*lpg.Node, 0)
+	expectedSources := make([]*lpg.Node, 0)
+	for nodeItr := dbGraph.GetNodes(); nodeItr.Next(); {
+		gotSources = append(gotSources, nodeItr.Node())
+	}
+	for nodeItr := expectedGraph.GetNodes(); nodeItr.Next(); {
+		expectedSources = append(expectedSources, nodeItr.Node())
+	}
+	for g := range gotSources {
+		matched := false
+		for e := range expectedSources {
+			eq := lpg.CheckIsomorphism(gotSources[g].GetGraph(), expectedSources[e].GetGraph(), func(n1, n2 *lpg.Node) bool {
+				if !n1.GetLabels().IsEqual(n2.GetLabels()) {
+					return false
+				}
+				// If only one of the source nodes match, return false
+				if n1 == gotSources[g] {
+					if n2 == expectedSources[e] {
+						return true
+					}
+					return false
+				}
+				if n2 == expectedSources[e] {
+					return false
+				}
 
+				// Expected properties must be a subset
+				propertiesOK := true
+				n2.ForEachProperty(func(k string, v interface{}) bool {
+					pv, ok := v.(*ls.PropertyValue)
+					if !ok {
+						return true
+					}
+					v2, ok := n1.GetProperty(k)
+					if !ok {
+						log.Printf("Error at %s: %v: Property does not exist", k, v)
+						propertiesOK = false
+						return false
+					}
+					pv2, ok := v2.(*ls.PropertyValue)
+					if !ok {
+						log.Printf("Error at %s: %v: Not property value", k, v)
+						propertiesOK = false
+						return false
+					}
+					if !pv2.IsEqual(pv) {
+						if strings.ToLower(pv2.AsString()) != strings.ToLower(pv.AsString()) {
+							log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
+							propertiesOK = false
+							return false
+						}
+					}
+					return true
+				})
+				if !propertiesOK {
+					log.Printf("Properties not same")
+					return false
+				}
+				log.Printf("True\n")
+				return true
+			}, func(e1, e2 *lpg.Edge) bool {
+				return e1.GetLabel() == e2.GetLabel() && ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))
+			})
+			if eq {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			m := ls.JSONMarshaler{}
+			result, _ := m.Marshal(dbGraph)
+			expected, _ := m.Marshal(expectedGraph)
+			log.Fatalf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
+		}
+	}
+	// fmt.Println(expectedSources)
+	// fmt.Println(ops)
+	// fmt.Println(ops)
+	fmt.Println(ops)
+	// fmt.Println(gotSources)
+	// t.Fatal()
 }
 
 // func TestMerge(t *testing.T) {

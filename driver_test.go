@@ -93,7 +93,6 @@ var _ = Describe("Driver", func() {
 		expectedEdgeSources := make([]*lpg.Edge, 0)
 		for nodeItr := grph.GetNodes(); nodeItr.Next(); {
 			gotSources = append(gotSources, nodeItr.Node())
-
 		}
 		for nodeItr := expectedGraph.GetNodes(); nodeItr.Next(); {
 			expectedSources = append(expectedSources, nodeItr.Node())
