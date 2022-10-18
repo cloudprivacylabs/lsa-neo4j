@@ -130,6 +130,7 @@ func compareGraphEdge(mem, db *lpg.Edge, operationType bool) delta {
 	if db == nil {
 		delta.addLabel = []string{mem.GetLabel()}
 		delta.setProp = ls.CloneProperties(mem)
+		return delta
 	}
 	if mem.GetLabel() != db.GetLabel() {
 		delta.addLabel = []string{mem.GetLabel()}

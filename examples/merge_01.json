@@ -23,19 +23,9 @@
             "properties": { 
                 "value": ["1","2"]
             }
-        },
-        {
-            "n":2,
-            "labels": [
-                "https://lschema.org/DocumentNode"
-            ],
-            "properties": {
-                "value": "test"
-            }
         }
     ],
     "edges": [
-        { "from": 0, "to": 1, "label": " " },
-        { "from": 1, "to": 2, "label": "edge"}
+        { "from": 0, "to": 1, "label": " " }
     ]
 }
