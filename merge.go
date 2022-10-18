@@ -49,6 +49,9 @@ func findNodeLabelDiff(memLabels, dbLabels lpg.StringSet) []string {
 			ret = append(ret, x)
 		}
 	}
+	if len(ret) == 0 {
+		return memLabels.Slice()
+	}
 	return ret
 }
 
@@ -161,6 +164,7 @@ type createNode struct {
 	n      *lpg.Node
 	c      Config
 }
+
 type createEdge struct {
 	id    int64
 	typ   []string
@@ -253,7 +257,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 	}
 	deltas := make([]delta, 0)
 	for ix := 0; ix < len(memEntities); ix++ {
-		d, _ := mergeEntity(memEntities[ix], dbEntities[ix], dbGraphIds, dbEdges)
+		d, _ := mergeEntity(memEntities[ix], dbEntities[ix], dbGraph, dbGraphIds, dbEdges)
 		deltas = append(deltas, d...)
 	}
 	queries := buildQueriesFromDeltas(deltas, config)
@@ -291,24 +295,27 @@ type edgeStep struct {
 	edge *lpg.Edge
 }
 
-func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) []delta {
+func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) []delta {
 	nodeAssociations := make(map[*lpg.Node][]step)
 	edgeAssociations := make(map[*lpg.Edge][]edgeStep)
 	unmapped := make([]step, 0)
 	deltas := make([]delta, 0)
 	memItr := memNode.GetEdges(lpg.OutgoingEdge)
 
-	nodeAssociations[memNode] = []step{
-		{
-			node: dbNode,
-		}}
-
+	if dbNode != nil {
+		nodeAssociations[memNode] = []step{
+			{
+				node: dbNode,
+			}}
+	}
 	for memItr.Next() {
 		memChildNode := memItr.Edge().GetTo()
 		memChildEdge := memItr.Edge()
 		dbItr := dbNode.GetEdges(lpg.OutgoingEdge)
 		// creates
 		if !dbItr.Next() {
+			n := dbGraph.NewNode(memChildNode.GetLabels().Slice(), ls.CloneProperties(memChildNode))
+			dbGraph.NewEdge(dbNode, n, memChildEdge.GetLabel(), ls.CloneProperties(memChildEdge))
 			unmapped = append(unmapped, step{node: memChildNode, edge: memChildEdge})
 		}
 		// updates
@@ -376,10 +383,17 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraphIds map[*lpg.Node]int64,
 	return deltas
 }
 
-func mergeEntity(memParent, dbParent *lpg.Node, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) ([]delta, bool) {
-	memOutgoing := memParent.GetEdges(lpg.OutgoingEdge)
-	dbOutgoing := dbParent.GetEdges(lpg.OutgoingEdge)
-	deltas := matchDBChildNode(memOutgoing.Edge().GetTo(), dbOutgoing.Edge().GetTo(), dbGraphIds, dbEdges)
+func mergeEntity(memParent, dbParent *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) ([]delta, bool) {
+	var memOutgoing lpg.EdgeIterator
+	var dbOutgoing lpg.EdgeIterator
+	var deltas []delta
+	memOutgoing = memParent.GetEdges(lpg.OutgoingEdge)
+	if dbParent != nil {
+		dbOutgoing = dbParent.GetEdges(lpg.OutgoingEdge)
+		deltas = matchDBChildNode(memOutgoing.Edge().GetTo(), dbOutgoing.Edge().GetTo(), dbGraph, dbGraphIds, dbEdges)
+	} else {
+		deltas = matchDBChildNode(memOutgoing.Edge().GetTo(), nil, dbGraph, dbGraphIds, dbEdges)
+	}
 	return deltas, true
 }
 

@@ -119,6 +119,7 @@ func TestMergeQueries(t *testing.T) {
 	if err := m.Decode(expectedGraph, json.NewDecoder(f)); err != nil {
 		t.Error(err)
 	}
+
 	gotSources := make([]*lpg.Node, 0)
 	expectedSources := make([]*lpg.Node, 0)
 	for nodeItr := dbGraph.GetNodes(); nodeItr.Next(); {
