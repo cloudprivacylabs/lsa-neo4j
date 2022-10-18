@@ -18,7 +18,6 @@ var (
 type delta struct {
 	id          int64
 	isNode      bool
-	isEdge      bool
 	addLabel    []string
 	setProp     map[string]interface{}
 	removeLabel []string
@@ -43,6 +42,61 @@ func findNodeLabelDiff(memLabels, dbLabels lpg.StringSet) []string {
 	return ret
 }
 
+func setPropertiesDelta(delta delta, x withProperty, operationType bool) {
+	x.ForEachProperty(func(k string, v interface{}) bool {
+		pv, ok := v.(*ls.PropertyValue)
+		if !ok {
+			return true
+		}
+		v2, ok := x.GetProperty(k)
+		if !ok {
+			log.Printf("Error at %s: %v: Property does not exist", k, v)
+			delta.setProp[k] = pv
+			return false
+		}
+		pv2, ok := v2.(*ls.PropertyValue)
+		if !ok {
+			log.Printf("Error at %s: %v: Not property value", k, v)
+			return false
+		}
+		if !pv2.IsEqual(pv) {
+			log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
+			delta.setProp[k] = pv2
+			return false
+		}
+		return true
+	})
+}
+
+func setNodeOverwrite(mem, db *lpg.Node, delta delta) {
+	for _, l := range db.GetLabels().Slice() {
+		if !mem.HasLabel(l) {
+			delta.removeLabel = append(delta.removeLabel, l)
+		}
+	}
+	db.ForEachProperty(func(s string, i interface{}) bool {
+		_, ok := mem.GetProperty(s)
+		if !ok {
+			delta.removeProp = append(delta.removeProp, s)
+		}
+		return true
+	})
+
+}
+func setEdgeOverwrite(mem, db *lpg.Edge, delta delta) {
+	if mem.GetLabel() != db.GetLabel() {
+		delta.removeLabel = append(delta.removeLabel, db.GetLabel())
+	}
+	db.ForEachProperty(func(s string, i interface{}) bool {
+		_, ok := mem.GetProperty(s)
+		if !ok {
+			delta.removeProp = append(delta.removeProp, s)
+		}
+		return true
+	})
+
+}
+
 // compares two lpg nodes and returns a diff
 func compareGraphNode(mem, db *lpg.Node, operationType bool) delta {
 	delta := delta{isNode: true}
@@ -53,49 +107,16 @@ func compareGraphNode(mem, db *lpg.Node, operationType bool) delta {
 	}
 	delta.addLabel = findNodeLabelDiff(mem.GetLabels(), db.GetLabels())
 	// Expected properties must be a subset
-	mem.ForEachProperty(func(k string, v interface{}) bool {
-		pv, ok := v.(*ls.PropertyValue)
-		if !ok {
-			return true
-		}
-		v2, ok := mem.GetProperty(k)
-		if !ok {
-			log.Printf("Error at %s: %v: Property does not exist", k, v)
-			delta.setProp[k] = pv
-			return false
-		}
-		pv2, ok := v2.(*ls.PropertyValue)
-		if !ok {
-			log.Printf("Error at %s: %v: Not property value", k, v)
-			return false
-		}
-		if !pv2.IsEqual(pv) {
-			log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
-			delta.setProp[k] = pv2
-			return false
-		}
-		return true
-	})
+	setPropertiesDelta(delta, mem, operationType)
 	if operationType == overwriteOp {
-		for _, l := range db.GetLabels().Slice() {
-			if !mem.HasLabel(l) {
-				delta.removeLabel = append(delta.removeLabel, l)
-			}
-		}
-		db.ForEachProperty(func(s string, i interface{}) bool {
-			_, ok := mem.GetProperty(s)
-			if !ok {
-				delta.removeProp = append(delta.removeProp, s)
-			}
-			return true
-		})
+		setNodeOverwrite(mem, db, delta)
 	}
 	return delta
 }
 
 // compares two native lpg nodes and returns a diff
 func compareGraphEdge(mem, db *lpg.Edge, operationType bool) delta {
-	delta := delta{isEdge: true}
+	delta := delta{isNode: false}
 	if db == nil {
 		delta.addLabel = []string{mem.GetLabel()}
 		delta.setProp = ls.CloneProperties(mem)
@@ -103,40 +124,9 @@ func compareGraphEdge(mem, db *lpg.Edge, operationType bool) delta {
 	if mem.GetLabel() != db.GetLabel() {
 		delta.addLabel = []string{mem.GetLabel()}
 	}
-	mem.ForEachProperty(func(k string, v interface{}) bool {
-		pv, ok := v.(*ls.PropertyValue)
-		if !ok {
-			return true
-		}
-		v2, ok := mem.GetProperty(k)
-		if !ok {
-			log.Printf("Error at %s: %v: Property does not exist", k, v)
-			delta.setProp[k] = pv
-			return false
-		}
-		pv2, ok := v2.(*ls.PropertyValue)
-		if !ok {
-			log.Printf("Error at %s: %v: Not property value", k, v)
-			return false
-		}
-		if !pv2.IsEqual(pv) {
-			log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
-			delta.setProp[k] = pv2
-			return false
-		}
-		return true
-	})
+	setPropertiesDelta(delta, mem, mergeOp)
 	if operationType == overwriteOp {
-		if mem.GetLabel() != db.GetLabel() {
-			delta.removeLabel = append(delta.removeLabel, db.GetLabel())
-		}
-		db.ForEachProperty(func(s string, i interface{}) bool {
-			_, ok := mem.GetProperty(s)
-			if !ok {
-				delta.removeProp = append(delta.removeProp, s)
-			}
-			return true
-		})
+		setEdgeOverwrite(mem, db, delta)
 	}
 	return delta
 }
@@ -202,11 +192,12 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 			}
 		}
 	}
-	ops := make([]fmt.Stringer, 0)
+	deltas := make([]delta, 0)
 	for ix := 0; ix < len(memEntities); ix++ {
-		op, _ := mergeEntity(memEntities[ix], dbEntities[ix], dbGraphIds, dbEdges)
-		ops = append(ops, op...)
+		d, _ := mergeEntity(memEntities[ix], dbEntities[ix], dbGraphIds, dbEdges)
+		deltas = append(deltas, d...)
 	}
+	ops := make([]fmt.Stringer, 0)
 	qs = append(qs, buildQueriesFromOperations(ops)...)
 	return dbGraph, qs, nil
 }
@@ -231,21 +222,23 @@ func (dx delta) setDeltaToEdge(dbEdge *lpg.Edge) {
 	dbEdge.SetLabel(strings.Join(dx.addLabel, ","))
 }
 
-// type step struct {
-// 	edge *lpg.Edge
-// 	node *lpg.Node
-// }
+type step struct {
+	edge *lpg.Edge
+	node *lpg.Node
+}
 
-func matchDBChildNode(memItr, dbItr lpg.EdgeIterator, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) []fmt.Stringer {
-	// associations := make(map[*lpg.Node][]step)
-	// unmapped := make([]step, 0)
-	ops := make([]fmt.Stringer, 0)
+func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) []delta {
+	associations := make(map[*lpg.Node][]step)
+	unmapped := make([]step, 0)
+	deltas := make([]delta, 0)
+	memItr := memNode.GetEdges(lpg.OutgoingEdge)
+	dbItr := dbNode.GetEdges(lpg.OutgoingEdge)
 MEM:
 	for memItr.Next() {
 		memChildNode := memItr.Edge().GetTo()
 		memChildEdge := memItr.Edge()
 		if !dbItr.Next() {
-			// unmapped = append(unmapped, step{node: memChildNode, edge: memChildEdge})
+			unmapped = append(unmapped, step{node: memChildNode, edge: memChildEdge})
 		}
 		for dbItr.Next() {
 			dbChildNode := dbItr.Edge().GetTo()
@@ -259,30 +252,34 @@ MEM:
 				panic("")
 			}
 			if lpg.ComparePropertyValue(mpv, dbpv) == 0 {
-				dn := compareGraphNode(memChildNode, dbChildNode, mergeOp)
-				dn.id = dbGraphIds[dbChildNode]
-				dn.setDeltaToNode(dbChildNode)
-				de := compareGraphEdge(memChildEdge, dbChildEdge, mergeOp)
-				de.id = dbEdges[dbChildEdge]
-				de.setDeltaToEdge(dbChildEdge)
-				ops = append(ops, nodeDeltasToOperation(dbChildNode, dn, updateNodeOp), edgeDeltasToOperation(dbChildEdge, de, updateEdgeOp))
-				// associations[memChildNode] = []step{
-				// 	step{
-				// 		node: dbChildNode,
-				// 		edge: dbChildEdge,
-				// 	}}
+				associations[memChildNode] = []step{
+					step{
+						node: dbChildNode,
+						edge: dbChildEdge,
+					}}
 				continue MEM
 			}
 		}
 	}
-	return ops
+	for memNode, steps := range associations {
+		for _, step := range steps {
+			dn := compareGraphNode(memNode, step.node, mergeOp)
+			dn.id = dbGraphIds[step.node]
+			dn.setDeltaToNode(step.node)
+			// de := compareGraphEdge(memChildEdge, dbChildEdge, mergeOp)
+			// de.id = dbEdges[dbChildEdge]
+			// de.setDeltaToEdge(dbChildEdge)
+			deltas = append(deltas, dn)
+		}
+	}
+	return deltas
 }
 
-func mergeEntity(memParent, dbParent *lpg.Node, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) ([]fmt.Stringer, bool) {
+func mergeEntity(memParent, dbParent *lpg.Node, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) ([]delta, bool) {
 	memOutgoing := memParent.GetEdges(lpg.OutgoingEdge)
 	dbOutgoing := dbParent.GetEdges(lpg.OutgoingEdge)
-	ops := matchDBChildNode(memOutgoing, dbOutgoing, dbGraphIds, dbEdges)
-	return ops, true
+	deltas := matchDBChildNode(memOutgoing.Edge().GetTo(), dbOutgoing.Edge().GetTo(), dbGraphIds, dbEdges)
+	return deltas, true
 }
 
 const (
