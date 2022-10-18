@@ -253,7 +253,7 @@ MEM:
 			}
 			if lpg.ComparePropertyValue(mpv, dbpv) == 0 {
 				associations[memChildNode] = []step{
-					step{
+					{
 						node: dbChildNode,
 						edge: dbChildEdge,
 					}}
