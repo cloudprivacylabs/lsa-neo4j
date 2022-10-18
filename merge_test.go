@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cloudprivacylabs/lpg"
+	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 )
 
@@ -68,7 +70,14 @@ func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []string, err
 	if err := m.Decode(memGraph, json.NewDecoder(f)); err != nil {
 		return nil, nil, err
 	}
-	return Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds)
+	var cfg Config
+
+	err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, err
+	}
+	InitNamespaceTrie(&cfg)
+	return Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds, cfg)
 }
 
 func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
@@ -186,7 +195,6 @@ func TestMergeQueries(t *testing.T) {
 		}
 	}
 	fmt.Println(ops)
-	// t.Fatal()
 }
 
 // func TestMerge(t *testing.T) {

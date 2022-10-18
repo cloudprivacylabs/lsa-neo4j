@@ -24,6 +24,8 @@ const (
 
 type delta struct {
 	operation   int
+	n           *lpg.Node
+	e           *lpg.Edge
 	id          int64
 	isNode      bool
 	addLabel    []string
@@ -59,9 +61,9 @@ func setPropertiesDelta(delta delta, x withProperty, operationType bool) {
 		v2, ok := x.GetProperty(k)
 		if !ok {
 			log.Printf("Error at %s: %v: Property does not exist", k, v)
-			delta.setProp[k] = pv
 			return false
 		}
+		delta.setProp[k] = pv
 		pv2, ok := v2.(*ls.PropertyValue)
 		if !ok {
 			log.Printf("Error at %s: %v: Not property value", k, v)
@@ -69,9 +71,9 @@ func setPropertiesDelta(delta delta, x withProperty, operationType bool) {
 		}
 		if !pv2.IsEqual(pv) {
 			log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
-			delta.setProp[k] = pv2
 			return false
 		}
+		delta.setProp[k] = pv2
 		return true
 	})
 }
@@ -107,7 +109,7 @@ func setEdgeOverwrite(mem, db *lpg.Edge, delta delta) {
 
 // compares two lpg nodes and returns a diff
 func compareGraphNode(mem, db *lpg.Node, operationType bool) delta {
-	delta := delta{isNode: true}
+	delta := delta{isNode: true, setProp: make(map[string]interface{})}
 	if db == nil {
 		delta.addLabel = mem.GetLabels().Slice()
 		delta.setProp = ls.CloneProperties(mem)
@@ -124,7 +126,7 @@ func compareGraphNode(mem, db *lpg.Node, operationType bool) delta {
 
 // compares two native lpg nodes and returns a diff
 func compareGraphEdge(mem, db *lpg.Edge, operationType bool) delta {
-	delta := delta{isNode: false}
+	delta := delta{isNode: false, setProp: make(map[string]interface{})}
 	if db == nil {
 		delta.addLabel = []string{mem.GetLabel()}
 		delta.setProp = ls.CloneProperties(mem)
@@ -148,7 +150,7 @@ type updateNode struct {
 	labels []string
 	props  map[string]interface{}
 	n      *lpg.Node
-	Config
+	c      Config
 }
 
 type createNode struct {
@@ -156,14 +158,14 @@ type createNode struct {
 	labels []string
 	props  map[string]interface{}
 	n      *lpg.Node
-	Config
+	c      Config
 }
 type createEdge struct {
 	id    int64
 	typ   []string
 	props map[string]interface{}
 	e     *lpg.Edge
-	Config
+	c     Config
 }
 
 type updateEdge struct {
@@ -171,39 +173,47 @@ type updateEdge struct {
 	typ   []string
 	props map[string]interface{}
 	e     *lpg.Edge
-	Config
+	c     Config
 }
 
-func buildQueriesFromDeltas(deltas []delta) []string {
+func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
 	res := make([]string, 0)
 	for _, d := range deltas {
 		switch d.operation {
 		case createNodeOp:
 			op := createNode{
+				n:      d.n,
 				id:     d.id,
 				labels: d.addLabel,
 				props:  d.setProp,
+				c:      cfg,
 			}
 			res = append(res, op.String())
 		case updateNodeOp:
 			op := updateNode{
+				n:      d.n,
 				id:     d.id,
 				labels: d.addLabel,
 				props:  d.setProp,
+				c:      cfg,
 			}
 			res = append(res, op.String())
 		case updateEdgeOp:
 			op := updateEdge{
+				e:     d.e,
 				id:    d.id,
 				typ:   d.addLabel,
 				props: d.setProp,
+				c:     cfg,
 			}
 			res = append(res, op.String())
 		case createEdgeOp:
 			op := createEdge{
+				e:     d.e,
 				id:    d.id,
 				typ:   d.addLabel,
 				props: d.setProp,
+				c:     cfg,
 			}
 			res = append(res, op.String())
 		}
@@ -211,7 +221,7 @@ func buildQueriesFromDeltas(deltas []delta) []string {
 	return res
 }
 
-func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) (*lpg.Graph, []string, error) {
+func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, config Config) (*lpg.Graph, []string, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph)
 	findDBCounterpart := func(n *lpg.Node, schemaPV, idPV *ls.PropertyValue) *lpg.Node {
@@ -229,7 +239,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 	for n := range memEntitiesMap {
 		schemaPV := ls.AsPropertyValue(n.GetProperty(ls.EntitySchemaTerm))
 		eidPV := ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm))
-		memEntities = append(memEntities, n)
+		memEntities[ix] = n
 		for db := range dbEntitiesMap {
 			if findDBCounterpart(db, schemaPV, eidPV) != nil {
 				dbEntities[ix] = db
@@ -245,7 +255,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 		d, _ := mergeEntity(memEntities[ix], dbEntities[ix], dbGraphIds, dbEdges)
 		deltas = append(deltas, d...)
 	}
-	queries := buildQueriesFromDeltas(deltas)
+	queries := buildQueriesFromDeltas(deltas, config)
 	return dbGraph, queries, nil
 }
 
@@ -286,6 +296,11 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraphIds map[*lpg.Node]int64,
 	unmapped := make([]step, 0)
 	deltas := make([]delta, 0)
 	memItr := memNode.GetEdges(lpg.OutgoingEdge)
+
+	nodeAssociations[memNode] = []step{
+		{
+			node: dbNode,
+		}}
 
 	for memItr.Next() {
 		memChildNode := memItr.Edge().GetTo()
@@ -328,6 +343,7 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraphIds map[*lpg.Node]int64,
 			dn := compareGraphNode(mn, step.node, mergeOp)
 			dn.id = dbGraphIds[step.node]
 			dn.operation = updateNodeOp
+			dn.n = step.node
 			dn.setDeltaToNode(step.node)
 			deltas = append(deltas, dn)
 		}
@@ -337,6 +353,7 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraphIds map[*lpg.Node]int64,
 			de := compareGraphEdge(memEdge, step.edge, mergeOp)
 			de.id = dbEdges[step.edge]
 			de.operation = updateEdgeOp
+			de.e = step.edge
 			de.setDeltaToEdge(step.edge)
 			deltas = append(deltas, de)
 		}
@@ -346,10 +363,12 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraphIds map[*lpg.Node]int64,
 		dn.operation = createNodeOp
 		dn.id = dbGraphIds[step.node]
 		dn.setDeltaToNode(step.node)
+		dn.n = step.node
 		deltas = append(deltas, dn)
 		de := compareGraphEdge(step.edge, nil, overwriteOp)
 		de.operation = createEdgeOp
 		de.id = dbEdges[step.edge]
+		de.e = step.edge
 		de.setDeltaToEdge(step.edge)
 		deltas = append(deltas, de)
 	}
@@ -366,8 +385,8 @@ func mergeEntity(memParent, dbParent *lpg.Node, dbGraphIds map[*lpg.Node]int64, 
 func (un updateNode) String() string {
 	vars := make(map[string]interface{})
 	sb := strings.Builder{}
-	prop := un.MakeProperties(un.n, vars)
-	labels := un.MakeLabels(un.labels)
+	prop := un.c.MakeProperties(un.n, vars)
+	labels := un.c.MakeLabels(un.labels)
 	sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d SET n = %v SET n:%s", un.id, prop, labels))
 	// for ix, l := range labels {
 	// 	sb.WriteString(fmt.Sprintf(":%s", l))
@@ -380,8 +399,8 @@ func (un updateNode) String() string {
 func (cn createNode) String() string {
 	vars := make(map[string]interface{})
 	sb := strings.Builder{}
-	prop := cn.MakeProperties(cn.n, vars)
-	labels := cn.MakeLabels(cn.labels)
+	prop := cn.c.MakeProperties(cn.n, vars)
+	labels := cn.c.MakeLabels(cn.labels)
 	sb.WriteString(fmt.Sprintf("(n%d%s %s)", cn.id, labels, prop))
 
 	// builder := strings.Builder{}
