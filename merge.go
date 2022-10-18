@@ -227,8 +227,15 @@ type step struct {
 	node *lpg.Node
 }
 
+type edgeStep struct {
+	to   *lpg.Node
+	from *lpg.Node
+	edge *lpg.Edge
+}
+
 func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) []delta {
-	associations := make(map[*lpg.Node][]step)
+	nodeAssociations := make(map[*lpg.Node][]step)
+	edgeAssociations := make(map[*lpg.Edge][]edgeStep)
 	unmapped := make([]step, 0)
 	deltas := make([]delta, 0)
 	memItr := memNode.GetEdges(lpg.OutgoingEdge)
@@ -252,25 +259,46 @@ MEM:
 				panic("")
 			}
 			if lpg.ComparePropertyValue(mpv, dbpv) == 0 {
-				associations[memChildNode] = []step{
+				nodeAssociations[memChildNode] = []step{
 					{
 						node: dbChildNode,
+						edge: dbChildEdge,
+					}}
+				edgeAssociations[memChildEdge] = []edgeStep{
+					{
+						to:   dbChildEdge.GetFrom(),
+						from: dbChildEdge.GetTo(),
 						edge: dbChildEdge,
 					}}
 				continue MEM
 			}
 		}
 	}
-	for memNode, steps := range associations {
+	for mn, steps := range nodeAssociations {
 		for _, step := range steps {
-			dn := compareGraphNode(memNode, step.node, mergeOp)
+			dn := compareGraphNode(mn, step.node, mergeOp)
 			dn.id = dbGraphIds[step.node]
 			dn.setDeltaToNode(step.node)
-			// de := compareGraphEdge(memChildEdge, dbChildEdge, mergeOp)
-			// de.id = dbEdges[dbChildEdge]
-			// de.setDeltaToEdge(dbChildEdge)
 			deltas = append(deltas, dn)
 		}
+	}
+	for memEdge, steps := range edgeAssociations {
+		for _, step := range steps {
+			de := compareGraphEdge(memEdge, step.edge, mergeOp)
+			de.id = dbEdges[step.edge]
+			de.setDeltaToEdge(step.edge)
+			deltas = append(deltas, de)
+		}
+	}
+	for _, step := range unmapped {
+		dn := compareGraphNode(step.node, nil, overwriteOp)
+		dn.id = dbGraphIds[step.node]
+		dn.setDeltaToNode(step.node)
+		deltas = append(deltas, dn)
+		de := compareGraphEdge(step.edge, nil, overwriteOp)
+		de.id = dbEdges[step.edge]
+		de.setDeltaToEdge(step.edge)
+		deltas = append(deltas, de)
 	}
 	return deltas
 }
