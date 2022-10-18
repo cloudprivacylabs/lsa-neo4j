@@ -23,16 +23,8 @@
             "properties": { 
                 "value": ["A","B","C"]
             }
-        },
-        {
-            "n":2,
-            "labels": [
-                "https://lschema.org/DocumentNode"
-            ],
-            "properties": {
-                "value": "test"
-            }
         }
+
     ],
     "edges": [
         { "from": 0, "to": 1, "label": " " },

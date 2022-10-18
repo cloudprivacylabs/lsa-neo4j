@@ -387,7 +387,13 @@ func (un updateNode) String() string {
 	sb := strings.Builder{}
 	prop := un.c.MakeProperties(un.n, vars)
 	labels := un.c.MakeLabels(un.labels)
-	sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d SET n = %v SET n:%s", un.id, prop, labels))
+	if len(labels) > 0 && len(prop) > 0 {
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d SET n = %v SET n:%s", un.id, prop, labels))
+	} else if len(labels) == 0 && len(prop) > 0 {
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d SET n = %v", un.id, prop))
+	} else if len(prop) == 0 && len(labels) > 0 {
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d SET n:%s", un.id, labels))
+	}
 	// for ix, l := range labels {
 	// 	sb.WriteString(fmt.Sprintf(":%s", l))
 	// 	if ix < len(labels) {
