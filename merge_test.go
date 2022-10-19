@@ -56,25 +56,25 @@ import (
 // }
 
 // testGraphMerge (without DB)
-func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []string, error) {
+func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, OperationQueue, error) {
 	dbGraph, dbNodeIds, dbEdgeIds, err := mockLoadGraph(dbGraphFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, OperationQueue{}, err
 	}
 	f, err := os.Open(memGraphFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, OperationQueue{}, err
 	}
 	memGraph := lpg.NewGraph()
 	m := ls.JSONMarshaler{}
 	if err := m.Decode(memGraph, json.NewDecoder(f)); err != nil {
-		return nil, nil, err
+		return nil, OperationQueue{}, err
 	}
 	var cfg Config
 
 	err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, nil, err
+		return nil, OperationQueue{}, err
 	}
 	InitNamespaceTrie(&cfg)
 	return Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds, cfg)
@@ -106,11 +106,11 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 }
 
 func TestMergeQueries(t *testing.T) {
-	dbGraph, ops, err := testGraphMerge("examples/merge_02.json", "examples/merge_01.json")
+	dbGraph, ops, err := testGraphMerge("examples/merge_05.json", "examples/merge_04.json")
 	if err != nil {
 		t.Error(err)
 	}
-	f, err := os.Open("examples/merge_03.json")
+	f, err := os.Open("examples/merge_06.json")
 	if err != nil {
 		t.Error(err)
 	}
@@ -128,6 +128,14 @@ func TestMergeQueries(t *testing.T) {
 	for nodeItr := expectedGraph.GetNodes(); nodeItr.Next(); {
 		expectedSources = append(expectedSources, nodeItr.Node())
 	}
+
+	// b, err := m.Marshal(dbGraph)
+	// fmt.Println(string(b))
+	// fmt.Println()
+	// fmt.Println()
+	// b, err = m.Marshal(expectedGraph)
+	// fmt.Println(string(b))
+	// fmt.Println()
 	for g := range gotSources {
 		matched := false
 		for e := range expectedSources {
@@ -166,12 +174,12 @@ func TestMergeQueries(t *testing.T) {
 						return false
 					}
 					if !pv2.IsEqual(pv) {
-						if strings.ToLower(pv2.AsString()) != strings.ToLower(pv.AsString()) {
-							log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
-							propertiesOK = false
-							return false
-						}
+
+						log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
+						propertiesOK = false
+						return false
 					}
+
 					return true
 				})
 				if !propertiesOK {
@@ -195,7 +203,8 @@ func TestMergeQueries(t *testing.T) {
 			log.Fatalf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
 		}
 	}
-	fmt.Println(ops)
+	fmt.Println(strings.Join(ops.ops, ", "))
+	// t.Fatal()
 }
 
 // func TestMerge(t *testing.T) {
