@@ -24,8 +24,8 @@ const (
 
 type delta struct {
 	operation   int
-	n           *lpg.Node
-	e           *lpg.Edge
+	node        *lpg.Node
+	edge        *lpg.Edge
 	id          int64
 	isNode      bool
 	addLabel    []string
@@ -145,10 +145,6 @@ func compareGraphEdge(mem, db *lpg.Edge, operationType bool) delta {
 	return delta
 }
 
-type OperationQueue struct {
-	ops []fmt.Stringer
-}
-
 type updateNode struct {
 	id     int64
 	labels []string
@@ -166,19 +162,21 @@ type createNode struct {
 }
 
 type createEdge struct {
-	id    int64
-	typ   []string
-	props map[string]interface{}
-	e     *lpg.Edge
-	c     Config
+	id               int64
+	typ              []string
+	props            map[string]interface{}
+	e                *lpg.Edge
+	fromNode, toNode int64
+	c                Config
 }
 
 type updateEdge struct {
-	id    int64
-	typ   []string
-	props map[string]interface{}
-	e     *lpg.Edge
-	c     Config
+	id               int64
+	typ              []string
+	props            map[string]interface{}
+	e                *lpg.Edge
+	fromNode, toNode int64
+	c                Config
 }
 
 func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
@@ -187,7 +185,7 @@ func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
 		switch d.operation {
 		case createNodeOp:
 			op := createNode{
-				n:      d.n,
+				n:      d.node,
 				id:     d.id,
 				labels: d.addLabel,
 				props:  d.setProp,
@@ -196,7 +194,7 @@ func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
 			res = append(res, op.String())
 		case updateNodeOp:
 			op := updateNode{
-				n:      d.n,
+				n:      d.node,
 				id:     d.id,
 				labels: d.addLabel,
 				props:  d.setProp,
@@ -205,7 +203,7 @@ func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
 			res = append(res, op.String())
 		case updateEdgeOp:
 			op := updateEdge{
-				e:     d.e,
+				e:     d.edge,
 				id:    d.id,
 				typ:   d.addLabel,
 				props: d.setProp,
@@ -214,7 +212,7 @@ func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
 			res = append(res, op.String())
 		case createEdgeOp:
 			op := createEdge{
-				e:     d.e,
+				e:     d.edge,
 				id:    d.id,
 				typ:   d.addLabel,
 				props: d.setProp,
@@ -249,8 +247,6 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 			if findDBCounterpart(db, schemaPV, eidPV) != nil {
 				dbEntities[ix] = db
 				delete(dbEntitiesMap, db)
-			} else {
-				dbEntities[ix] = nil
 			}
 		}
 		ix++
@@ -351,7 +347,7 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds 
 			dn := compareGraphNode(mn, step.node, mergeOp)
 			dn.id = dbGraphIds[step.node]
 			dn.operation = updateNodeOp
-			dn.n = step.node
+			dn.node = step.node
 			dn.setDeltaToNode(step.node)
 			deltas = append(deltas, dn)
 		}
@@ -361,7 +357,6 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds 
 			de := compareGraphEdge(memEdge, step.edge, mergeOp)
 			de.id = dbEdges[step.edge]
 			de.operation = updateEdgeOp
-			de.e = step.edge
 			de.setDeltaToEdge(step.edge)
 			deltas = append(deltas, de)
 		}
@@ -371,12 +366,12 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds 
 		dn.operation = createNodeOp
 		dn.id = dbGraphIds[step.node]
 		dn.setDeltaToNode(step.node)
-		dn.n = step.node
+		dn.node = step.node
 		deltas = append(deltas, dn)
 		de := compareGraphEdge(step.edge, nil, overwriteOp)
 		de.operation = createEdgeOp
 		de.id = dbEdges[step.edge]
-		de.e = step.edge
+		de.edge = step.edge
 		de.setDeltaToEdge(step.edge)
 		deltas = append(deltas, de)
 	}
@@ -429,11 +424,20 @@ func (cn createNode) String() string {
 	return fmt.Sprintf("CREATE %s RETURN ID(n%d)", sb.String(), cn.id)
 }
 func (ce createEdge) String() string {
-	return fmt.Sprintf("MERGE (n)")
+	sb := strings.Builder{}
+	label := ce.c.MakeLabels(ce.typ)
+	sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d MATCH (m) WHERE ID(m) = %d CREATE (n)-[%s]->(m)", ce.fromNode, ce.toNode, label))
+	return sb.String()
 }
 
 func (ue updateEdge) String() string {
-	return fmt.Sprintf("MERGE (n)")
+	sb := strings.Builder{}
+	label := ue.c.MakeLabels(ue.typ)
+	if len(label) > 0 {
+		sb.WriteString(fmt.Sprintf("MATCH (n)-[rel:%s]->(m) MATCH (n) WHERE ID(n) = %d MATCH (m) WHERE ID(m) = %d MERGE (n)-[:%s]->(m) DELETE rel",
+			ue.e.GetLabel(), ue.fromNode, ue.toNode, label))
+	}
+	return sb.String()
 }
 
 func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) (map[*lpg.Node]int64, error) {
