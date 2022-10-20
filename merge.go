@@ -221,6 +221,13 @@ type OperationQueue struct {
 }
 
 func RunOperations(ctx *ls.Context, session *Session, tx neo4j.Transaction, ops OperationQueue) error {
+	vars := make(map[string]interface{})
+	for _, op := range ops.ops {
+		_, err := tx.Run(op, vars)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
