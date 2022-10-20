@@ -220,7 +220,7 @@ type OperationQueue struct {
 	ops []string
 }
 
-func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, config Config) (*lpg.Graph, OperationQueue, error) {
+func Merge(ctx *ls.Context, session *Session, tx neo4j.Transaction, memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, config Config) (*lpg.Graph, OperationQueue, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph)
 	findDBCounterpart := func(n *lpg.Node, schemaPV, idPV *ls.PropertyValue) *lpg.Node {
@@ -305,6 +305,10 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds 
 	} else {
 
 		dbParent = dbGraph.NewNode(memNode.GetLabels().Slice(), ls.CloneProperties(memNode))
+		nodeAssociations[memNode] = []step{
+			{
+				node: dbParent,
+			}}
 
 		// dbGraph.NewEdge(dbNode, n, memChildEdge.GetLabel(), ls.CloneProperties(memChildEdge))
 	}
@@ -471,12 +475,25 @@ func (ue updateEdge) writeQuery(c Config) string {
 	return sb.String()
 }
 
-func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) (map[*lpg.Node]int64, error) {
+func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config Config) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
+	rootIds, _, _, err := s.CollectEntityDBIds(tx, config, memGraph)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	grph, ids, eids, err := loadGraphByEntities(tx, memGraph, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return grph, ids, eids, nil
+}
+
+func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
 	if len(rootIds) == 0 {
-		return nil, fmt.Errorf("Empty entity schema nodes")
+		return nil, nil, nil, fmt.Errorf("Empty entity schema nodes")
 	}
 	// neo4j IDs
 	visitedNode := make(map[int64]*lpg.Node)
+	visitedEdge := make(map[int64]*lpg.Edge)
 	queue := make([]uint64, 0, len(rootIds))
 	for _, id := range rootIds {
 		queue = append(queue, uint64(id))
@@ -486,7 +503,7 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
 		queue = queue[len(queue):]
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		if len(srcNodes) == 0 || (len(adjNodes) == 0 && len(adjRelationships) == 0) {
 			break
@@ -546,14 +563,17 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64
 		for _, edge := range adjRelationships {
 			src := visitedNode[edge.startId]
 			target := visitedNode[edge.endId]
-			grph.NewEdge(src, target, config.Expand(edge.types), edge.props)
+			e := grph.NewEdge(src, target, config.Expand(edge.types), edge.props)
+			visitedEdge[edge.id] = e
 		}
 	}
 	mappedIds := make(map[*lpg.Node]int64)
-	dbIds := make([]int64, 0, len(visitedNode))
+	mappedEdgeIds := make(map[*lpg.Edge]int64)
 	for id, n := range visitedNode {
 		mappedIds[n] = id
-		dbIds = append(dbIds, id)
 	}
-	return mappedIds, nil
+	for id, e := range visitedEdge {
+		mappedEdgeIds[e] = id
+	}
+	return grph, mappedIds, mappedEdgeIds, nil
 }
