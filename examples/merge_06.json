@@ -574,10 +574,6 @@
                     "label": "https://lschema.org/has"
                 },
                 {
-                    "to": 27,
-                    "label": "https://lschema.org/has"
-                },
-                {
                     "to": 32,
                     "label": "https://lschema.org/has"
                 }

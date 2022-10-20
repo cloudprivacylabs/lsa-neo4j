@@ -10,9 +10,9 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
-var (
-	mergeOp     bool
-	overwriteOp bool
+const (
+	mergeOp int = iota
+	overwriteOp
 )
 
 const (
@@ -55,7 +55,7 @@ func findNodeLabelDiff(memLabels, dbLabels lpg.StringSet) []string {
 	return ret
 }
 
-func setPropertiesDelta(delta delta, x withProperty, operationType bool) {
+func setPropertiesDelta(delta delta, x withProperty, operationType int) {
 	x.ForEachProperty(func(k string, v interface{}) bool {
 		pv, ok := v.(*ls.PropertyValue)
 		if !ok {
@@ -111,7 +111,7 @@ func setEdgeOverwrite(mem, db *lpg.Edge, delta delta) {
 }
 
 // compares two lpg nodes and returns a diff
-func compareGraphNode(mem, db *lpg.Node, operationType bool) delta {
+func compareGraphNode(mem, db *lpg.Node, operationType int) delta {
 	delta := delta{isNode: true, setProp: make(map[string]interface{})}
 	if db == nil {
 		delta.addLabel = mem.GetLabels().Slice()
@@ -128,7 +128,7 @@ func compareGraphNode(mem, db *lpg.Node, operationType bool) delta {
 }
 
 // compares two native lpg nodes and returns a diff
-func compareGraphEdge(mem, db *lpg.Edge, operationType bool) delta {
+func compareGraphEdge(mem, db *lpg.Edge, operationType int) delta {
 	delta := delta{isNode: false, setProp: make(map[string]interface{})}
 	if db == nil {
 		delta.addLabel = []string{mem.GetLabel()}
@@ -220,7 +220,11 @@ type OperationQueue struct {
 	ops []string
 }
 
-func Merge(ctx *ls.Context, session *Session, tx neo4j.Transaction, memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, config Config) (*lpg.Graph, OperationQueue, error) {
+func RunOperations(ctx *ls.Context, session *Session, tx neo4j.Transaction, ops OperationQueue) error {
+	return nil
+}
+
+func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, config Config) (*lpg.Graph, OperationQueue, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph)
 	findDBCounterpart := func(n *lpg.Node, schemaPV, idPV *ls.PropertyValue) *lpg.Node {
@@ -265,7 +269,9 @@ func (dx delta) setDeltaToNode(dbNode *lpg.Node) {
 	for k, v := range dx.setProp {
 		dbNode.SetProperty(k, v)
 	}
-	dbNode.SetLabels(lpg.NewStringSet(dx.addLabel...))
+	if len(dx.addLabel) > 0 {
+		dbNode.SetLabels(lpg.NewStringSet(dx.addLabel...))
+	}
 }
 
 func (dx delta) setDeltaToEdge(dbEdge *lpg.Edge) {
@@ -275,7 +281,9 @@ func (dx delta) setDeltaToEdge(dbEdge *lpg.Edge) {
 	for k, v := range dx.setProp {
 		dbEdge.SetProperty(k, v)
 	}
-	dbEdge.SetLabel(strings.Join(dx.addLabel, ","))
+	if len(dx.addLabel) > 0 {
+		dbEdge.SetLabel(strings.Join(dx.addLabel, ","))
+	}
 }
 
 type step struct {
@@ -296,6 +304,10 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds 
 	deltas := make([]delta, 0)
 	memItr := memNode.GetEdges(lpg.OutgoingEdge)
 	var dbParent *lpg.Node
+	dbRoot := lpg.Sources(dbGraph)[0]
+	if dbNode != nil && dbNode.HasLabel("https://dartnet.info/graphModel/Observation") {
+		fmt.Println("observation")
+	}
 
 	if dbNode != nil {
 		nodeAssociations[memNode] = []step{
@@ -303,14 +315,13 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds 
 				node: dbNode,
 			}}
 	} else {
-
 		dbParent = dbGraph.NewNode(memNode.GetLabels().Slice(), ls.CloneProperties(memNode))
 		nodeAssociations[memNode] = []step{
 			{
 				node: dbParent,
 			}}
-
-		// dbGraph.NewEdge(dbNode, n, memChildEdge.GetLabel(), ls.CloneProperties(memChildEdge))
+		dbGraph.NewEdge(dbRoot, dbParent, ls.HasTerm, nil)
+		// dbGraph.NewEdge(dbParent, dbParent, ls.HasTerm, nil)
 	}
 
 	for memItr.Next() {
@@ -318,31 +329,31 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds 
 		memChildEdge := memItr.Edge()
 		if dbNode == nil {
 			n := dbGraph.NewNode(memChildNode.GetLabels().Slice(), ls.CloneProperties(memChildNode))
-			dbGraph.NewEdge(dbParent, n, memChildEdge.GetLabel(), ls.CloneProperties(memChildEdge))
+			e := dbGraph.NewEdge(dbParent, n, memChildEdge.GetLabel(), ls.CloneProperties(memChildEdge))
 			nodeAssociations[memChildNode] = []step{
 				{
 					node: n,
-					edge: memChildEdge,
+					edge: e,
 				}}
 			edgeAssociations[memChildEdge] = []edgeStep{
 				{
-					to:   memChildEdge.GetFrom(),
-					from: memChildEdge.GetTo(),
-					edge: memChildEdge,
+					to:   n,
+					from: memChildEdge.GetFrom(),
+					edge: e,
 				}}
-			// dbNode = memChildNode
 			continue
 		}
 		dbItr := dbNode.GetEdges(lpg.OutgoingEdge)
 		// creates
 		if !dbItr.Next() {
+			//n := dbGraph.NewNode(memNode.GetLabels().Slice(), ls.CloneProperties(memNode))
 			n := dbGraph.NewNode(memChildNode.GetLabels().Slice(), ls.CloneProperties(memChildNode))
 			dbGraph.NewEdge(dbNode, n, memChildEdge.GetLabel(), ls.CloneProperties(memChildEdge))
 			unmapped = append(unmapped, step{node: memChildNode, edge: memChildEdge})
 		}
 		// updates
 		for dbItr.Next() {
-			dbChildNode := dbItr.Edge().GetTo()
+			// dbChildNode := dbItr.Edge().GetTo()
 			dbChildEdge := dbItr.Edge()
 			mpv, ok := memChildNode.GetProperty(ls.SchemaNodeIDTerm)
 			if !ok {
@@ -355,13 +366,13 @@ func matchDBChildNode(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds 
 			if lpg.ComparePropertyValue(mpv, dbpv) == 0 {
 				nodeAssociations[memChildNode] = []step{
 					{
-						node: dbChildNode,
+						node: dbChildEdge.GetFrom(),
 						edge: dbChildEdge,
 					}}
 				edgeAssociations[memChildEdge] = []edgeStep{
 					{
-						to:   dbChildEdge.GetFrom(),
-						from: dbChildEdge.GetTo(),
+						to:   dbChildEdge.GetTo(),
+						from: dbChildEdge.GetFrom(),
 						edge: dbChildEdge,
 					}}
 				break

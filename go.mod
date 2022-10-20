@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/cloudprivacylabs/lpg v1.0.8
+	github.com/cloudprivacylabs/lpg v1.0.10
 	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220930162948-3724bfdf6d24
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/onsi/ginkgo/v2 v2.1.4

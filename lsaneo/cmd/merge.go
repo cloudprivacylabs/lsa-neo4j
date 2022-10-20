@@ -36,11 +36,11 @@ var (
 				return err
 			}
 
-			mutatedDBGraph, ops, err := neo.Merge(ls.DefaultContext(), session, tx, memGraph, dbGraph, ids, edgeIds, cfg)
+			_, ops, err := neo.Merge(memGraph, dbGraph, ids, edgeIds, cfg)
 			if err != nil {
 				return err
 			}
-			return nil
+			return neo.RunOperations(ls.DefaultContext(), session, tx, ops)
 		},
 	}
 )

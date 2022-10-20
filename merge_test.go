@@ -12,7 +12,6 @@ import (
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
 // in db, ls.SchemaNodeIDTerm is "schemaNodeId"
@@ -63,18 +62,18 @@ const port = 7687
 const db = "neo4j"
 
 // testGraphMerge (without DB)
-func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, OperationQueue, error) {
-	var session *Session
-	address := fmt.Sprintf("%s:%d", uri, port)
-	driver, err := neo4j.NewDriver(address, neo4j.BasicAuth(username, pwd, ""))
+// var session *Session
+// address := fmt.Sprintf("%s:%d", uri, port)
+// driver, err := neo4j.NewDriver(address, neo4j.BasicAuth(username, pwd, ""))
 
-	drv := NewDriver(driver, "neo4j")
-	session = drv.NewSession()
-	defer session.Close()
-	tx, err := session.BeginTransaction()
-	if err != nil {
-		return nil, OperationQueue{}, err
-	}
+// drv := NewDriver(driver, "neo4j")
+// session = drv.NewSession()
+// defer session.Close()
+// tx, err := session.BeginTransaction()
+// if err != nil {
+// 	return nil, OperationQueue{}, err
+// }
+func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, OperationQueue, error) {
 	dbGraph, dbNodeIds, dbEdgeIds, err := mockLoadGraph(dbGraphFile)
 	if err != nil {
 		return nil, OperationQueue{}, err
@@ -95,7 +94,7 @@ func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, OperationQueu
 		return nil, OperationQueue{}, err
 	}
 	InitNamespaceTrie(&cfg)
-	return Merge(ls.DefaultContext(), session, tx, memGraph, dbGraph, dbNodeIds, dbEdgeIds, cfg)
+	return Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds, cfg)
 }
 
 func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
@@ -146,14 +145,16 @@ func TestMergeQueries(t *testing.T) {
 	for nodeItr := expectedGraph.GetNodes(); nodeItr.Next(); {
 		expectedSources = append(expectedSources, nodeItr.Node())
 	}
+	fmt.Println("dbGraph nodes:", dbGraph.NumNodes(), "expectedGraph nodes:", expectedGraph.NumNodes())
+	fmt.Println("dbGraph edges:", dbGraph.NumEdges(), "expectedGraph edges:", expectedGraph.NumEdges())
 
-	// b, err := m.Marshal(dbGraph)
-	// fmt.Println(string(b))
+	v, _ := os.Create("dbgraph.json")
+	m.Encode(dbGraph, v)
 	// fmt.Println()
 	// fmt.Println()
-	// b, err = m.Marshal(expectedGraph)
-	// fmt.Println(string(b))
-	// fmt.Println()
+	y, _ := os.Create("egraph.json")
+	m.Encode(expectedGraph, y)
+	fmt.Println()
 	for g := range gotSources {
 		matched := false
 		for e := range expectedSources {
@@ -192,7 +193,6 @@ func TestMergeQueries(t *testing.T) {
 						return false
 					}
 					if !pv2.IsEqual(pv) {
-
 						log.Printf("Error at %s: Got %v, Expected %v: Values are not equal", k, pv, pv2)
 						propertiesOK = false
 						return false
