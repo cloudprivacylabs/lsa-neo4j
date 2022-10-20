@@ -480,11 +480,7 @@ func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config 
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	grph, ids, eids, err := loadGraphByEntities(tx, memGraph, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return grph, ids, eids, nil
+	return loadGraphByEntities(tx, memGraph, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
 }
 
 func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
