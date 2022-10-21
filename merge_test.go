@@ -123,11 +123,11 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 }
 
 func TestMergeQueries(t *testing.T) {
-	dbGraph, ops, err := testGraphMerge("examples/merge_05.json", "examples/merge_04.json")
+	dbGraph, ops, err := testGraphMerge("examples/merge_08.json", "examples/merge_07.json")
 	if err != nil {
 		t.Error(err)
 	}
-	f, err := os.Open("examples/merge_06.json")
+	f, err := os.Open("examples/merge_09.json")
 	if err != nil {
 		t.Error(err)
 	}
