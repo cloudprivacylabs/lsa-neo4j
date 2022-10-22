@@ -175,8 +175,9 @@ type updateEdge struct {
 	fromNode, toNode int64
 }
 
-func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
+func buildQueriesFromDeltas(deltas []delta, cfg Config) ([]string, []map[string]interface{}) {
 	res := make([]string, 0)
+	vars := make([]map[string]interface{}, 0)
 	for _, d := range deltas {
 		switch d.operation {
 		case createNodeOp:
@@ -194,7 +195,9 @@ func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
 				labels: d.addLabel,
 				props:  d.setProp,
 			}
-			res = append(res, op.writeQuery(cfg))
+			q, v := op.writeQuery(cfg)
+			res = append(res, q)
+			vars = append(vars, v)
 		case updateEdgeOp:
 			op := updateEdge{
 				e:     d.edge,
@@ -213,17 +216,17 @@ func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
 			res = append(res, op.writeQuery(cfg))
 		}
 	}
-	return res
+	return res, vars
 }
 
 type OperationQueue struct {
-	Ops []string
+	Ops  []string
+	vars []map[string]interface{}
 }
 
 func RunOperations(ctx *ls.Context, session *Session, tx neo4j.Transaction, ops OperationQueue) error {
-	vars := make(map[string]interface{})
-	for _, op := range ops.Ops {
-		_, err := tx.Run(op, vars)
+	for ix, op := range ops.Ops {
+		_, err := tx.Run(op, ops.vars[ix])
 		if err != nil {
 			return err
 		}
@@ -264,8 +267,8 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 		d, _ := mergeEntity(memEntities[ix], dbEntities[ix], dbGraph, dbGraphIds, dbEdges)
 		deltas = append(deltas, d...)
 	}
-	queries := buildQueriesFromDeltas(deltas, config)
-	opsQueue := OperationQueue{Ops: queries}
+	queries, vars := buildQueriesFromDeltas(deltas, config)
+	opsQueue := OperationQueue{Ops: queries, vars: vars}
 	return dbGraph, opsQueue, nil
 }
 
@@ -448,7 +451,7 @@ func mergeEntity(memEntityRoot, dbEntityRoot *lpg.Node, dbGraph *lpg.Graph, dbGr
 	return deltas, true
 }
 
-func (un updateNode) writeQuery(c Config) string {
+func (un updateNode) writeQuery(c Config) (string, map[string]interface{}) {
 	vars := make(map[string]interface{})
 	sb := strings.Builder{}
 	prop := c.MakeProperties(un.n, vars)
@@ -466,7 +469,7 @@ func (un updateNode) writeQuery(c Config) string {
 	// 		sb.WriteString(fmt.Sprintf("%s", l))
 	// 	}
 	// }
-	return sb.String()
+	return sb.String(), vars
 }
 func (cn createNode) writeQuery(c Config) string {
 	vars := make(map[string]interface{})
