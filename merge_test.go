@@ -107,13 +107,13 @@ func TestMergeQueries(t *testing.T) {
 	fmt.Println("dbGraph nodes:", dbGraph.NumNodes(), "expectedGraph nodes:", expectedGraph.NumNodes())
 	fmt.Println("dbGraph edges:", dbGraph.NumEdges(), "expectedGraph edges:", expectedGraph.NumEdges())
 
-	v, _ := os.Create("dbgraph.json")
-	m.Encode(dbGraph, v)
+	// v, _ := os.Create("dbgraph.json")
+	// m.Encode(dbGraph, v)
+	// // fmt.Println()
+	// // fmt.Println()
+	// y, _ := os.Create("egraph.json")
+	// m.Encode(expectedGraph, y)
 	// fmt.Println()
-	// fmt.Println()
-	y, _ := os.Create("egraph.json")
-	m.Encode(expectedGraph, y)
-	fmt.Println()
 	for g := range gotSources {
 		matched := false
 		for e := range expectedSources {
