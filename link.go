@@ -210,7 +210,7 @@ func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, enti
 		fkNodesRec, err = tx.Run(fmt.Sprintf(
 			"MATCH (n) WHERE n.`%s` IN $labels MATCH (n) WHERE ALL(cmp IN $ids WHERE cmp IN SPLIT(n.`%s`, %s)) RETURN n",
 			config.Shorten(ls.ReferenceFKFor), config.Shorten(ls.ReferenceFK), quoteStringLiteral(",")),
-			map[string]interface{}{"ids": ID[0], "labels": entityLabels},
+			map[string]interface{}{"ids": ID, "labels": entityLabels},
 		)
 	} else {
 		fkNodesRec, err = tx.Run(fmt.Sprintf(
@@ -259,7 +259,7 @@ func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, enti
 				if err != nil {
 					return err
 				}
-				if singleRec == nil {
+				if len(singleRec) == 0 {
 					depth++
 					continue
 				}

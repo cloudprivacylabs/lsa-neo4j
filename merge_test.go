@@ -180,6 +180,6 @@ func TestMergeQueries(t *testing.T) {
 			log.Fatalf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
 		}
 	}
-	fmt.Println(strings.Join(ops.ops, ", "))
+	fmt.Println(strings.Join(ops.Ops, ", "))
 	// t.Fatal()
 }

@@ -217,12 +217,12 @@ func buildQueriesFromDeltas(deltas []delta, cfg Config) []string {
 }
 
 type OperationQueue struct {
-	ops []string
+	Ops []string
 }
 
 func RunOperations(ctx *ls.Context, session *Session, tx neo4j.Transaction, ops OperationQueue) error {
 	vars := make(map[string]interface{})
-	for _, op := range ops.ops {
+	for _, op := range ops.Ops {
 		_, err := tx.Run(op, vars)
 		if err != nil {
 			return err
@@ -265,7 +265,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 		deltas = append(deltas, d...)
 	}
 	queries := buildQueriesFromDeltas(deltas, config)
-	opsQueue := OperationQueue{ops: queries}
+	opsQueue := OperationQueue{Ops: queries}
 	return dbGraph, opsQueue, nil
 }
 
@@ -497,7 +497,7 @@ func (ue updateEdge) writeQuery(c Config) string {
 }
 
 func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config Config) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
-	rootIds, _, _, err := s.CollectEntityDBIds(tx, config, memGraph)
+	_, rootIds, _, _, err := s.CollectEntityDBIds(tx, config, memGraph)
 	if err != nil {
 		return nil, nil, nil, err
 	}

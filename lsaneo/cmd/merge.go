@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
@@ -40,7 +42,15 @@ var (
 			if err != nil {
 				return err
 			}
+			fmt.Println(ops)
 			return neo.RunOperations(ls.DefaultContext(), session, tx, ops)
 		},
 	}
 )
+
+func init() {
+	rootCmd.AddCommand(mergeGraphCmd)
+	mergeGraphCmd.Flags().String("input", "json", "Input graph format (json, jsonld)")
+	mergeGraphCmd.Flags().String("cfg", "", "configuration spec for node properties and labels (default: lsaneo.config.yaml)")
+	mergeGraphCmd.Flags().String("memGraph", "", "in-memory graph with updates")
+}
