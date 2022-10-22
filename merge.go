@@ -253,9 +253,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 		for db := range dbEntitiesMap {
 			if findDBCounterpart(db, schemaPV, eidPV) != nil {
 				dbEntities[ix] = db
-				// delete(dbEntitiesMap, db)
-				// fmt.Println(ls.AsPropertyValue(dbEntities[ix].GetProperty(ls.EntityIDTerm)))
-				// fmt.Println(ls.AsPropertyValue(memEntities[ix].GetProperty(ls.EntityIDTerm)))
+				delete(dbEntitiesMap, db)
 				continue
 			}
 		}
