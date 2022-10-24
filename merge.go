@@ -10,9 +10,11 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
+type operation int
+
 const (
-	mergeOp int = iota
-	overwriteOp
+	updateOp operation = iota
+	createOp
 )
 
 const (
@@ -51,7 +53,7 @@ func findNodeLabelDiff(memLabels, dbLabels lpg.StringSet) []string {
 	return ret
 }
 
-func setPropertiesDelta(delta delta, x withProperty, operationType int) {
+func setPropertiesDelta(delta delta, x withProperty, operationType operation) {
 	x.ForEachProperty(func(k string, v interface{}) bool {
 		pv, ok := v.(*ls.PropertyValue)
 		if !ok {
@@ -107,7 +109,7 @@ func setEdgeOverwrite(mem, db *lpg.Edge, delta delta) {
 }
 
 // compares two lpg nodes and returns a diff
-func compareGraphNode(mem, db *lpg.Node, operationType int) delta {
+func compareGraphNode(mem, db *lpg.Node, operationType operation) delta {
 	delta := delta{isNode: true, setProp: make(map[string]interface{})}
 	if db == nil {
 		delta.addLabel = mem.GetLabels().Slice()
@@ -117,14 +119,14 @@ func compareGraphNode(mem, db *lpg.Node, operationType int) delta {
 	delta.addLabel = findNodeLabelDiff(mem.GetLabels(), db.GetLabels())
 	// Expected properties must be a subset
 	setPropertiesDelta(delta, mem, operationType)
-	if operationType == overwriteOp {
+	if operationType == createOp {
 		setNodeOverwrite(mem, db, delta)
 	}
 	return delta
 }
 
 // compares two native lpg nodes and returns a diff
-func compareGraphEdge(mem, db *lpg.Edge, operationType int) delta {
+func compareGraphEdge(mem, db *lpg.Edge, operationType operation) delta {
 	delta := delta{isNode: false, setProp: make(map[string]interface{})}
 	if db == nil {
 		delta.addLabel = []string{mem.GetLabel()}
@@ -134,8 +136,8 @@ func compareGraphEdge(mem, db *lpg.Edge, operationType int) delta {
 	if mem.GetLabel() != db.GetLabel() {
 		delta.addLabel = []string{mem.GetLabel()}
 	}
-	setPropertiesDelta(delta, mem, mergeOp)
-	if operationType == overwriteOp {
+	setPropertiesDelta(delta, mem, updateOp)
+	if operationType == createOp {
 		setEdgeOverwrite(mem, db, delta)
 	}
 	return delta
@@ -320,12 +322,14 @@ func (dx delta) setDeltaToEdge(dbEdge *lpg.Edge) {
 type step struct {
 	edge *lpg.Edge
 	node *lpg.Node
+	op   operation
 }
 
 type edgeStep struct {
 	to   *lpg.Node
 	from *lpg.Node
 	edge *lpg.Edge
+	op   operation
 }
 
 func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, nodeAssociations map[*lpg.Node][]step, edgeAssociations map[*lpg.Edge][]edgeStep, isChild bool) []delta {
@@ -345,6 +349,7 @@ func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, d
 			nodeAssociations[memNode] = []step{
 				{
 					node: dbNodeParent,
+					op:   createOp,
 				},
 			}
 			followAllEdges := func(e *lpg.Edge) ls.EdgeFuncResult { return ls.FollowEdgeResult }
@@ -354,7 +359,21 @@ func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, d
 					if edge.GetTo() == memNode {
 						sourceItr := dbGraph.FindNodes(edge.GetFrom().GetLabels(), ls.CloneProperties(edge.GetFrom()))
 						if sourceItr.Next() {
-							dbGraph.NewEdge(sourceItr.Node(), dbNodeParent, ls.HasTerm, nil)
+							nodeAssociations[edge.GetFrom()] = []step{
+								{
+									node: sourceItr.Node(),
+									op:   createOp,
+								},
+							}
+							e := dbGraph.NewEdge(sourceItr.Node(), dbNodeParent, ls.HasTerm, nil)
+							edgeAssociations[edge] = []edgeStep{
+								{
+									from: sourceItr.Node(),
+									to:   dbNodeParent,
+									edge: e,
+									op:   createOp,
+								},
+							}
 							return false
 						}
 						dbSource := dbGraph.NewNode(edge.GetFrom().GetLabels().Slice(), ls.CloneProperties(edge.GetFrom()))
@@ -377,12 +396,14 @@ func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, d
 				{
 					node: n,
 					edge: e,
+					op:   createOp,
 				}}
 			edgeAssociations[memChildEdge] = []edgeStep{
 				{
 					to:   n,
 					from: dbNodeParent,
 					edge: e,
+					op:   createOp,
 				}}
 			continue
 		}
@@ -400,12 +421,14 @@ func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, d
 				{
 					node: n,
 					edge: e,
+					op:   updateOp,
 				}}
 			edgeAssociations[memChildEdge] = []edgeStep{
 				{
 					to:   n,
 					from: dbNode,
 					edge: e,
+					op:   updateOp,
 				}}
 			deltas = append(deltas, mergeSubtree(memChildNode, n, dbNodeParent, dbGraph, dbGraphIds, dbEdges, nodeAssociations, edgeAssociations, true)...)
 		}
@@ -459,7 +482,7 @@ func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, d
 	}
 	for mn, steps := range nodeAssociations {
 		for _, step := range steps {
-			dn := compareGraphNode(mn, step.node, mergeOp)
+			dn := compareGraphNode(mn, step.node, step.op)
 			dn.id = dbGraphIds[step.node]
 			dn.operation = updateNodeOp
 			dn.node = step.node
@@ -469,7 +492,7 @@ func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, d
 	}
 	for memEdge, steps := range edgeAssociations {
 		for _, step := range steps {
-			de := compareGraphEdge(memEdge, step.edge, mergeOp)
+			de := compareGraphEdge(memEdge, step.edge, step.op)
 			de.id = dbEdges[step.edge]
 			de.operation = updateEdgeOp
 			de.setDeltaToEdge(step.edge)
