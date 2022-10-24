@@ -34,12 +34,8 @@ type delta struct {
 	removeProp  []string
 }
 
-func (d delta) isUpdateEmpty() bool {
-	return len(d.addLabel) == 0 && len(d.setProp) == 0
-}
-
-func (d delta) isRemoveEmpty() bool {
-	return len(d.removeLabel) == 0 && len(d.removeProp) == 0
+func (d delta) isEmpty() bool {
+	return len(d.removeLabel) == 0 && len(d.removeProp) == 0 && len(d.addLabel) == 0 && len(d.setProp) == 0
 }
 
 func findNodeLabelDiff(memLabels, dbLabels lpg.StringSet) []string {
@@ -179,6 +175,9 @@ func buildQueriesFromDeltas(deltas []delta, cfg Config) ([]string, []map[string]
 	res := make([]string, 0)
 	vars := make([]map[string]interface{}, 0)
 	for _, d := range deltas {
+		if d.isEmpty() {
+			continue
+		}
 		switch d.operation {
 		case createNodeOp:
 			op := createNode{
@@ -226,6 +225,7 @@ type OperationQueue struct {
 
 func RunOperations(ctx *ls.Context, session *Session, tx neo4j.Transaction, ops OperationQueue) error {
 	for ix, op := range ops.Ops {
+		fmt.Println(op)
 		_, err := tx.Run(op, ops.vars[ix])
 		if err != nil {
 			return err
@@ -237,6 +237,9 @@ func RunOperations(ctx *ls.Context, session *Session, tx neo4j.Transaction, ops 
 func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, config Config) (*lpg.Graph, OperationQueue, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph)
+	nodeAssocations := make(map[*lpg.Node][]step)
+	edgeAssocations := make(map[*lpg.Edge][]edgeStep)
+
 	findDBCounterpart := func(n *lpg.Node, schemaPV, idPV *ls.PropertyValue) *lpg.Node {
 		if ls.AsPropertyValue(n.GetProperty(ls.EntitySchemaTerm)).IsEqual(schemaPV) {
 			if ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm)).IsEqual(idPV) {
@@ -264,9 +267,27 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 	}
 	deltas := make([]delta, 0)
 	for ix := 0; ix < len(memEntities); ix++ {
-		d, _ := mergeEntity(memEntities[ix], dbEntities[ix], dbGraph, dbGraphIds, dbEdges)
+		d, _ := mergeEntity(memEntities[ix], dbEntities[ix], dbGraph, dbGraphIds, dbEdges, nodeAssocations, edgeAssocations)
 		deltas = append(deltas, d...)
 	}
+	// for _, steps := range nodeAssocations {
+	// 	for _, step := range steps {
+	// 		for edgeItr := memGraph.GetEdges(); edgeItr.Next(); {
+	// 			edge := edgeItr.Edge()
+	// 			if ls.GetEntityRootNode(edge.GetFrom()) != ls.GetEntityRootNode(edge.GetTo()) {
+	// 				if _, ok := dbEdges[edge]; !ok {
+	// 					dbFrom := dbGraph.NewNode(edge.GetFrom().GetLabels().Slice(), ls.CloneProperties(edge.GetFrom()))
+	// 					dbEdge := dbGraph.NewEdge(dbFrom, step.node, edge.GetLabel(), ls.CloneProperties(edge))
+	// 					de := compareGraphEdge(edge, dbEdge, mergeOp)
+	// 					de.id = dbEdges[dbEdge]
+	// 					de.operation = updateEdgeOp
+	// 					de.setDeltaToEdge(dbEdge)
+	// 					deltas = append(deltas, de)
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
 	queries, vars := buildQueriesFromDeltas(deltas, config)
 	opsQueue := OperationQueue{Ops: queries, vars: vars}
 	return dbGraph, opsQueue, nil
@@ -307,13 +328,9 @@ type edgeStep struct {
 	edge *lpg.Edge
 }
 
-func mergeSubtree(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, isChild bool) []delta {
-	nodeAssociations := make(map[*lpg.Node][]step)
-	edgeAssociations := make(map[*lpg.Edge][]edgeStep)
+func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, nodeAssociations map[*lpg.Node][]step, edgeAssociations map[*lpg.Edge][]edgeStep, isChild bool) []delta {
 	deltas := make([]delta, 0)
 	memItr := memNode.GetEdges(lpg.OutgoingEdge)
-	dbSource := lpg.Sources(dbGraph)[0]
-	var dbParent *lpg.Node
 
 	if dbNode != nil {
 		nodeAssociations[memNode] = []step{
@@ -323,13 +340,30 @@ func mergeSubtree(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[
 	} else {
 		// db entity root is null; create entity and connect to source root
 		if !isChild {
-			dbParent = dbGraph.NewNode(memNode.GetLabels().Slice(), ls.CloneProperties(memNode))
-			dbGraph.NewEdge(dbSource, dbParent, ls.HasTerm, nil)
+			dbNodeParent = dbGraph.NewNode(memNode.GetLabels().Slice(), ls.CloneProperties(memNode))
+			// dbGraph.NewEdge(dbNodeParent, dbNode, ls.HasTerm, nil)
 			nodeAssociations[memNode] = []step{
 				{
-					node: dbParent,
+					node: dbNodeParent,
 				},
 			}
+			followAllEdges := func(e *lpg.Edge) ls.EdgeFuncResult { return ls.FollowEdgeResult }
+			ls.IterateAncestors(memNode, func(n *lpg.Node) bool {
+				for edgeItr := n.GetEdges(lpg.AnyEdge); edgeItr.Next(); {
+					edge := edgeItr.Edge()
+					if edge.GetTo() == memNode {
+						sourceItr := dbGraph.FindNodes(edge.GetFrom().GetLabels(), ls.CloneProperties(edge.GetFrom()))
+						if sourceItr.Next() {
+							dbGraph.NewEdge(sourceItr.Node(), dbNodeParent, ls.HasTerm, nil)
+							return false
+						}
+						dbSource := dbGraph.NewNode(edge.GetFrom().GetLabels().Slice(), ls.CloneProperties(edge.GetFrom()))
+						dbGraph.NewEdge(dbSource, dbNodeParent, ls.HasTerm, nil)
+						return false
+					}
+				}
+				return true
+			}, followAllEdges)
 		}
 	}
 
@@ -338,7 +372,7 @@ func mergeSubtree(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[
 		memChildEdge := memItr.Edge()
 		if dbNode == nil {
 			n := dbGraph.NewNode(memChildNode.GetLabels().Slice(), ls.CloneProperties(memChildNode))
-			e := dbGraph.NewEdge(dbParent, n, memChildEdge.GetLabel(), ls.CloneProperties(memChildEdge))
+			e := dbGraph.NewEdge(dbNodeParent, n, memChildEdge.GetLabel(), ls.CloneProperties(memChildEdge))
 			nodeAssociations[memChildNode] = []step{
 				{
 					node: n,
@@ -347,7 +381,7 @@ func mergeSubtree(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[
 			edgeAssociations[memChildEdge] = []edgeStep{
 				{
 					to:   n,
-					from: dbParent,
+					from: dbNodeParent,
 					edge: e,
 				}}
 			continue
@@ -373,7 +407,7 @@ func mergeSubtree(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[
 					from: dbNode,
 					edge: e,
 				}}
-			deltas = append(deltas, mergeSubtree(memChildNode, n, dbGraph, dbGraphIds, dbEdges, true)...)
+			deltas = append(deltas, mergeSubtree(memChildNode, n, dbNodeParent, dbGraph, dbGraphIds, dbEdges, nodeAssociations, edgeAssociations, true)...)
 		}
 		// updates
 		seenDBPath := make(map[string]struct{})
@@ -419,7 +453,7 @@ func mergeSubtree(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[
 						edge: e,
 					}}
 				seenDBPath = make(map[string]struct{})
-				deltas = append(deltas, mergeSubtree(memChildNode, n, dbGraph, dbGraphIds, dbEdges, true)...)
+				deltas = append(deltas, mergeSubtree(memChildNode, n, dbNodeParent, dbGraph, dbGraphIds, dbEdges, nodeAssociations, edgeAssociations, true)...)
 			}
 		}
 	}
@@ -445,9 +479,9 @@ func mergeSubtree(memNode, dbNode *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[
 	return deltas
 }
 
-func mergeEntity(memEntityRoot, dbEntityRoot *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64) ([]delta, bool) {
+func mergeEntity(memEntityRoot, dbEntityRoot *lpg.Node, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, nodeAssocations map[*lpg.Node][]step, edgeAssociations map[*lpg.Edge][]edgeStep) ([]delta, bool) {
 	var deltas []delta
-	deltas = mergeSubtree(memEntityRoot, dbEntityRoot, dbGraph, dbGraphIds, dbEdges, false)
+	deltas = mergeSubtree(memEntityRoot, dbEntityRoot, nil, dbGraph, dbGraphIds, dbEdges, nodeAssocations, edgeAssociations, false)
 	return deltas, true
 }
 
@@ -503,6 +537,9 @@ func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config 
 	_, rootIds, _, _, err := s.CollectEntityDBIds(tx, config, memGraph)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	if len(rootIds) == 0 {
+		return lpg.NewGraph(), make(map[*lpg.Node]int64), make(map[*lpg.Edge]int64), nil
 	}
 	return loadGraphByEntities(tx, memGraph, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
 }

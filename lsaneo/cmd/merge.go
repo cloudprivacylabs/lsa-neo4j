@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
@@ -42,7 +40,6 @@ var (
 			if err != nil {
 				return err
 			}
-			fmt.Println(ops)
 			return neo.RunOperations(ls.DefaultContext(), session, tx, ops)
 		},
 	}

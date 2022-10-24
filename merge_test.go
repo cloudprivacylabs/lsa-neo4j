@@ -82,11 +82,11 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 }
 
 func TestMergeQueries(t *testing.T) {
-	dbGraph, ops, err := testGraphMerge("examples/merge_11.json", "examples/merge_10.json")
+	dbGraph, ops, err := testGraphMerge("examples/merge_08.json", "examples/merge_07.json")
 	if err != nil {
 		t.Error(err)
 	}
-	f, err := os.Open("examples/merge_12.json")
+	f, err := os.Open("examples/merge_09.json")
 	if err != nil {
 		t.Error(err)
 	}
@@ -107,13 +107,13 @@ func TestMergeQueries(t *testing.T) {
 	fmt.Println("dbGraph nodes:", dbGraph.NumNodes(), "expectedGraph nodes:", expectedGraph.NumNodes())
 	fmt.Println("dbGraph edges:", dbGraph.NumEdges(), "expectedGraph edges:", expectedGraph.NumEdges())
 
-	// v, _ := os.Create("dbgraph.json")
-	// m.Encode(dbGraph, v)
-	// // fmt.Println()
-	// // fmt.Println()
-	// y, _ := os.Create("egraph.json")
-	// m.Encode(expectedGraph, y)
+	v, _ := os.Create("dbgraph.json")
+	m.Encode(dbGraph, v)
 	// fmt.Println()
+	// fmt.Println()
+	y, _ := os.Create("egraph.json")
+	m.Encode(expectedGraph, y)
+	fmt.Println()
 	for g := range gotSources {
 		matched := false
 		for e := range expectedSources {
