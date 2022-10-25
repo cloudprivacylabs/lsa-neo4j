@@ -35,12 +35,12 @@ var (
 			if err != nil {
 				return err
 			}
-
+			dbGraphEmpty := dbGraph.NumNodes() == 0 && dbGraph.NumEdges() == 0
 			dbGraph, deltas, err := neo.Merge(memGraph, dbGraph, ids, edgeIds, cfg)
 			if err != nil {
 				return err
 			}
-			if dbGraph.NumNodes() == 0 && dbGraph.NumEdges() == 0 {
+			if dbGraphEmpty {
 				dbGraphIds := make(map[*lpg.Node]int64)
 				if err := neo.CreateNodes(tx, deltas, cfg, dbGraphIds); err != nil {
 					return err
