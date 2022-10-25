@@ -31,28 +31,32 @@ const db = "neo4j"
 // if err != nil {
 // 	return nil, OperationQueue{}, err
 // }
-func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []Delta, error) {
+func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []Delta, Config, error) {
 	dbGraph, dbNodeIds, dbEdgeIds, err := mockLoadGraph(dbGraphFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, Config{}, err
 	}
 	f, err := os.Open(memGraphFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, Config{}, err
 	}
 	memGraph := lpg.NewGraph()
 	m := ls.JSONMarshaler{}
 	if err := m.Decode(memGraph, json.NewDecoder(f)); err != nil {
-		return nil, nil, err
+		return nil, nil, Config{}, err
 	}
 	var cfg Config
 
 	err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, nil, err
+		return nil, nil, Config{}, err
 	}
 	InitNamespaceTrie(&cfg)
-	return Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds, cfg)
+	g, d, err := Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds, cfg)
+	if err != nil {
+		return nil, nil, Config{}, err
+	}
+	return g, d, cfg, nil
 }
 
 func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
@@ -81,9 +85,13 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 }
 
 func TestMergeQueries(t *testing.T) {
-	dbGraph, deltas, err := testGraphMerge("examples/merge_11.json", "examples/merge_10.json")
+	dbGraph, deltas, config, err := testGraphMerge("examples/merge_11.json", "examples/merge_10.json")
+	c, n, v := buildCreateNodeQueriesFromDeltas(deltas, config)
 	if err != nil {
 		t.Error(err)
+	}
+	if len(c) > 0 || len(n) > 0 || len(v) > 0 {
+		t.Error("create nodes > 0, when only updates")
 	}
 	f, err := os.Open("examples/merge_12.json")
 	if err != nil {
