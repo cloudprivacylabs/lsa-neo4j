@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"github.com/cloudprivacylabs/lpg"
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
-	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/spf13/cobra"
 )
 
@@ -36,11 +36,25 @@ var (
 				return err
 			}
 
-			_, ops, err := neo.Merge(memGraph, dbGraph, ids, edgeIds, cfg)
+			dbGraph, deltas, err := neo.Merge(memGraph, dbGraph, ids, edgeIds, cfg)
 			if err != nil {
 				return err
 			}
-			return neo.RunOperations(ls.DefaultContext(), session, tx, ops)
+			if dbGraph.NumNodes() == 0 && dbGraph.NumEdges() == 0 {
+				dbGraphIds := make(map[*lpg.Node]int64)
+				if err := neo.CreateNodes(tx, deltas, cfg, dbGraphIds); err != nil {
+					return err
+				}
+				if err := neo.CreateEdges(tx, deltas, cfg, dbGraphIds); err != nil {
+					return err
+				}
+			}
+			if err := neo.RunUpdateOperations(tx, deltas, cfg); err != nil {
+				tx.Rollback()
+				return err
+			}
+			tx.Commit()
+			return nil
 		},
 	}
 )

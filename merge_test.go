@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -32,25 +31,25 @@ const db = "neo4j"
 // if err != nil {
 // 	return nil, OperationQueue{}, err
 // }
-func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, OperationQueue, error) {
+func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, []Delta, error) {
 	dbGraph, dbNodeIds, dbEdgeIds, err := mockLoadGraph(dbGraphFile)
 	if err != nil {
-		return nil, OperationQueue{}, err
+		return nil, nil, err
 	}
 	f, err := os.Open(memGraphFile)
 	if err != nil {
-		return nil, OperationQueue{}, err
+		return nil, nil, err
 	}
 	memGraph := lpg.NewGraph()
 	m := ls.JSONMarshaler{}
 	if err := m.Decode(memGraph, json.NewDecoder(f)); err != nil {
-		return nil, OperationQueue{}, err
+		return nil, nil, err
 	}
 	var cfg Config
 
 	err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, OperationQueue{}, err
+		return nil, nil, err
 	}
 	InitNamespaceTrie(&cfg)
 	return Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds, cfg)
@@ -82,11 +81,11 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 }
 
 func TestMergeQueries(t *testing.T) {
-	dbGraph, ops, err := testGraphMerge("examples/merge_08.json", "examples/merge_07.json")
+	dbGraph, deltas, err := testGraphMerge("examples/merge_11.json", "examples/merge_10.json")
 	if err != nil {
 		t.Error(err)
 	}
-	f, err := os.Open("examples/merge_09.json")
+	f, err := os.Open("examples/merge_12.json")
 	if err != nil {
 		t.Error(err)
 	}
@@ -107,13 +106,13 @@ func TestMergeQueries(t *testing.T) {
 	fmt.Println("dbGraph nodes:", dbGraph.NumNodes(), "expectedGraph nodes:", expectedGraph.NumNodes())
 	fmt.Println("dbGraph edges:", dbGraph.NumEdges(), "expectedGraph edges:", expectedGraph.NumEdges())
 
-	v, _ := os.Create("dbgraph.json")
-	m.Encode(dbGraph, v)
+	// v, _ := os.Create("dbgraph.json")
+	// m.Encode(dbGraph, v)
+	// // fmt.Println()
+	// // fmt.Println()
+	// y, _ := os.Create("egraph.json")
+	// m.Encode(expectedGraph, y)
 	// fmt.Println()
-	// fmt.Println()
-	y, _ := os.Create("egraph.json")
-	m.Encode(expectedGraph, y)
-	fmt.Println()
 	for g := range gotSources {
 		matched := false
 		for e := range expectedSources {
@@ -180,6 +179,6 @@ func TestMergeQueries(t *testing.T) {
 			log.Fatalf("Result is different from the expected: Result:\n%s\nExpected:\n%s", string(result), string(expected))
 		}
 	}
-	fmt.Println(strings.Join(ops.Ops, ", "))
+	fmt.Println(deltas)
 	// t.Fatal()
 }
