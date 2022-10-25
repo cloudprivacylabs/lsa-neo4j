@@ -434,7 +434,6 @@ func mergeSubtree(memNode, dbNode, dbNodeParent *lpg.Node, dbGraph *lpg.Graph, d
 		// db entity root is null; create entity and connect to source root
 		if !isChild {
 			dbNodeParent = dbGraph.NewNode(memNode.GetLabels().Slice(), ls.CloneProperties(memNode))
-			// dbGraph.NewEdge(dbNodeParent, dbNode, ls.HasTerm, nil)
 			nodeAssociations[memNode] = step{
 				node: dbNodeParent,
 				op:   createOp,

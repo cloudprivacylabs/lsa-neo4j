@@ -1,0 +1,275 @@
+{
+    "description": "expected graph",
+    "nodes": [
+        {
+            "n": 20,
+            "labels": [
+                "https://lschema.org/Value",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/dir": "from",
+                "https://lschema.org/Reference/fkFor": "https://dartnet.info/graphmodel/Person",
+                "https://lschema.org/Reference/fkValue": "123456576",
+                "https://lschema.org/Reference/label": "https://lschema.org/has",
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Measurement/person",
+                "https://lschema.org/value": "123456576"
+            }
+        },
+        {
+            "n": 24,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Observation/date",
+                "https://lschema.org/value": "2022-11-12",
+                "https://lschema.org/valueType": "ls:date"
+            }
+        },
+        {
+            "n": 18,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/dir": "from",
+                "https://lschema.org/Reference/fkFor": "https://dartnet.info/graphmodel/Person",
+                "https://lschema.org/Reference/fkValue": "123456576",
+                "https://lschema.org/Reference/label": "https://lschema.org/has",
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Measurement/person",
+                "https://lschema.org/value": "123456576"
+            }
+        },
+        {
+            "n": 9,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object",
+                "Code"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/gender/source",
+                "text": "Female"
+            }
+        },
+        {
+            "n": 14,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/dir": "from",
+                "https://lschema.org/Reference/fkFor": "https://dartnet.info/graphmodel/Person",
+                "https://lschema.org/Reference/fkValue": "123456576",
+                "https://lschema.org/Reference/label": "https://lschema.org/has",
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Measurement/person",
+                "https://lschema.org/value": "123456576"
+            }
+        },
+        {
+            "n": 2,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object",
+                "https://dartnet.info/graphModel/Condition"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/Condition",
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/Condition/schema",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/conditions/element"
+            },
+            "edges": [
+                {
+                    "to": 4,
+                    "label": "https://lschema.org/has"
+                },
+                {
+                    "to": 5,
+                    "label": "https://lschema.org/has"
+                }
+            ]
+        },
+        {
+            "n": 19,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object",
+                "https://dartnet.info/graphModel/Measurement"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/Measurement",
+                "https://lschema.org/attributeIndex": "9",
+                "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/Measurement/schema",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/measurements/element"
+            },
+            "edges": [
+                {
+                    "to": 20,
+                    "label": "https://lschema.org/has"
+                }
+            ]
+        },
+        {
+            "n": 22,
+            "labels": [
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode",
+                "Code"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Observation/codedValue/source"
+            },
+            "edges": [
+                {
+                    "to": 23,
+                    "label": "https://lschema.org/has"
+                }
+            ]
+        },
+        {
+            "n": 4,
+            "labels": [
+                "Code",
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object"
+            ],
+            "properties": {
+                "code": "MCH  28.4",
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Condition/source",
+                "text": "Problem-list"
+            }
+        },
+        {
+            "n": 5,
+            "labels": [
+                "https://lschema.org/Value",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "2",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Condition/start",
+                "https://lschema.org/value": "2021-10-13T00:00:00Z",
+                "https://lschema.org/valueType": "ls:dateTime"
+            }
+        },
+
+        {
+            "n": 23,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/attributeName": "text",
+                "https://lschema.org/ingestAs": "node",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Observation/codedValue/source/text",
+                "https://lschema.org/value": "Never used alcohol"
+            }
+        },
+        {
+            "n": 8,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "3",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/gender"
+            },
+            "edges": [
+                {
+                    "to": 9,
+                    "label": "https://lschema.org/has"
+                }
+            ]
+        },
+        {
+            "n": 0,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object",
+                "https://dartnet.info/graphModel/Person"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "13",
+                "https://lschema.org/entityId": "123456576",
+                "https://lschema.org/entityIdFields": "https://dartnet.info/graphModel/Person/id",
+                "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/Person/schema",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person"
+            },
+            "edges": [
+                {
+                    "to": 2,
+                    "label": "https://lschema.org/has"
+                },
+                {
+                    "to": 6,
+                    "label": "https://lschema.org/has"
+                },
+                {
+                    "to": 8,
+                    "label": "https://lschema.org/has"
+                }
+            ]
+        },
+        {
+            "n": 6,
+            "labels": [
+                "https://lschema.org/Object",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "2",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/ethnicity"
+            },
+            "edges": [
+                {
+                    "to": 7,
+                    "label": "https://lschema.org/has"
+                }
+            ]
+        },
+        {
+            "n": 7,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object",
+                "Code"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/ethnicity/source",
+                "text": "Hispanic / Latino"
+            }
+        },
+        {
+            "n": 12,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value"
+            ],
+            "properties": {
+                "https://lschema.org/Reference/dir": "from",
+                "https://lschema.org/Reference/fkFor": "https://dartnet.info/graphmodel/Person",
+                "https://lschema.org/Reference/fkValue": "123456576",
+                "https://lschema.org/Reference/label": "https://lschema.org/has",
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Measurement/person",
+                "https://lschema.org/value": "123456576"
+            }
+        }
+    ]
+}
