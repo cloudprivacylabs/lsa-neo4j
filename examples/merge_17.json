@@ -1,5 +1,5 @@
 {
-    "description": "db graph, some edges from Source root (Person) are removed",
+    "description": "in-memory graph",
     "nodes": [
         {
             "n": 0,
