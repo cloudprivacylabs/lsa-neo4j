@@ -653,7 +653,7 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 				default:
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
 						val, _ := itemToSave.GetProperty(expandedKey)
-						native := c.GetNativePropertyValue(itemToSave, expandedKey, val.(*ls.PropertyValue).AsString())
+						native := c.GetNativePropertyValue(itemToSave, expandedKey, val.(*ls.PropertyValue).GetNativeValue())
 						vars[tname] = native
 					} else {
 						vars[tname] = v.AsString()
@@ -664,7 +664,7 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 				nsl := make([]interface{}, 0, len(vsl))
 				for _, vn := range vsl {
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
-						native := c.GetNativePropertyValue(itemToSave, expandedKey, vn.(string))
+						native := c.GetNativePropertyValue(itemToSave, expandedKey, vn.(*ls.PropertyValue).GetNativeValue())
 						nsl = append(nsl, native)
 					} else {
 						nsl = append(nsl, vn)

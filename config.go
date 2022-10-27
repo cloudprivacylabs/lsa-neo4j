@@ -1,7 +1,6 @@
 package neo4j
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -70,16 +69,11 @@ func (cfg Config) MakeLabels(types []string) string {
 }
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
-func (cfg Config) GetNativePropertyValue(item withProperty, expandedPropertyKey, val string) interface{} {
+func (cfg Config) GetNativePropertyValue(item withProperty, expandedPropertyKey string, val interface{}) interface{} {
 	if _, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
-		va := ls.GetValueAccessor(cfg.PropertyTypes[expandedPropertyKey])
-		node, ok := item.(*lpg.Node)
-		if ok {
-			native, err := va.GetNativeValue(val, node)
-			if err != nil {
-				panic(fmt.Errorf("Cannot get native value for %v, %w", node, err))
-			}
-			return native
+		switch item.(type) {
+		case *lpg.Node, *lpg.Edge:
+			return nativeValueToNeo4jValue(val)
 		}
 	}
 	return val
