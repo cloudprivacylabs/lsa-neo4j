@@ -1,5 +1,5 @@
 {
-    "description": "in-memory graph",
+    "description": "db graph, some edges from Source root (Person) are removed",
     "nodes": [
         {
             "n": 0,
@@ -54,6 +54,7 @@
                 "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/Condition",
                 "https://lschema.org/attributeIndex": "1",
                 "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/Condition/schema",
+                "https://lschema.org/entityId": "condition_1",
                 "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/conditions/element"
             },
             "edges": [
@@ -62,20 +63,6 @@
                     "label": "https://lschema.org/has"
                 }
             ]
-        },
-        {
-            "n": 19,
-            "labels": [
-                "https://lschema.org/DocumentNode",
-                "https://lschema.org/Object",
-                "https://dartnet.info/graphModel/Measurement"
-            ],
-            "properties": {
-                "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/Measurement",
-                "https://lschema.org/attributeIndex": "9",
-                "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/Measurement/schema",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/measurements/element"
-            }
         },
         {
             "n": 4,
