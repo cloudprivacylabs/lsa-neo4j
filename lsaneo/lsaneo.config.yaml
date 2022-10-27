@@ -20,10 +20,10 @@ termMappings:
 
 # low, high json:number
 propertyTypes:
-  https://lschema.org/attributeIndex: json:number
-  https://lschema.org/floatTest: ls:double
-  negationInd: json:boolean
-  inversionInd: xsd:boolean
+  https://lschema.org/attributeIndex: Number
+  https://lschema.org/floatTest: Float
+  negationInd: Boolean
+  inversionInd: Boolean
 
 namespaceMappings:
   https://lschema.org/: ls

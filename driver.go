@@ -503,6 +503,16 @@ func neo4jValueToNativeValue(val interface{}) interface{} {
 // nativeValueToNeo4jValue will get native neo4j type based on given value to be represented in the database
 func nativeValueToNeo4jValue(val interface{}) interface{} {
 	switch val := val.(type) {
+	case neo4j.Date:
+		return val
+	case neo4j.LocalDateTime:
+		return val
+	case neo4j.Duration:
+		return val
+	case neo4j.Time:
+		return val
+	case neo4j.LocalTime:
+		return val
 	case bool, float32, float64, int8, int16, int, int64, string:
 		return val
 	case types.Measure:
@@ -537,10 +547,10 @@ func nativeValueToNeo4jValue(val interface{}) interface{} {
 }
 
 // buildDBPropertiesForSave writes the properties that will be ran by the query
-func buildDBPropertiesForSave(c Config, subject withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
+func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
 	out := strings.Builder{}
 	first := true
-	node := subject.(graph.Node)
+	node := itemToSave.(graph.Node)
 
 	buildProperties := func(m map[string]*ls.PropertyValue) {
 		for k, v := range m {
