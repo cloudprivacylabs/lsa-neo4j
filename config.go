@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/cloudprivacylabs/opencypher/graph"
 )
 
 type Config struct {
@@ -17,6 +17,7 @@ type Config struct {
 
 type withProperty interface {
 	ForEachProperty(func(string, interface{}) bool) bool
+	GetProperty(string) (interface{}, bool)
 }
 
 type mapWithProperty map[string]interface{}
@@ -28,6 +29,11 @@ func (m mapWithProperty) ForEachProperty(f func(string, interface{}) bool) bool 
 		}
 	}
 	return true
+}
+
+func (m mapWithProperty) GetProperty(key string) (interface{}, bool) {
+	x, ok := m[key]
+	return x, ok
 }
 
 func InitNamespaceTrie(cfg *Config) *Trie {
@@ -64,14 +70,17 @@ func (cfg Config) MakeLabels(types []string) string {
 }
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
-func (cfg Config) GetNativePropertyValue(node graph.Node, expandedPropertyKey, val string) interface{} {
+func (cfg Config) GetNativePropertyValue(item withProperty, expandedPropertyKey, val string) interface{} {
 	if _, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
 		va := ls.GetValueAccessor(cfg.PropertyTypes[expandedPropertyKey])
-		native, err := va.GetNativeValue(val, node)
-		if err != nil {
-			panic(fmt.Errorf("Cannot get native value for %v, %w", node, err))
+		node, ok := item.(*lpg.Node)
+		if ok {
+			native, err := va.GetNativeValue(val, node)
+			if err != nil {
+				panic(fmt.Errorf("Cannot get native value for %v, %w", node, err))
+			}
+			return native
 		}
-		return native
 	}
 	return val
 }

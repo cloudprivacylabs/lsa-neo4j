@@ -1,11 +1,11 @@
 module github.com/cloudprivacylabs/lsa-neo4j
 
-go 1.17
+go 1.18
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220715212745-1cfd0a04aa35
-	github.com/cloudprivacylabs/opencypher v1.0.0-beta-4
+	github.com/cloudprivacylabs/lpg v1.0.8
+	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220930162948-3724bfdf6d24
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
@@ -13,7 +13,10 @@ require (
 	github.com/testcontainers/testcontainers-go v0.13.0
 )
 
-require gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+require (
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+)
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -25,13 +28,14 @@ require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/bserdar/jsonstream v0.0.0-20190428032403-9f1769267072 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
+	github.com/cloudprivacylabs/opencypher v1.0.0-beta-7.0.20220920225214-cab0c9322e95 // indirect
 	github.com/containerd/cgroups v1.0.1 // indirect
 	github.com/containerd/containerd v1.5.9 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v20.10.11+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
-	github.com/emirpasic/gods v1.18.0 // indirect
+	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
