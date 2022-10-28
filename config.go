@@ -1,10 +1,12 @@
 package neo4j
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
@@ -71,40 +73,55 @@ func (cfg Config) MakeLabels(types []string) string {
 }
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
-func (cfg Config) GetNativePropertyValue(item withProperty, expandedPropertyKey string, val interface{}) interface{} {
+func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) interface{} {
 	if propType, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
 		var v interface{}
 		var err error
 		switch propType {
 		case "Number":
-			v, err = strconv.Atoi(val.(string))
+			v, err = strconv.Atoi(val)
 			if err != nil {
 				return nil
 			}
 		case "Float":
-			v, err = strconv.ParseFloat(val.(string), 64)
+			v, err = strconv.ParseFloat(val, 64)
 			if err != nil {
 				return nil
 			}
 		case "Boolean":
-			v, err = strconv.ParseBool(val.(string))
+			v, err = strconv.ParseBool(val)
 			if err != nil {
 				return nil
 			}
 		case "Date":
-			t, err := time.Parse(val.(string), val.(string))
+			t, err := time.Parse(val, val)
 			if err != nil {
 				return nil
 			}
 			v = neo4j.DateOf(t)
 		case "DateTime":
-			t, err := time.Parse(val.(string), val.(string))
+			t, err := time.Parse(val, val)
 			if err != nil {
 				return nil
 			}
 			v = neo4j.DateOf(t)
 		}
 		return nativeValueToNeo4jValue(v)
+	}
+	return val
+}
+
+func (cfg Config) GetN4JNodeValue(item withProperty, expandedPropertyKey, val string) interface{} {
+	switch item.(type) {
+	case *lpg.Node:
+		node := item.(*lpg.Node)
+		term := cfg.Shorten(cfg.PropertyTypes[expandedPropertyKey])
+		va := ls.GetValueAccessor(term)
+		native, err := va.GetNativeValue(val, node)
+		if err != nil {
+			panic(fmt.Errorf("Cannot get native value for %v, %w", node, err))
+		}
+		return nativeValueToNeo4jValue(native)
 	}
 	return val
 }

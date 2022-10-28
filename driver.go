@@ -624,6 +624,8 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 			out.WriteString(tname)
 			if v.IsString() {
 				switch k {
+				case c.Shorten(ls.AttributeIndexTerm):
+					vars[tname] = v.AsInt()
 				case c.Shorten(ls.NodeValueTerm):
 					node, ok := itemToSave.(*lpg.Node)
 					if ok {
@@ -636,13 +638,11 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 						switch itemToSave.(type) {
 						case *lpg.Node, *lpg.Edge:
 							val, _ := itemToSave.GetProperty(expandedKey)
-							// n4jNative := nativeValueToNeo4jValue(val.(*ls.PropertyValue).GetNativeValue())
-							n4jNative := c.GetNativePropertyValue(itemToSave, expandedKey, val.(*ls.PropertyValue).GetNativeValue())
+							n4jNative := c.GetNeo4jPropertyValue(expandedKey, val.(*ls.PropertyValue).AsString())
 							vars[tname] = n4jNative
 						default:
 							for _, v := range itemToSave.(mapWithProperty) {
-								// n4jNative := nativeValueToNeo4jValue(v.(*ls.PropertyValue).GetNativeValue())
-								n4jNative := c.GetNativePropertyValue(itemToSave, expandedKey, v.(*ls.PropertyValue).GetNativeValue())
+								n4jNative := c.GetNeo4jPropertyValue(expandedKey, v.(*ls.PropertyValue).AsString())
 								vars[tname] = n4jNative
 							}
 						}
@@ -655,9 +655,8 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 				nsl := make([]interface{}, 0, len(vsl))
 				for _, vn := range vsl {
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
-						native := nativeValueToNeo4jValue(vn.(*ls.PropertyValue).GetNativeValue())
-						// native := c.GetNativePropertyValue(itemToSave, expandedKey, vn.(*ls.PropertyValue).GetNativeValue())
-						nsl = append(nsl, native)
+						n4jNative := c.GetNeo4jPropertyValue(expandedKey, vn.(*ls.PropertyValue).AsString())
+						nsl = append(nsl, n4jNative)
 					} else {
 						nsl = append(nsl, vn)
 					}
