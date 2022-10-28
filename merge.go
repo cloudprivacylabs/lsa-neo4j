@@ -57,6 +57,12 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 	nodeAssociations := make(map[*lpg.Node]*lpg.Node)
 	edgeAssociations := make(map[*lpg.Edge]*lpg.Edge)
 	deltas := make([]Delta, 0)
+	unassociatedDbNodes := make(map[*lpg.Node]struct{})
+	// Put all dbNodes into a set, We will remove those that are associated later
+	for dbNodes := dbGraph.GetNodes(); dbNodes.Next(); {
+		dbNode := dbNodes.Node()
+		unassociatedDbNodes[dbNode] = struct{}{}
+	}
 
 	for n := range memEntitiesMap {
 		schemaPV := ls.AsPropertyValue(n.GetProperty(ls.EntitySchemaTerm))
@@ -74,6 +80,40 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 		}
 		deltas = append(deltas, mergeSubtree(n, foundDBEntity, dbGraph, dbGraphIds, dbEdges, nodeAssociations, edgeAssociations)...)
 	}
+
+	// Remove all db nodes that are associated with a memnode
+	for memNodes := memGraph.GetNodes(); memNodes.Next(); {
+		delete(unassociatedDbNodes, nodeAssociations[memNodes.Node()])
+	}
+
+	// Deal with standalone clusters
+	for memNodes := memGraph.GetNodes(); memNodes.Next(); {
+		memNode := memNodes.Node()
+		if _, associated := nodeAssociations[memNode]; associated {
+			continue
+		}
+		// This memnode is not associated with a db node
+		// Is there an identical unassociated db node
+		found := false
+		for dbNode := range unassociatedDbNodes {
+			if isNodeIdentical(memNode, dbNode) {
+				nodeAssociations[memNode] = dbNode
+				delete(unassociatedDbNodes, dbNode)
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
+		// Create this node
+		n, d := mergeNewNode(memNode, dbGraph)
+		if d != nil {
+			deltas = append(deltas, d)
+		}
+		nodeAssociations[memNode] = n
+	}
+
 	// Each entity is merged. Now we have to work on the edges that link
 	// entities, or edges between non-entity nodes Any unassociated memEdge needs to be
 	// dealt with
@@ -177,6 +217,7 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *lpg.Graph, dbNodeIds map[*
 			if d != nil {
 				ret = append(ret, d)
 			}
+			nodeAssociations[currentMemNode] = matchingDbNode
 		}
 
 		parentArray := currentMemNode.GetLabels().Has(ls.AttributeTypeArray)
@@ -231,7 +272,7 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *lpg.Graph, dbNodeIds map[*
 			for dbEdges := matchingDbNode.GetEdgesWithLabel(lpg.OutgoingEdge, edge.GetLabel()); dbEdges.Next(); {
 				dbEdge := dbEdges.Edge()
 				dbNode := dbEdge.GetTo()
-				if len(findLabelDiff(toNode.GetLabels(), dbNode.GetLabels())) == 0 && len(findPropDiff(toNode, dbNode)) == 0 {
+				if isNodeIdentical(toNode, dbNode) {
 					nodeAssociations[toNode] = dbNode
 					edgeAssociations[edge] = dbEdge
 					found = true
@@ -269,6 +310,87 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *lpg.Graph, dbNodeIds map[*
 		}
 	}
 	return ret
+}
+
+// Return true if n1 contained in n2
+func isNodeContained(n1, n2 *lpg.Node) bool {
+	if !n2.GetLabels().HasAllSet(n1.GetLabels()) {
+		return false
+	}
+	eq := true
+	n1.ForEachProperty(func(k string, v interface{}) bool {
+		pv, ok := v.(*ls.PropertyValue)
+		if !ok {
+			eq = false
+			return false
+		}
+		v2, ok := n2.GetProperty(k)
+		if !ok {
+			eq = false
+			return false
+		}
+		pv2, ok := v2.(*ls.PropertyValue)
+		if !ok {
+			eq = false
+			return false
+		}
+		if !pv2.IsEqual(pv) {
+			eq = false
+			return false
+		}
+		return true
+	})
+	return eq
+}
+
+// Return true if n1 is identical to n2
+func isNodeIdentical(n1, n2 *lpg.Node) bool {
+	if !n1.GetLabels().IsEqual(n2.GetLabels()) {
+		return false
+	}
+	eq := true
+	n1.ForEachProperty(func(k string, v interface{}) bool {
+		pv, ok := v.(*ls.PropertyValue)
+		if !ok {
+			return true
+		}
+		v2, ok := n2.GetProperty(k)
+		if !ok {
+			eq = false
+			return false
+		}
+		pv2, ok := v2.(*ls.PropertyValue)
+		if !ok {
+			eq = false
+			return false
+		}
+		if !pv2.IsEqual(pv) {
+			eq = false
+			return false
+		}
+		return true
+	})
+	if !eq {
+		return false
+	}
+	n2.ForEachProperty(func(k string, v interface{}) bool {
+		_, ok := v.(*ls.PropertyValue)
+		if !ok {
+			return true
+		}
+		v2, ok := n2.GetProperty(k)
+		if !ok {
+			eq = false
+			return false
+		}
+		_, ok = v2.(*ls.PropertyValue)
+		if !ok {
+			eq = false
+			return false
+		}
+		return true
+	})
+	return eq
 }
 
 func buildCreateNodeQueries(in []Delta, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) []DeltaQuery {

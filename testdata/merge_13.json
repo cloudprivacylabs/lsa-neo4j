@@ -18,35 +18,6 @@
             }
         },
         {
-            "n": 24,
-            "labels": [
-                "https://lschema.org/DocumentNode",
-                "https://lschema.org/Value"
-            ],
-            "properties": {
-                "https://lschema.org/attributeIndex": "1",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Observation/date",
-                "https://lschema.org/value": "2022-11-12",
-                "https://lschema.org/valueType": "ls:date"
-            }
-        },
-        {
-            "n": 18,
-            "labels": [
-                "https://lschema.org/DocumentNode",
-                "https://lschema.org/Value"
-            ],
-            "properties": {
-                "https://lschema.org/Reference/dir": "from",
-                "https://lschema.org/Reference/fkFor": "https://dartnet.info/graphmodel/Person",
-                "https://lschema.org/Reference/fkValue": "123456576",
-                "https://lschema.org/Reference/label": "https://lschema.org/has",
-                "https://lschema.org/attributeIndex": "0",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Measurement/person",
-                "https://lschema.org/value": "123456576"
-            }
-        },
-        {
             "n": 9,
             "labels": [
                 "https://lschema.org/DocumentNode",
@@ -57,22 +28,6 @@
                 "https://lschema.org/attributeIndex": "0",
                 "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/gender/source",
                 "text": "Female"
-            }
-        },
-        {
-            "n": 14,
-            "labels": [
-                "https://lschema.org/DocumentNode",
-                "https://lschema.org/Value"
-            ],
-            "properties": {
-                "https://lschema.org/Reference/dir": "from",
-                "https://lschema.org/Reference/fkFor": "https://dartnet.info/graphmodel/Person",
-                "https://lschema.org/Reference/fkValue": "123456576",
-                "https://lschema.org/Reference/label": "https://lschema.org/has",
-                "https://lschema.org/attributeIndex": "0",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Measurement/person",
-                "https://lschema.org/value": "123456576"
             }
         },
         {
@@ -224,22 +179,6 @@
                 "https://lschema.org/attributeIndex": "0",
                 "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/ethnicity/source",
                 "text": "Hispanic / Latino"
-            }
-        },
-        {
-            "n": 12,
-            "labels": [
-                "https://lschema.org/DocumentNode",
-                "https://lschema.org/Value"
-            ],
-            "properties": {
-                "https://lschema.org/Reference/dir": "from",
-                "https://lschema.org/Reference/fkFor": "https://dartnet.info/graphmodel/Person",
-                "https://lschema.org/Reference/fkValue": "123456576",
-                "https://lschema.org/Reference/label": "https://lschema.org/has",
-                "https://lschema.org/attributeIndex": "0",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Measurement/person",
-                "https://lschema.org/value": "123456576"
             }
         }
     ]

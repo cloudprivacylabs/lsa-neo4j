@@ -90,13 +90,7 @@ func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.E
 }
 
 func checkNodeEquivalence(n1, n2 *lpg.Node) bool {
-	if !n1.GetLabels().IsEqual(n2.GetLabels()) {
-		return false
-	}
-	if !ls.IsPropertiesEqual(ls.PropertiesAsMap(n1), ls.PropertiesAsMap(n2)) {
-		return false
-	}
-	return true
+	return isNodeIdentical(n1, n2)
 }
 
 func checkEdgeEquivalence(e1, e2 *lpg.Edge) bool {
@@ -110,29 +104,29 @@ func checkEdgeEquivalence(e1, e2 *lpg.Edge) bool {
 }
 
 func TestMerge14_13(t *testing.T) {
-	memGraph, dbGraph, _, _, _, _, err := testGraphMerge("examples/merge_14.json", "examples/merge_13.json")
-	expectedGraph, err := testLoadGraph("examples/merge_15.json")
+	_, dbGraph, _, _, _, _, err := testGraphMerge("testdata/merge_14.json", "testdata/merge_13.json")
+	expectedGraph, err := testLoadGraph("testdata/merge_15.json")
 	if err != nil {
 		t.Error(err)
 	}
-	if !lpg.CheckIsomorphism(memGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+	if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
 		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
 	}
 }
 
 func TestMerge16_17(t *testing.T) {
-	memGraph, dbGraph, _, _, _, _, err := testGraphMerge("examples/merge_16.json", "examples/merge_17.json")
-	expectedGraph, err := testLoadGraph("examples/merge_1617.json")
+	_, dbGraph, _, _, _, _, err := testGraphMerge("testdata/merge_16.json", "testdata/merge_17.json")
+	expectedGraph, err := testLoadGraph("testdata/merge_1617.json")
 	if err != nil {
 		t.Error(err)
 	}
-	if !lpg.CheckIsomorphism(memGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+	if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
 		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
 	}
 }
 
 func TestMergeG1Emp(t *testing.T) {
-	mem, db, _, _, _, _, err := testGraphMerge("examples/g1.json", "examples/empty.json")
+	mem, db, _, _, _, _, err := testGraphMerge("testdata/g1.json", "testdata/empty.json")
 	if err != nil {
 		t.Error(err)
 	}
@@ -142,7 +136,7 @@ func TestMergeG1Emp(t *testing.T) {
 }
 
 func TestMergeFromExistEmp(t *testing.T) {
-	mem, db, _, _, _, _, err := testGraphMerge("examples/from_exist.json", "examples/empty.json")
+	mem, db, _, _, _, _, err := testGraphMerge("testdata/from_exist.json", "testdata/empty.json")
 	if err != nil {
 		t.Error(err)
 	}
