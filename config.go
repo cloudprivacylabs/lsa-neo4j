@@ -72,9 +72,23 @@ func (cfg Config) MakeLabels(types []string) string {
 func (cfg Config) GetNativePropertyValue(item withProperty, expandedPropertyKey string, val interface{}) interface{} {
 	if _, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
 		switch item.(type) {
-		case *lpg.Node, *lpg.Edge:
+		case *lpg.Node:
+			node := item.(*lpg.Node)
+			if node.HasLabel(ls.AttributeTypeValue) {
+				v, err := ls.GetNodeValue(node)
+				if err != nil {
+					panic("cannot get node value")
+				}
+				return nativeValueToNeo4jValue(v)
+			}
+		case *lpg.Edge:
 			return nativeValueToNeo4jValue(val)
+		case mapWithProperty:
+			if _, ok := item.(mapWithProperty)[expandedPropertyKey]; ok {
+				return nativeValueToNeo4jValue(item.(mapWithProperty)[expandedPropertyKey])
+			}
 		}
+		return nativeValueToNeo4jValue(val)
 	}
 	return val
 }

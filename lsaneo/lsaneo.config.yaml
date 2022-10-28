@@ -22,8 +22,13 @@ termMappings:
 propertyTypes:
   https://lschema.org/attributeIndex: Number
   https://lschema.org/floatTest: Float
-  negationInd: Boolean
-  inversionInd: Boolean
+  https://lschema.org/negationInd: Boolean
+  https://lschema.org/inversionInd: Boolean
+  https://lschema.org/someDate: Date
+  https://lschema.org/someDateTime: DateTime
+  https://lschema.org/someNumber: Date
+  https://lschema.org/someFloat: Float
+  https://lschema.org/someBoolean: Boolean
 
 namespaceMappings:
   https://lschema.org/: ls
