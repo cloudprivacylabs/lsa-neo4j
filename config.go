@@ -1,10 +1,12 @@
 package neo4j
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
-	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
 type Config struct {
@@ -70,25 +72,39 @@ func (cfg Config) MakeLabels(types []string) string {
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
 func (cfg Config) GetNativePropertyValue(item withProperty, expandedPropertyKey string, val interface{}) interface{} {
-	if _, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
-		switch item.(type) {
-		case *lpg.Node:
-			node := item.(*lpg.Node)
-			if node.HasLabel(ls.AttributeTypeValue) {
-				v, err := ls.GetNodeValue(node)
-				if err != nil {
-					panic("cannot get node value")
-				}
-				return nativeValueToNeo4jValue(v)
+	if propType, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
+		var v interface{}
+		var err error
+		switch propType {
+		case "Number":
+			v, err = strconv.Atoi(val.(string))
+			if err != nil {
+				return nil
 			}
-		case *lpg.Edge:
-			return nativeValueToNeo4jValue(val)
-		case mapWithProperty:
-			if _, ok := item.(mapWithProperty)[expandedPropertyKey]; ok {
-				return nativeValueToNeo4jValue(item.(mapWithProperty)[expandedPropertyKey])
+		case "Float":
+			v, err = strconv.ParseFloat(val.(string), 64)
+			if err != nil {
+				return nil
 			}
+		case "Boolean":
+			v, err = strconv.ParseBool(val.(string))
+			if err != nil {
+				return nil
+			}
+		case "Date":
+			t, err := time.Parse(val.(string), val.(string))
+			if err != nil {
+				return nil
+			}
+			v = neo4j.DateOf(t)
+		case "DateTime":
+			t, err := time.Parse(val.(string), val.(string))
+			if err != nil {
+				return nil
+			}
+			v = neo4j.DateOf(t)
 		}
-		return nativeValueToNeo4jValue(val)
+		return nativeValueToNeo4jValue(v)
 	}
 	return val
 }

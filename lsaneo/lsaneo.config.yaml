@@ -26,7 +26,7 @@ propertyTypes:
   https://lschema.org/inversionInd: Boolean
   https://lschema.org/someDate: Date
   https://lschema.org/someDateTime: DateTime
-  https://lschema.org/someNumber: Date
+  https://lschema.org/someNumber: Number
   https://lschema.org/someFloat: Float
   https://lschema.org/someBoolean: Boolean
 

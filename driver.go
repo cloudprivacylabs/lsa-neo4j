@@ -624,8 +624,6 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 			out.WriteString(tname)
 			if v.IsString() {
 				switch k {
-				case c.Shorten(ls.AttributeIndexTerm):
-					vars[tname] = v.AsInt()
 				case c.Shorten(ls.NodeValueTerm):
 					node, ok := itemToSave.(*lpg.Node)
 					if ok {
