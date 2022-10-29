@@ -20,8 +20,9 @@
             "properties": { 
                 "https://lschema.org/attributeIndex": "1",
                 "https://lschema.org/value": "6000",
+                "https://lschema.org/valueType": "int",
                 "https://lschema.org/someDate": "2006-01-02",
-                "https://lschema.org/someDateTime": "2006-01-02T15:04:05-0700",
+                "https://lschema.org/someDateTime": "2006-01-02T15:04:05Z",
                 "https://lschema.org/someNumber": "1000",
                 "https://lschema.org/someBoolean": "false",
                 "https://lschema.org/someFloat": "3.05"

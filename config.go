@@ -1,12 +1,10 @@
 package neo4j
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
@@ -73,57 +71,53 @@ func (cfg Config) MakeLabels(types []string) string {
 }
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
-func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) interface{} {
-	if propType, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
-		var v interface{}
-		var err error
-		switch propType {
-		case "Number":
-			v, err = strconv.Atoi(val)
-			if err != nil {
-				return nil
-			}
-		case "Float":
-			v, err = strconv.ParseFloat(val, 64)
-			if err != nil {
-				return nil
-			}
-		case "Boolean":
-			v, err = strconv.ParseBool(val)
-			if err != nil {
-				return nil
-			}
-		case "Date":
-			t, err := time.Parse(val, val)
-			if err != nil {
-				return nil
-			}
-			v = neo4j.DateOf(t)
-		case "DateTime":
-			t, err := time.Parse(val, val)
-			if err != nil {
-				return nil
-			}
-			v = neo4j.DateOf(t)
-		}
-		return nativeValueToNeo4jValue(v)
+func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) (interface{}, error) {
+	propType, exists := cfg.PropertyTypes[expandedPropertyKey]
+	if !exists {
+		return val, nil
 	}
-	return val
-}
-
-func (cfg Config) GetN4JNodeValue(item withProperty, expandedPropertyKey, val string) interface{} {
-	switch item.(type) {
-	case *lpg.Node:
-		node := item.(*lpg.Node)
-		term := cfg.Shorten(cfg.PropertyTypes[expandedPropertyKey])
-		va := ls.GetValueAccessor(term)
-		native, err := va.GetNativeValue(val, node)
+	var v interface{}
+	var err error
+	switch propType {
+	case "Integer":
+		v, err = strconv.Atoi(val)
 		if err != nil {
-			panic(fmt.Errorf("Cannot get native value for %v, %w", node, err))
+			return nil, err
 		}
-		return nativeValueToNeo4jValue(native)
+	case "Float":
+		v, err = strconv.ParseFloat(val, 64)
+		if err != nil {
+			return nil, err
+		}
+	case "Boolean":
+		v, err = strconv.ParseBool(val)
+		if err != nil {
+			return nil, err
+		}
+	case "Date":
+		t, err := time.Parse("2006-01-02", val)
+		if err != nil {
+			return nil, err
+		}
+		strF := t.Format(val)
+		t, err = time.Parse(strF, val)
+		if err != nil {
+			return nil, err
+		}
+		v = neo4j.DateOf(t)
+	case "DateTime":
+		t, err := time.Parse(time.RFC3339, val)
+		if err != nil {
+			return nil, err
+		}
+		strF := t.Format(val)
+		t, err = time.Parse(strF, val)
+		if err != nil {
+			return nil, err
+		}
+		v = neo4j.DateOf(t)
 	}
-	return val
+	return nativeValueToNeo4jValue(v), nil
 }
 
 func (cfg Config) Shorten(fullName string) string {

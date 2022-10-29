@@ -638,11 +638,17 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 						switch itemToSave.(type) {
 						case *lpg.Node, *lpg.Edge:
 							val, _ := itemToSave.GetProperty(expandedKey)
-							n4jNative := c.GetNeo4jPropertyValue(expandedKey, val.(*ls.PropertyValue).AsString())
+							n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, val.(*ls.PropertyValue).AsString())
+							if err != nil {
+								panic(err)
+							}
 							vars[tname] = n4jNative
 						default:
 							for _, v := range itemToSave.(mapWithProperty) {
-								n4jNative := c.GetNeo4jPropertyValue(expandedKey, v.(*ls.PropertyValue).AsString())
+								n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, v.(*ls.PropertyValue).AsString())
+								if err != nil {
+									panic(err)
+								}
 								vars[tname] = n4jNative
 							}
 						}
@@ -655,7 +661,10 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 				nsl := make([]interface{}, 0, len(vsl))
 				for _, vn := range vsl {
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
-						n4jNative := c.GetNeo4jPropertyValue(expandedKey, vn.(*ls.PropertyValue).AsString())
+						n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, vn.(*ls.PropertyValue).AsString())
+						if err != nil {
+							panic(err)
+						}
 						nsl = append(nsl, n4jNative)
 					} else {
 						nsl = append(nsl, vn)
