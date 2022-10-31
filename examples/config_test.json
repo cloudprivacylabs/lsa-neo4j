@@ -23,7 +23,7 @@
                 "https://lschema.org/valueType": "int",
                 "https://lschema.org/someDate": "2006-01-02",
                 "https://lschema.org/someDateTime": "2006-01-02T15:04:05Z",
-                "https://lschema.org/someNumber": "1000",
+                "https://lschema.org/someInteger": "1000",
                 "https://lschema.org/someBoolean": "false",
                 "https://lschema.org/someFloat": "3.05"
             }
@@ -40,7 +40,7 @@
                 "https://lschema.org/value": "2006-01-02",
                 "https://lschema.org/someDateTime": "2006-01-02T15:04:05Z",
                 "https://lschema.org/someDate": "2006-01-02",
-                "https://lschema.org/someNumber": "1500",
+                "https://lschema.org/someInteger": "1500",
                 "https://lschema.org/someBoolean": "true",
                 "https://lschema.org/someFloat": "1.05"
             }
@@ -57,7 +57,7 @@
                 "https://lschema.org/value": "500",
                 "https://lschema.org/someDateTime": "2006-01-02Z0700",
                 "https://lschema.org/someDate": "2006-01-02",
-                "https://lschema.org/someNumber": "2300",
+                "https://lschema.org/someInteger": "2300",
                 "https://lschema.org/someBoolean": "True",
                 "https://lschema.org/someFloat": "7.77"
             }

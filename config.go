@@ -3,10 +3,11 @@ package neo4j
 import (
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/araddon/dateparse"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/nleeper/goment"
 )
 
 type Config struct {
@@ -72,13 +73,10 @@ func (cfg Config) MakeLabels(types []string) string {
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
 func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) (interface{}, error) {
-	isDateOrDateTime := func(s string) (string, string) {
-		if s[0:4] == "Date" && s[4] == ',' {
-			format := strings.TrimSpace(s[6:])
-			return "Date", format
-		} else if s[0:8] == "DateTime" {
-			format := strings.TrimSpace(s[10:])
-			return "DateTime", format
+	dateOrDateTime := func(s string) (string, string) {
+		sl := strings.Split(s, ",")
+		if len(sl) > 1 {
+			return strings.TrimSpace(sl[0]), strings.TrimSpace(sl[1])
 		}
 		return "", ""
 	}
@@ -104,30 +102,38 @@ func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) 
 		if err != nil {
 			return nil, err
 		}
-	default:
-		date, userF := isDateOrDateTime(propType)
-		var format string
-		switch date {
+	}
+	dt, format := dateOrDateTime(propType)
+	if dt != "" && format != "" {
+		switch dt {
 		case "Date":
-			switch userF {
-			case "MM/DD/YYYY":
-				format = "2006-01-02"
+			if format != "" {
+				gmt, err := goment.New(val, format)
+				if err != nil {
+					return nil, err
+				}
+				v = neo4j.DateOf(gmt.ToTime())
+			} else {
+				t, err := dateparse.ParseAny(val)
+				if err != nil {
+					return nil, err
+				}
+				v = neo4j.DateOf(t)
 			}
-			t, err := time.Parse(format, val)
-			if err != nil {
-				return nil, err
-			}
-			v = neo4j.DateOf(t)
 		case "DateTime":
-			switch userF {
-			case "MM/DD/YYYY hh:mm:ss":
-				format = time.RFC3339
+			if format != "" {
+				gmt, err := goment.New(val, format)
+				if err != nil {
+					return nil, err
+				}
+				v = neo4j.DateOf(gmt.ToTime())
+			} else {
+				t, err := dateparse.ParseAny(val)
+				if err != nil {
+					return nil, err
+				}
+				v = neo4j.LocalDateTimeOf(t)
 			}
-			t, err := time.Parse(format, val)
-			if err != nil {
-				return nil, err
-			}
-			v = neo4j.DateOf(t)
 		}
 	}
 	return nativeValueToNeo4jValue(v), nil

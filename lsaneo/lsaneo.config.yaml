@@ -24,8 +24,8 @@ propertyTypes:
   https://lschema.org/floatTest: Float
   https://lschema.org/negationInd: Boolean
   https://lschema.org/inversionInd: Boolean
-  https://lschema.org/someDate: Date, MM/DD/YYYY
-  https://lschema.org/someDateTime: DateTime, MM/DD/YYYY hh:mm:ss
+  https://lschema.org/someDate: Date, YYYY-MM-DD
+  https://lschema.org/someDateTime: DateTime, YYYY-MM-DD HH:mm:ss
   https://lschema.org/someInteger: Integer
   https://lschema.org/someFloat: Float
   https://lschema.org/someBoolean: Boolean
