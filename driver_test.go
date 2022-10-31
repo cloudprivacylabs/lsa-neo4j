@@ -159,7 +159,6 @@ var _ = Describe("Driver", func() {
 						log.Printf("Properties not same")
 						return false
 					}
-					log.Printf("True\n")
 					return true
 				}, func(e1, e2 *lpg.Edge) bool {
 					return e1.GetLabel() == e2.GetLabel() && ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))
