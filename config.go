@@ -83,7 +83,7 @@ func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) 
 	if prefix == -1 {
 		propType = prop
 	} else {
-		propType = prop[:prefix]
+		propType = strings.TrimSpace(prop[:prefix])
 		format = strings.TrimSpace(prop[prefix+1:])
 	}
 	var v interface{}
