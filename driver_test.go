@@ -58,8 +58,8 @@ var _ = Describe("Driver", func() {
 		err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 		Expect(err).To(BeNil(), "Could not read file: %s", "lsaneo/lsaneo.config.yaml")
 		InitNamespaceTrie(&cfg)
-		grph, err = cmdutil.ReadJSONGraph([]string{"examples/test.json"}, nil)
-		Expect(err).To(BeNil(), "Could not read file: %s", "examples/test.json")
+		grph, err = cmdutil.ReadJSONGraph([]string{"testdata/test.json"}, nil)
+		Expect(err).To(BeNil(), "Could not read file: %s", "testdata/test.json")
 	})
 
 	AfterEach(func() {
