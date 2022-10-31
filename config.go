@@ -72,6 +72,16 @@ func (cfg Config) MakeLabels(types []string) string {
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
 func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) (interface{}, error) {
+	isDateOrDateTime := func(s string) (string, string) {
+		if s[0:4] == "Date" && s[4] == ',' {
+			format := strings.TrimSpace(s[6:])
+			return "Date", format
+		} else if s[0:8] == "DateTime" {
+			format := strings.TrimSpace(s[10:])
+			return "DateTime", format
+		}
+		return "", ""
+	}
 	propType, exists := cfg.PropertyTypes[expandedPropertyKey]
 	if !exists {
 		return val, nil
@@ -94,28 +104,31 @@ func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) 
 		if err != nil {
 			return nil, err
 		}
-	case "Date":
-		t, err := time.Parse("2006-01-02", val)
-		if err != nil {
-			return nil, err
+	default:
+		date, userF := isDateOrDateTime(propType)
+		var format string
+		switch date {
+		case "Date":
+			switch userF {
+			case "MM/DD/YYYY":
+				format = "2006-01-02"
+			}
+			t, err := time.Parse(format, val)
+			if err != nil {
+				return nil, err
+			}
+			v = neo4j.DateOf(t)
+		case "DateTime":
+			switch userF {
+			case "MM/DD/YYYY hh:mm:ss":
+				format = time.RFC3339
+			}
+			t, err := time.Parse(format, val)
+			if err != nil {
+				return nil, err
+			}
+			v = neo4j.DateOf(t)
 		}
-		strF := t.Format(val)
-		t, err = time.Parse(strF, val)
-		if err != nil {
-			return nil, err
-		}
-		v = neo4j.DateOf(t)
-	case "DateTime":
-		t, err := time.Parse(time.RFC3339, val)
-		if err != nil {
-			return nil, err
-		}
-		strF := t.Format(val)
-		t, err = time.Parse(strF, val)
-		if err != nil {
-			return nil, err
-		}
-		v = neo4j.DateOf(t)
 	}
 	return nativeValueToNeo4jValue(v), nil
 }
