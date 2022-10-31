@@ -126,7 +126,7 @@ func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) 
 				if err != nil {
 					return nil, err
 				}
-				v = neo4j.DateOf(gmt.ToTime())
+				v = neo4j.LocalDateTimeOf(gmt.ToTime())
 			} else {
 				t, err := dateparse.ParseAny(val)
 				if err != nil {
