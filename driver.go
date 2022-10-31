@@ -233,13 +233,13 @@ func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lp
 
 	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "linking"})
 	// Link nodes
-	for node := range allNodes {
-		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-			if err := LinkNodesForNewEntity(ctx, tx, config, node, mappedEntities); err != nil {
-				return nil, err
-			}
-		}
-	}
+	// for node := range allNodes {
+	// 	if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
+	// 		if err := LinkNodesForNewEntity(ctx, tx, config, node, mappedEntities); err != nil {
+	// 			return nil, err
+	// 		}
+	// 	}
+	// }
 	return eids, nil
 }
 
@@ -368,25 +368,8 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 		}
 		vt := cfg.Shorten(cfg.PropertyTypes[expandedKey])
 		if vt != "" && k != expandedKey {
-			va := ls.GetValueAccessor(vt)
-			_, ok := v.([]interface{})
-			if ok {
-				si := make([]string, 0, len(v.([]interface{})))
-				for _, vi := range v.([]interface{}) {
-					form, err := va.FormatNativeValue(vi, nil, node)
-					if err != nil {
-						panic(fmt.Errorf("Cannot format native value for %v, %w", node, err))
-					}
-					si = append(si, form)
-				}
-				node.SetProperty(expandedKey, ls.StringSlicePropertyValue(expandedKey, si))
-			} else {
-				form, err := va.FormatNativeValue(v, nil, node)
-				if err != nil {
-					panic(fmt.Errorf("Cannot format native value for %v, %w", node, err))
-				}
-				node.SetProperty(expandedKey, ls.StringPropertyValue(expandedKey, form))
-			}
+			native := neo4jValueToNativeValue(v)
+			node.SetProperty(expandedKey, native)
 		} else {
 			buildNodeProperties(expandedKey, v)
 		}
@@ -574,6 +557,16 @@ func neo4jValueToNativeValue(val interface{}) interface{} {
 // nativeValueToNeo4jValue will get native neo4j type based on given value to be represented in the database
 func nativeValueToNeo4jValue(val interface{}) interface{} {
 	switch val := val.(type) {
+	case neo4j.Date:
+		return val
+	case neo4j.LocalDateTime:
+		return val
+	case neo4j.Duration:
+		return val
+	case neo4j.Time:
+		return val
+	case neo4j.LocalTime:
+		return val
 	case bool, float32, float64, int8, int16, int, int64, string:
 		return val
 	case types.Measure:
@@ -608,7 +601,7 @@ func nativeValueToNeo4jValue(val interface{}) interface{} {
 }
 
 // buildDBPropertiesForSave writes the properties that will be ran by the query
-func buildDBPropertiesForSave(c Config, subject withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
+func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
 	out := strings.Builder{}
 	first := true
 
@@ -634,16 +627,31 @@ func buildDBPropertiesForSave(c Config, subject withProperty, vars map[string]in
 				case c.Shorten(ls.AttributeIndexTerm):
 					vars[tname] = v.AsInt()
 				case c.Shorten(ls.NodeValueTerm):
-					node := subject.(*lpg.Node)
-					val, _ := ls.GetNodeValue(node)
-					n4jNative := nativeValueToNeo4jValue(val)
-					vars[tname] = n4jNative
+					node, ok := itemToSave.(*lpg.Node)
+					if ok {
+						val, _ := ls.GetNodeValue(node)
+						n4jNative := nativeValueToNeo4jValue(val)
+						vars[tname] = n4jNative
+					}
 				default:
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
-						val, _ := subject.GetProperty(expandedKey)
-						node, _ := subject.(*lpg.Node)
-						native := c.GetNativePropertyValue(node, expandedKey, val.(*ls.PropertyValue).AsString())
-						vars[tname] = native
+						switch itemToSave.(type) {
+						case *lpg.Node, *lpg.Edge:
+							val, _ := itemToSave.GetProperty(expandedKey)
+							n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, val.(*ls.PropertyValue).AsString())
+							if err != nil {
+								panic(err)
+							}
+							vars[tname] = n4jNative
+						default:
+							for _, v := range itemToSave.(mapWithProperty) {
+								n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, v.(*ls.PropertyValue).AsString())
+								if err != nil {
+									panic(err)
+								}
+								vars[tname] = n4jNative
+							}
+						}
 					} else {
 						vars[tname] = v.AsString()
 					}
@@ -651,11 +659,13 @@ func buildDBPropertiesForSave(c Config, subject withProperty, vars map[string]in
 			} else if v.IsStringSlice() {
 				vsl := v.AsInterfaceSlice()
 				nsl := make([]interface{}, 0, len(vsl))
-				node, _ := subject.(*lpg.Node)
 				for _, vn := range vsl {
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
-						native := c.GetNativePropertyValue(node, expandedKey, vn.(string))
-						nsl = append(nsl, native)
+						n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, vn.(*ls.PropertyValue).AsString())
+						if err != nil {
+							panic(err)
+						}
+						nsl = append(nsl, n4jNative)
 					} else {
 						nsl = append(nsl, vn)
 					}
