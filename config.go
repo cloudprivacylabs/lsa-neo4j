@@ -74,13 +74,21 @@ func (cfg Config) MakeLabels(types []string) string {
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
 func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) (interface{}, error) {
 	prop, exists := cfg.PropertyTypes[expandedPropertyKey]
-	propType := strings.Split(prop, ",")
 	if !exists {
 		return val, nil
 	}
+	var propType string
+	var format string
+	prefix := strings.Index(prop, ",")
+	if prefix == -1 {
+		propType = prop
+	} else {
+		propType = prop[:prefix]
+		format = strings.TrimSpace(prop[prefix+1:])
+	}
 	var v interface{}
 	var err error
-	switch propType[0] {
+	switch propType {
 	case "Integer":
 		v, err = strconv.Atoi(val)
 		if err != nil {
@@ -97,8 +105,8 @@ func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) 
 			return nil, err
 		}
 	case "Date":
-		if propType[1] != "" {
-			gmt, err := goment.New(val, propType[1])
+		if format != "" {
+			gmt, err := goment.New(val, format)
 			if err != nil {
 				return nil, err
 			}
@@ -111,8 +119,8 @@ func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) 
 			v = neo4j.DateOf(t)
 		}
 	case "DateTime":
-		if propType[1] != "" {
-			gmt, err := goment.New(val, propType[1])
+		if format != "" {
+			gmt, err := goment.New(val, format)
 			if err != nil {
 				return nil, err
 			}
