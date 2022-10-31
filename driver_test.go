@@ -58,8 +58,8 @@ var _ = Describe("Driver", func() {
 		err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 		Expect(err).To(BeNil(), "Could not read file: %s", "lsaneo/lsaneo.config.yaml")
 		InitNamespaceTrie(&cfg)
-		grph, err = cmdutil.ReadJSONGraph([]string{"examples/test.json"}, nil)
-		Expect(err).To(BeNil(), "Could not read file: %s", "examples/test.json")
+		grph, err = cmdutil.ReadJSONGraph([]string{"testdata/test.json"}, nil)
+		Expect(err).To(BeNil(), "Could not read file: %s", "testdata/test.json")
 	})
 
 	AfterEach(func() {
@@ -93,7 +93,6 @@ var _ = Describe("Driver", func() {
 		expectedEdgeSources := make([]*lpg.Edge, 0)
 		for nodeItr := grph.GetNodes(); nodeItr.Next(); {
 			gotSources = append(gotSources, nodeItr.Node())
-
 		}
 		for nodeItr := expectedGraph.GetNodes(); nodeItr.Next(); {
 			expectedSources = append(expectedSources, nodeItr.Node())
@@ -160,7 +159,6 @@ var _ = Describe("Driver", func() {
 						log.Printf("Properties not same")
 						return false
 					}
-					log.Printf("True\n")
 					return true
 				}, func(e1, e2 *lpg.Edge) bool {
 					return e1.GetLabel() == e2.GetLabel() && ls.IsPropertiesEqual(ls.PropertiesAsMap(e1), ls.PropertiesAsMap(e2))

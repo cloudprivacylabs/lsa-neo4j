@@ -69,6 +69,7 @@ func Insert(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.G
 
 	for nodeItr := grph.GetNodesWithProperty(ls.EntityIDTerm); nodeItr.Next(); {
 		node := nodeItr.Node()
+		allNodes[node] = struct{}{}
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
 			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
 			ids := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsStringSlice()
@@ -129,29 +130,10 @@ func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lp
 	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "start"})
 	eids := make([]uint64, 0)
 	mappedEntities := make(map[*lpg.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
-	nonemptyEntityNodeIds := make([]string, 0)
-	entities := make([]*lpg.Node, 0)
 	allNodes := make(map[*lpg.Node]struct{})
 
-	for nodeItr := grph.GetNodesWithProperty(ls.EntityIDTerm); nodeItr.Next(); {
-		node := nodeItr.Node()
-		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
-			ids := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsStringSlice()
-			if len(ids) > 1 {
-				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, strings.Join(ids, ","))
-				entities = append(entities, node)
-			}
-			if id != "" {
-				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, id)
-				entities = append(entities, node)
-			}
-		}
-	}
-
+	entities, entityDBIds, entityIds, nonemptyEntityNodeIds, err := session.CollectEntityDBIds(tx, config, grph)
 	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "collectedEntityNodes", "nEntityNodes": len(entities)})
-
-	entityDBIds, entityIds, err := session.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
 		return nil, err
 	}
@@ -459,6 +441,32 @@ func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, co
 		dbIds = append(dbIds, id)
 	}
 	return dbIds, nil
+}
+
+func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *lpg.Graph) ([]*lpg.Node, []int64, []string, []string, error) {
+	nonemptyEntityNodeIds := make([]string, 0)
+	entities := make([]*lpg.Node, 0)
+
+	for nodeItr := grph.GetNodesWithProperty(ls.EntityIDTerm); nodeItr.Next(); {
+		node := nodeItr.Node()
+		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
+			id := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsString()
+			ids := ls.AsPropertyValue(node.GetProperty(ls.EntityIDTerm)).AsStringSlice()
+			if len(ids) > 1 {
+				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, strings.Join(ids, ","))
+				entities = append(entities, node)
+			}
+			if id != "" {
+				nonemptyEntityNodeIds = append(nonemptyEntityNodeIds, id)
+				entities = append(entities, node)
+			}
+		}
+	}
+	entityDBIds, entityIds, err := s.entityDBIds(tx, nonemptyEntityNodeIds, config)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return entities, entityDBIds, entityIds, nonemptyEntityNodeIds, nil
 }
 
 func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config) ([]int64, []string, error) {
