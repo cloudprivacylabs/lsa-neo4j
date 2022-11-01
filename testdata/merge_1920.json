@@ -1,5 +1,5 @@
 {
-    "description": "db graph",
+    "description": "expected graph",
     "nodes": [
         {
             "n": 0,
@@ -57,6 +57,10 @@
                 {
                     "to": 3,
                     "label": "https://lschema.org/has"
+                },
+                {
+                    "to": 4,
+                    "label": "https://lschema.org/has"
                 }
             ]
         },
@@ -74,6 +78,20 @@
                 "https://lschema.org/attributeIndex": "0",
                 "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Condition/person",
                 "https://lschema.org/value": "123456576"
+            }
+        },
+        {
+            "n": 4,
+            "labels": [
+                "Code",
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Object"
+            ],
+            "properties": {
+                "code": "MCH  28.4",
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Condition/source",
+                "text": "Problem-list"
             }
         }
     ]

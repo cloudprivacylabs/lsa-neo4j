@@ -17,38 +17,26 @@
             },
             "edges": [
                 {
+                    "to": 1,
+                    "label": "https://lschema.org/has"
+                },
+                {
                     "to": 2,
-                    "label": "https://lschema.org/has"
-                },
-                {
-                    "to": 6,
-                    "label": "https://lschema.org/has"
-                },
-                {
-                    "to": 8,
-                    "label": "https://lschema.org/has"
-                },
-                {
-                    "to": 26,
-                    "label": "https://lschema.org/has"
-                },
-                {
-                    "to": 27,
                     "label": "https://lschema.org/has"
                 }
             ]
         },
         {
-            "n": 9,
+            "n": 1,
             "labels": [
-                "https://lschema.org/DocumentNode",
-                "https://lschema.org/Object",
-                "Code"
+                "https://lschema.org/Value",
+                "https://lschema.org/DocumentNode"
             ],
             "properties": {
                 "https://lschema.org/attributeIndex": "0",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/gender/source",
-                "text": "Female"
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/birthDate",
+                "https://lschema.org/value": "1980-02-19",
+                "https://lschema.org/valueType": "ls:date"
             }
         },
         {
@@ -61,10 +49,15 @@
             "properties": {
                 "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/Condition",
                 "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/entityId": "condition_1",
                 "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/Condition/schema",
                 "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/conditions/element"
             },
             "edges": [
+                {
+                    "to": 3,
+                    "label": "https://lschema.org/has"
+                },
                 {
                     "to": 4,
                     "label": "https://lschema.org/has"
@@ -72,17 +65,19 @@
             ]
         },
         {
-            "n": 19,
+            "n": 3,
             "labels": [
                 "https://lschema.org/DocumentNode",
-                "https://lschema.org/Object",
-                "https://dartnet.info/graphModel/Measurement"
+                "https://lschema.org/Value"
             ],
             "properties": {
-                "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/Measurement",
-                "https://lschema.org/attributeIndex": "9",
-                "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/Measurement/schema",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/measurements/element"
+                "https://lschema.org/Reference/dir": "from",
+                "https://lschema.org/Reference/fkFor": "https://dartnet.info/graphModel/Person",
+                "https://lschema.org/Reference/fkValue": "123456576",
+                "https://lschema.org/Reference/label": "https://lschema.org/has",
+                "https://lschema.org/attributeIndex": "0",
+                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Condition/person",
+                "https://lschema.org/value": "123456576"
             }
         },
         {
@@ -97,108 +92,6 @@
                 "https://lschema.org/attributeIndex": "1",
                 "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Condition/source",
                 "text": "Problem-list"
-            }
-        },
-        {
-            "n": 8,
-            "labels": [
-                "https://lschema.org/DocumentNode",
-                "https://lschema.org/Object"
-            ],
-            "properties": {
-                "https://lschema.org/attributeIndex": "3",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/gender"
-            },
-            "edges": [
-                {
-                    "to": 9,
-                    "label": "https://lschema.org/has"
-                }
-            ]
-        },
-        {
-            "n": 6,
-            "labels": [
-                "https://lschema.org/Object",
-                "https://lschema.org/DocumentNode"
-            ],
-            "properties": {
-                "https://lschema.org/attributeIndex": "2",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/ethnicity"
-            },
-            "edges": [
-                {
-                    "to": 7,
-                    "label": "https://lschema.org/has"
-                }
-            ]
-        },
-        {
-            "n": 7,
-            "labels": [
-                "https://lschema.org/DocumentNode",
-                "https://lschema.org/Object",
-                "Code"
-            ],
-            "properties": {
-                "https://lschema.org/attributeIndex": "0",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/ethnicity/source",
-                "text": "Hispanic / Latino"
-            }
-        },
-        {
-            "n": 26,
-            "labels": [
-                "https://dartnet.info/graphModel/SomeNode",
-                "https://lschema.org/Object",
-                "https://lschema.org/DocumentNode"
-            ],
-            "properties": {
-                "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/PayerPlan",
-                "https://lschema.org/attributeIndex": "11",
-                "https://lschema.org/entityId": "somenode_1",
-                "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/SomeNode/schema",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/someNode/element"
-            },
-            "edges": [
-                {
-                    "to": 28,
-                    "label": "https://lschema.org/has"
-                }
-            ]
-        },
-        {
-            "n": 27,
-            "labels": [
-                "https://dartnet.info/graphModel/PayerPlan",
-                "https://lschema.org/Object",
-                "https://lschema.org/DocumentNode"
-            ],
-            "properties": {
-                "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/PayerPlan",
-                "https://lschema.org/attributeIndex": "11",
-                "https://lschema.org/entityId": "plan_1",
-                "https://lschema.org/entitySchema": "https://dartnet.info/graphModel/PayerPlan/schema",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/payerPlans/element"
-            },
-            "edges": [
-                {
-                    "to": 28,
-                    "label": "https://lschema.org/has"
-                }
-            ]
-        },
-        {
-            "n": 28,
-            "labels": [
-                "https://dartnet.info/graphModel/EDGE_FROM_PAYERPLAN_SOMENODE",
-                "https://lschema.org/Value",
-                "https://lschema.org/DocumentNode"
-            ],
-            "properties": {
-                "https://lschema.org/Reference/ref": "https://dartnet.info/graphModel/PayerPlan",
-                "https://lschema.org/attributeIndex": "11",
-                "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Person/payerPlans/element"
             }
         }
     ]
