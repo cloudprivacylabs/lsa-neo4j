@@ -12,6 +12,7 @@ import (
 
 type Delta interface {
 	WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery
+	Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error
 }
 
 type DeltaQuery struct {
@@ -19,7 +20,11 @@ type DeltaQuery struct {
 	Vars  map[string]interface{}
 }
 
-func selectDelta(in []Delta, flt func(Delta) bool) []Delta {
+func (d DeltaQuery) String() string {
+	return fmt.Sprintf("Statement: %s params: %s", d.Query, d.Vars)
+}
+
+func SelectDelta(in []Delta, flt func(Delta) bool) []Delta {
 	out := make([]Delta, 0, len(in))
 	for _, x := range in {
 		if flt(x) {
@@ -29,24 +34,23 @@ func selectDelta(in []Delta, flt func(Delta) bool) []Delta {
 	return out
 }
 
-type createNodeDelta struct {
-	labels     []string
-	properties map[string]interface{}
+type CreateNodeDelta struct {
+	dbNode *lpg.Node
 }
 
-type updateNodeDelta struct {
+type UpdateNodeDelta struct {
 	dbNode     *lpg.Node
 	labels     []string
 	properties map[string]interface{}
 }
 
-type createEdgeDelta struct {
+type CreateEdgeDelta struct {
 	fromDbNode, toDbNode *lpg.Node
 	label                string
 	properties           map[string]interface{}
 }
 
-type updateEdgeDelta struct {
+type UpdateEdgeDelta struct {
 	dbEdge     *lpg.Edge
 	properties map[string]interface{}
 }
@@ -85,7 +89,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 	for memNodes := memGraph.GetNodes(); memNodes.Next(); {
 		delete(unassociatedDbNodes, nodeAssociations[memNodes.Node()])
 	}
-
+	toCreate := make([]*lpg.Node, 0)
 	// Deal with standalone clusters
 	for memNodes := memGraph.GetNodes(); memNodes.Next(); {
 		memNode := memNodes.Node()
@@ -107,6 +111,9 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 			continue
 		}
 		// Create this node
+		toCreate = append(toCreate, memNode)
+	}
+	for _, memNode := range toCreate {
 		n, d := mergeNewNode(memNode, dbGraph)
 		if d != nil {
 			deltas = append(deltas, d)
@@ -114,6 +121,12 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 		nodeAssociations[memNode] = n
 	}
 
+	for nodes := memGraph.GetNodes(); nodes.Next(); {
+		node := nodes.Node()
+		if _, exists := nodeAssociations[node]; !exists {
+			panic(fmt.Sprintf("Unassociated node: %d %s", nodes.MaxSize(), node))
+		}
+	}
 	// Each entity is merged. Now we have to work on the edges that link
 	// entities, or edges between non-entity nodes Any unassociated memEdge needs to be
 	// dealt with
@@ -124,9 +137,12 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 		}
 		// From and to nodes must already be in the dbGraph
 		fromDbNode := nodeAssociations[edge.GetFrom()]
+		if fromDbNode == nil {
+			panic(fmt.Sprintf("Unassociated from node: %s -> %s\n", edge.GetFrom(), edge.GetTo()))
+		}
 		toDbNode := nodeAssociations[edge.GetTo()]
-		if fromDbNode == nil || toDbNode == nil {
-			panic(fmt.Sprintf("Unassociated edge: %s -> %s\n", edge.GetFrom(), edge.GetTo()))
+		if toDbNode == nil {
+			panic(fmt.Sprintf("Unassociated to node: %s -> %s\n", edge.GetFrom(), edge.GetTo()))
 		}
 		// The edge might already be in the dbgraph
 		found := false
@@ -394,8 +410,8 @@ func isNodeIdentical(n1, n2 *lpg.Node) bool {
 }
 
 func buildCreateNodeQueries(in []Delta, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) []DeltaQuery {
-	deltas := selectDelta(in, func(d Delta) bool {
-		_, ok := d.(createNodeDelta)
+	deltas := SelectDelta(in, func(d Delta) bool {
+		_, ok := d.(CreateNodeDelta)
 		return ok
 	})
 	ret := make([]DeltaQuery, 0, len(deltas))
@@ -419,7 +435,7 @@ func mergeNodes(memNode, dbNode *lpg.Node) Delta {
 	l := dbNode.GetLabels()
 	l.AddSet(memNode.GetLabels())
 	dbNode.SetLabels(l)
-	return updateNodeDelta{
+	return UpdateNodeDelta{
 		dbNode:     dbNode,
 		labels:     labels,
 		properties: props,
@@ -435,7 +451,7 @@ func mergeEdges(memEdge, dbEdge *lpg.Edge) Delta {
 	for k, v := range props {
 		dbEdge.SetProperty(k, v)
 	}
-	return updateEdgeDelta{
+	return UpdateEdgeDelta{
 		dbEdge:     dbEdge,
 		properties: props,
 	}
@@ -447,7 +463,7 @@ func mergeNewEdge(memEdge *lpg.Edge, nodeAssociations map[*lpg.Node]*lpg.Node) (
 	to := nodeAssociations[memEdge.GetTo()]
 	props := findPropDiff(memEdge, nil)
 	edge := from.GetGraph().NewEdge(from, to, memEdge.GetLabel(), props)
-	return edge, createEdgeDelta{
+	return edge, CreateEdgeDelta{
 		fromDbNode: from,
 		toDbNode:   to,
 		label:      memEdge.GetLabel(),
@@ -459,9 +475,8 @@ func mergeNewNode(memNode *lpg.Node, dbGraph *lpg.Graph) (*lpg.Node, Delta) {
 	props := findPropDiff(memNode, nil)
 	labels := memNode.GetLabels().Slice()
 	newNode := dbGraph.NewNode(labels, props)
-	return newNode, createNodeDelta{
-		labels:     labels,
-		properties: props,
+	return newNode, CreateNodeDelta{
+		dbNode: newNode,
 	}
 }
 
@@ -506,7 +521,7 @@ func findPropDiff(memObj, dbObj withProperty) map[string]interface{} {
 	return ret
 }
 
-func (un updateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+func (un UpdateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
 	sb := strings.Builder{}
 	prop := c.MakeProperties(mapWithProperty(un.properties), vars)
@@ -528,17 +543,41 @@ func (un updateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds ma
 	}
 }
 
-func (cn createNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+func (un UpdateNodeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
+	q := un.WriteQuery(dbNodeIds, dbEdgeIds, c)
+	_, err := tx.Run(q.Query, q.Vars)
+	if err != nil {
+		return fmt.Errorf("While running %s: %w", q, err)
+	}
+	return nil
+}
+
+func (cn CreateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
-	prop := c.MakeProperties(mapWithProperty(cn.properties), vars)
-	labels := c.MakeLabels(cn.labels)
+	prop := c.MakeProperties(cn.dbNode, vars)
+	labels := c.MakeLabels(cn.dbNode.GetLabels().Slice())
 	return DeltaQuery{
 		Query: fmt.Sprintf("CREATE (n%s %s) RETURN ID(n)", labels, prop),
 		Vars:  vars,
 	}
 }
 
-func (ce createEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+func (cn CreateNodeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
+	q := cn.WriteQuery(dbNodeIds, dbEdgeIds, c)
+	rec, err := tx.Run(q.Query, q.Vars)
+	if err != nil {
+		return fmt.Errorf("While running %s: %w", q, err)
+	}
+	records, err := rec.Single()
+	if err != nil {
+		return err
+	}
+	id := records.Values[0].(int64)
+	dbNodeIds[cn.dbNode] = id
+	return nil
+}
+
+func (ce CreateEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
 	label := c.MakeLabels([]string{ce.label})
 	props := c.MakeProperties(mapWithProperty(ce.properties), vars)
@@ -548,7 +587,13 @@ func (ce createEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds ma
 	}
 }
 
-func (ue updateEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+func (ce CreateEdgeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
+	q := ce.WriteQuery(dbNodeIds, dbEdgeIds, c)
+	_, err := tx.Run(q.Query, q.Vars)
+	return err
+}
+
+func (ue UpdateEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
 	props := c.MakeProperties(mapWithProperty(ue.properties), vars)
 	return DeltaQuery{
@@ -557,15 +602,22 @@ func (ue updateEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds ma
 	}
 }
 
+func (ue UpdateEdgeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
+	q := ue.WriteQuery(dbNodeIds, dbEdgeIds, c)
+	_, err := tx.Run(q.Query, q.Vars)
+	return err
+}
+
 func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config Config) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
 	_, rootIds, _, _, err := s.CollectEntityDBIds(tx, config, memGraph)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	g := ls.NewDocumentGraph()
 	if len(rootIds) == 0 {
-		return lpg.NewGraph(), make(map[*lpg.Node]int64), make(map[*lpg.Edge]int64), nil
+		return g, make(map[*lpg.Node]int64), make(map[*lpg.Edge]int64), nil
 	}
-	return loadGraphByEntities(tx, memGraph, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
+	return loadGraphByEntities(tx, g, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
 }
 
 func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
@@ -575,70 +627,60 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64,
 	// neo4j IDs
 	visitedNode := make(map[int64]*lpg.Node)
 	visitedEdge := make(map[int64]*lpg.Edge)
-	queue := make([]uint64, 0, len(rootIds))
+	queue := make(map[uint64]struct{}, len(rootIds))
 	for _, id := range rootIds {
-		queue = append(queue, uint64(id))
+		queue[uint64(id)] = struct{}{}
 	}
 
 	for len(queue) > 0 {
-		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
-		queue = queue[len(queue):]
+		q := make([]uint64, 0, len(queue))
+		for k := range queue {
+			q = append(q, k)
+		}
+		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, q)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		if len(srcNodes) == 0 || (len(adjNodes) == 0 && len(adjRelationships) == 0) {
 			break
 		}
+		queue = make(map[uint64]struct{})
+		makeNode := func(srcNode neo4jNode) *lpg.Node {
+			src := grph.NewNode(srcNode.labels, nil)
+			labels := make([]string, 0, len(srcNode.labels))
+			for _, lbl := range srcNode.labels {
+				labels = append(labels, config.Expand(lbl))
+			}
+			ss := lpg.NewStringSet(labels...)
+			if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
+				ss.Add(ls.DocumentNodeTerm)
+			}
+			src.SetLabels(ss)
+			// Set properties and node value
+			BuildNodePropertiesAfterLoad(src, srcNode.props, config)
+			nv := SetNodeValueAfterLoad(config, src, srcNode.props)
+			if nv != nil {
+				if err := ls.SetNodeValue(src, nv); err != nil {
+					panic(fmt.Errorf("Cannot set node value for %w %v", err, src))
+				}
+			}
+			visitedNode[srcNode.id] = src
+			return src
+		}
 		for _, srcNode := range srcNodes {
 			if _, seen := visitedNode[srcNode.id]; !seen {
-				src := grph.NewNode(srcNode.labels, nil)
-				labels := make([]string, 0, len(srcNode.labels))
-				for _, lbl := range srcNode.labels {
-					labels = append(labels, config.Expand(lbl))
-				}
-				ss := lpg.NewStringSet(labels...)
-				if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
-					ss.Add(ls.DocumentNodeTerm)
-				}
-				src.SetLabels(lpg.NewStringSet(labels...))
-				// Set properties and node value
-				BuildNodePropertiesAfterLoad(src, srcNode.props, config)
-				nv := SetNodeValueAfterLoad(config, src, srcNode.props)
-				if nv != nil {
-					if err := ls.SetNodeValue(src, nv); err != nil {
-						panic(fmt.Errorf("Cannot set node value for %w %v", err, src))
-					}
-				}
-				visitedNode[srcNode.id] = src
+				makeNode(srcNode)
 			}
 		}
 		for _, node := range adjNodes {
 			if _, seen := visitedNode[node.id]; !seen {
-				nd := grph.NewNode(node.labels, nil)
-				labels := make([]string, 0, len(node.labels))
-				for _, lbl := range node.labels {
-					labels = append(labels, config.Expand(lbl))
-				}
-				ss := lpg.NewStringSet(labels...)
-				if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
-					ss.Add(ls.DocumentNodeTerm)
-				}
-				nd.SetLabels(ss)
-				// Set properties and node value
-				BuildNodePropertiesAfterLoad(nd, node.props, config)
-				nv := SetNodeValueAfterLoad(config, nd, node.props)
-				if nv != nil {
-					if err := ls.SetNodeValue(nd, nv); err != nil {
-						panic(fmt.Errorf("Cannot set node value for %w %v", err, nd))
-					}
-				}
-				visitedNode[node.id] = nd
+				nd := makeNode(node)
 				if selectEntity != nil && selectEntity(nd) {
-					queue = append(queue, uint64(node.id))
+					queue[uint64(node.id)] = struct{}{}
 				}
 			}
 			if _, ok := node.props[config.Shorten(ls.EntitySchemaTerm)]; !ok {
-				queue = append(queue, uint64(node.id))
+				queue[uint64(node.id)] = struct{}{}
 			}
 		}
 		for _, edge := range adjRelationships {
