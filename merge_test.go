@@ -1,8 +1,10 @@
 package neo4j
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -10,13 +12,75 @@ import (
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/testcontainers/testcontainers-go"
 )
 
-const username = "neo4j"
-const pwd = "password"
-const uri = "neo4j://34.213.163.7"
-const port = 7687
-const db = "neo4j"
+func TestMergeNeo4j(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "LsaNeo4j Suite")
+}
+
+var _ = Describe("Driver", func() {
+	var ctx context.Context
+	var neo4jContainer testcontainers.Container
+	var session *Session
+	var driver neo4j.Driver
+	var tx neo4j.Transaction
+
+	var cfg Config
+	var memGraph *lpg.Graph
+	var err error
+	var deltas []Delta
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		var err error
+		neo4jContainer, err = startContainer(ctx, username, pwd)
+		Expect(err).To(BeNil(), "Container should start")
+		//port, err := neo4jContainer.MappedPort(ctx, "7687")
+		Expect(err).To(BeNil(), "Port should be resolved")
+		address := fmt.Sprintf("%s:%d", uri, port)
+		driver, err = neo4j.NewDriver(address, neo4j.BasicAuth(username, pwd, ""))
+		Expect(err).To(BeNil(), "Driver should be created")
+		err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
+		Expect(err).To(BeNil(), "Could not read file: %s", "lsaneo/lsaneo.config.yaml")
+		InitNamespaceTrie(&cfg)
+		memGraph, err = cmdutil.ReadJSONGraph([]string{"testdata/merge_11.json"}, nil)
+		Expect(err).To(BeNil(), "Could not read file: %s", "testdata/merge_11.json")
+	})
+
+	AfterEach(func() {
+		Close(driver, "Driver")
+		Expect(neo4jContainer.Terminate(ctx)).To(BeNil(), "Container should stop")
+	})
+
+	It("Post to database using merge", func() {
+		drv := NewDriver(driver, db)
+		session = drv.NewSession()
+		defer session.Close()
+		tx, err = session.BeginTransaction()
+		Expect(err).To(BeNil(), "must be valid transaction")
+		deltas, err = Merge(memGraph, nil, nil, nil, cfg)
+		Expect(err).To(BeNil(), "unable to post graph to empty database with merge")
+	})
+
+	It("Merge in-memory graph to db graph", func() {
+		dbGraph, ids, edgeIds, err := session.LoadDBGraph(tx, memGraph, cfg)
+		Expect(err).To(BeNil(), "cannot load graph from database")
+		deltas, err = Merge(memGraph, dbGraph, ids, edgeIds, cfg)
+		Expect(err).To(BeNil(), "unable to merge memory graph onto db graph")
+		expectedGraph, err := testLoadGraph("testdata/merge_12.json")
+		Expect(err).To(BeNil(), "unable to load graph")
+		if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
+		}
+		fmt.Println(deltas)
+		// actual db updates with deltas
+	})
+})
 
 func testLoadGraph(fname string) (*lpg.Graph, error) {
 	f, err := os.Open(fname)
