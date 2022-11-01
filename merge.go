@@ -524,8 +524,8 @@ func findPropDiff(memObj, dbObj withProperty) map[string]interface{} {
 func (un UpdateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
 	sb := strings.Builder{}
-	prop := c.MakeProperties(mapWithProperty(un.properties), vars)
-	labels := c.MakeLabels(un.labels)
+	prop := c.MakeProperties(un.dbNode, vars)
+	labels := c.MakeLabels(un.dbNode.GetLabels().Slice())
 	id, ok := dbNodeIds[un.dbNode]
 	if !ok {
 		panic(fmt.Sprintf("Node ID not known: %s", un.dbNode))
