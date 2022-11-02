@@ -66,17 +66,32 @@ var _ = Describe("Merge", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 		Expect(err).To(BeNil(), "must be valid transaction")
+		tx.Run("match (n) detach delete n", nil)
+		tx.Commit()
+
+		tx, err = session.BeginTransaction()
+		Expect(err).To(BeNil(), "must be valid transaction")
 		deltas, err = Merge(memGraph, ls.NewDocumentGraph(), nids, eids, cfg)
 		Expect(err).To(BeNil(), "unable to post graph to empty database with merge")
 		// apply deltas to database objects
-		for _, delta := range deltas {
+		for _, delta := range SelectDelta(deltas, func(d Delta) bool {
+			_, ok := d.(CreateNodeDelta)
+			return ok
+		}) {
+			err := delta.Run(tx, nids, eids, cfg)
+			Expect(err).To(BeNil(), "error posting to DB with delta: %v", delta)
+		}
+		for _, delta := range SelectDelta(deltas, func(d Delta) bool {
+			_, ok := d.(CreateNodeDelta)
+			return !ok
+		}) {
 			err := delta.Run(tx, nids, eids, cfg)
 			Expect(err).To(BeNil(), "error posting to DB with delta: %v", delta)
 		}
 		err := tx.Commit()
 		Expect(err).To(BeNil(), "error committing transaction to DB")
 		// compare new db graph to expected graph
-		expectedGraph, err := testLoadGraph("testdata/merge_12.json")
+		expectedGraph, err := testLoadGraph("result.json")
 		drv = NewDriver(driver, db)
 		session = drv.NewSession()
 		defer session.Close()
