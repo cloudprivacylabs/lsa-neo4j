@@ -93,14 +93,6 @@ var _ = Describe("Merge", func() {
 		tx, err = session.BeginTransaction()
 
 		dbGraph, nids, eids, err := session.LoadDBGraph(tx, memGraph, cfg)
-		m := ls.JSONMarshaler{}
-		f, err := os.Create("db_test.json")
-		b, _ := m.Marshal(dbGraph)
-		f.Write(b)
-		//
-		f, err = os.Create("exp_test.json")
-		b, _ = m.Marshal(expectedGraph)
-		f.Write(b)
 		if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
 			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
 		}

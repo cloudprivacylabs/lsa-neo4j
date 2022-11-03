@@ -1,0 +1,84 @@
+{
+    "nodes": [
+        {
+            "n": 0,
+            "labels": [
+                "Person",
+                "https://lschema.org/DocumentNode"
+            ],
+            "properties": {
+                "https://lschema.org/entityId": "0",
+                "https://lschema.org/entitySchema": "Schema for person"
+            },
+            "edges": [
+                {
+                    "to": 1,
+                    "label": "test"
+                }
+            ]
+        },
+        {
+            "n": 1,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "1",
+                "https://lschema.org/someBoolean": "false",
+                "https://lschema.org/someDate": "2006-01-02 00:00:00 -0800 PST",
+                "https://lschema.org/someDateTime": "2006-01-02 15:04:05 -0800 PST",
+                "https://lschema.org/someFloat": "3.05",
+                "https://lschema.org/someInteger": "1000",
+                "https://lschema.org/value": "6000",
+                "https://lschema.org/valueType": "int"
+            },
+            "edges": [
+                {
+                    "to": 2,
+                    "label": "test"
+                }
+            ]
+        },
+        {
+            "n": 2,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "2",
+                "https://lschema.org/someBoolean": "true",
+                "https://lschema.org/someDate": "2006-01-02 00:00:00 -0800 PST",
+                "https://lschema.org/someDateTime": "2006-01-02 15:04:05 -0800 PST",
+                "https://lschema.org/someFloat": "1.05",
+                "https://lschema.org/someInteger": "1500",
+                "https://lschema.org/value": "2006-01-02",
+                "https://lschema.org/valueType": "json:dateTime"
+            },
+            "edges": [
+                {
+                    "to": 3,
+                    "label": "test"
+                }
+            ]
+        },
+        {
+            "n": 3,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value"
+            ],
+            "properties": {
+                "https://lschema.org/attributeIndex": "3",
+                "https://lschema.org/someBoolean": "true",
+                "https://lschema.org/someDate": "2006-01-02 00:00:00 -0800 PST",
+                "https://lschema.org/someDateTime": "2006-01-02 07:00:00 -0800 PST",
+                "https://lschema.org/someFloat": "7.77",
+                "https://lschema.org/someInteger": "2300",
+                "https://lschema.org/value": "86900",
+                "https://lschema.org/valueType": "unix:time"
+            }
+        }
+    ]
+}

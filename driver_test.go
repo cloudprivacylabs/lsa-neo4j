@@ -50,7 +50,7 @@ var _ = Describe("Driver", func() {
 		Expect(err).To(BeNil(), "Could not read file: %s", "lsaneo/lsaneo.config.yaml")
 		InitNamespaceTrie(&cfg)
 		grph, err = cmdutil.ReadJSONGraph([]string{"testdata/config_test.json"}, nil)
-		Expect(err).To(BeNil(), "Could not read file: %s", "testdata/test.json")
+		Expect(err).To(BeNil(), "Could not read file: %s", "testdata/config_test.json")
 	})
 
 	AfterEach(func() {
@@ -76,12 +76,14 @@ var _ = Describe("Driver", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 		Expect(err).To(BeNil(), "must be valid transaction")
-		expectedGraph := ls.NewDocumentGraph()
-		_, err = loadEntityNodes(tx, expectedGraph, eids, cfg, findNeighbors, selectEntity)
+		dbGraph := ls.NewDocumentGraph()
+		_, err = loadEntityNodes(tx, dbGraph, eids, cfg, findNeighbors, selectEntity)
 		Expect(err).To(BeNil(), "unable to load nodes connected to entity", err)
 		// graph isomorphism
-		if !lpg.CheckIsomorphism(grph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
-			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(grph), testPrintGraph(expectedGraph))
+		expGrph, err := cmdutil.ReadJSONGraph([]string{"testdata/config_driver_expected.json"}, nil)
+		Expect(err).To(BeNil(), "Could not read file: %s", "testdata/config_driver_expected.json")
+		if !lpg.CheckIsomorphism(expGrph, dbGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(grph), testPrintGraph(dbGraph))
 		}
 	})
 })

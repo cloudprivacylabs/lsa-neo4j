@@ -346,6 +346,12 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 			node.SetProperty(key, ls.StringSlicePropertyValue(key, slProps))
 		case time.Time:
 			node.SetProperty(key, ls.StringPropertyValue(key, v.(time.Time).String()))
+		case types.TimeOfDay:
+			node.SetProperty(key, ls.StringPropertyValue(key, v.(types.TimeOfDay).ToTime().String()))
+		case types.Date:
+			node.SetProperty(key, ls.StringPropertyValue(key, v.(types.Date).ToTime().String()))
+		case types.DateTime:
+			node.SetProperty(key, ls.StringPropertyValue(key, v.(types.DateTime).ToTime().String()))
 		}
 	}
 
@@ -355,13 +361,7 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 		if expandedKey == ls.NodeValueTerm {
 			continue
 		}
-		vt := cfg.Shorten(cfg.PropertyTypes[expandedKey])
-		if vt != "" && k != expandedKey {
-			native := neo4jValueToNativeValue(v)
-			buildNodeProperties(expandedKey, native)
-		} else {
-			buildNodeProperties(expandedKey, v)
-		}
+		buildNodeProperties(expandedKey, neo4jValueToNativeValue(v))
 	}
 }
 
@@ -542,7 +542,7 @@ func neo4jValueToNativeValue(val interface{}) interface{} {
 			Milliseconds: int64(x.Second() / 1000),
 			Hour:         int64(x.Hour()),
 			Nanoseconds:  int64(x.Nanosecond()),
-			Location:     x.Location(),
+			Location:     x.Local().Location(),
 		}
 		return tm
 	case neo4j.LocalTime:
@@ -553,7 +553,7 @@ func neo4jValueToNativeValue(val interface{}) interface{} {
 			Hour:         int64(x.Hour()),
 			Minute:       int64(x.Minute()),
 			Nanoseconds:  int64(x.Nanosecond()),
-			Location:     x.Location(),
+			Location:     x.Local().Location(),
 		}
 		fmt.Println(tm.String())
 		return tm
@@ -563,7 +563,7 @@ func neo4jValueToNativeValue(val interface{}) interface{} {
 			Month:    int(x.Month()),
 			Day:      x.Day(),
 			Year:     x.Year(),
-			Location: x.Location(),
+			Location: x.Local().Location(),
 		}
 		return tm
 	}
