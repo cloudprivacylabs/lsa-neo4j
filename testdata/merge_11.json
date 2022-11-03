@@ -412,8 +412,8 @@
             "properties": {
                 "https://lschema.org/attributeIndex": "2",
                 "https://lschema.org/schemaNodeId": "https://dartnet.info/graphModel/Condition/start",
-                "https://lschema.org/value": "2021-10-13T00:00:00Z",
-                "https://lschema.org/valueType": "ls:dateTime"
+                "https://lschema.org/value": "2021-10-13",
+                "https://lschema.org/valueType": "ls:date"
             }
         },
         {

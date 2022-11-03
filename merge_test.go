@@ -66,11 +66,6 @@ var _ = Describe("Merge", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 		Expect(err).To(BeNil(), "must be valid transaction")
-		tx.Run("match (n) detach delete n", nil)
-		tx.Commit()
-
-		tx, err = session.BeginTransaction()
-		Expect(err).To(BeNil(), "must be valid transaction")
 		deltas, err = Merge(memGraph, ls.NewDocumentGraph(), nids, eids, cfg)
 		Expect(err).To(BeNil(), "unable to post graph to empty database with merge")
 		// apply deltas to database objects
@@ -91,21 +86,21 @@ var _ = Describe("Merge", func() {
 		err := tx.Commit()
 		Expect(err).To(BeNil(), "error committing transaction to DB")
 		// compare new db graph to expected graph
-		expectedGraph, err := testLoadGraph("result.json")
+		expectedGraph, err := testLoadGraph("testdata/merge_12.json")
 		drv = NewDriver(driver, db)
 		session = drv.NewSession()
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 
 		dbGraph, nids, eids, err := session.LoadDBGraph(tx, memGraph, cfg)
-		// m := ls.JSONMarshaler{}
-		// f, err := os.Create("db_test.json")
-		// b, _ := m.Marshal(dbGraph)
-		// f.Write(b)
-		// //
-		// f, err = os.Create("exp_test.json")
-		// b, _ = m.Marshal(expectedGraph)
-		// f.Write(b)
+		m := ls.JSONMarshaler{}
+		f, err := os.Create("db_test.json")
+		b, _ := m.Marshal(dbGraph)
+		f.Write(b)
+		//
+		f, err = os.Create("exp_test.json")
+		b, _ = m.Marshal(expectedGraph)
+		f.Write(b)
 		if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
 			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
 		}
@@ -134,14 +129,6 @@ var _ = Describe("Merge", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 		dbGraph, nids, eids, err = session.LoadDBGraph(tx, memGraph, cfg)
-		// m := ls.JSONMarshaler{}
-		// f, err := os.Create("db_test.json")
-		// b, _ := m.Marshal(dbGraph)
-		// f.Write(b)
-		// //
-		// f, err = os.Create("exp_test.json")
-		// b, _ = m.Marshal(expectedGraph)
-		// f.Write(b)
 		if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
 			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
 		}
@@ -219,6 +206,17 @@ func checkEdgeEquivalence(e1, e2 *lpg.Edge) bool {
 		return false
 	}
 	return true
+}
+
+func TestMerge11_10(t *testing.T) {
+	_, dbGraph, _, _, _, _, err := testGraphMerge("testdata/merge_11.json", "testdata/merge_10.json")
+	expectedGraph, err := testLoadGraph("testdata/merge_12.json")
+	if err != nil {
+		t.Error(err)
+	}
+	if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
+	}
 }
 
 func TestMerge14_13(t *testing.T) {

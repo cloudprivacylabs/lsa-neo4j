@@ -222,6 +222,9 @@ func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lp
 	// 		}
 	// 	}
 	// }
+	for _, id := range mappedEntities {
+		eids = append(eids, id)
+	}
 	return eids, nil
 }
 
@@ -329,6 +332,8 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 			node.SetProperty(key, ls.StringPropertyValue(key, f))
 		case int:
 			node.SetProperty(key, ls.IntPropertyValue(key, v.(int)))
+		case int64:
+			node.SetProperty(key, ls.IntPropertyValue(key, int(v.(int64))))
 		case string:
 			node.SetProperty(key, ls.StringPropertyValue(key, v.(string)))
 		case []interface{}:
@@ -339,6 +344,8 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 				slProps = append(slProps, form)
 			}
 			node.SetProperty(key, ls.StringSlicePropertyValue(key, slProps))
+		case time.Time:
+			node.SetProperty(key, ls.StringPropertyValue(key, v.(time.Time).String()))
 		}
 	}
 
@@ -351,7 +358,7 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 		vt := cfg.Shorten(cfg.PropertyTypes[expandedKey])
 		if vt != "" && k != expandedKey {
 			native := neo4jValueToNativeValue(v)
-			node.SetProperty(expandedKey, native)
+			buildNodeProperties(expandedKey, native)
 		} else {
 			buildNodeProperties(expandedKey, v)
 		}
@@ -548,6 +555,7 @@ func neo4jValueToNativeValue(val interface{}) interface{} {
 			Nanoseconds:  int64(x.Nanosecond()),
 			Location:     x.Location(),
 		}
+		fmt.Println(tm.String())
 		return tm
 	case neo4j.Date:
 		x := val.Time()
