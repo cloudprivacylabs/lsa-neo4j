@@ -10,6 +10,35 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
+type DBGraph struct {
+	G *lpg.Graph
+
+	NodeIds map[*lpg.Node]int64
+	Nodes   map[int64]*lpg.Node
+	EdgeIds map[*lpg.Edge]int64
+	Edges   map[int64]*lpg.Edge
+}
+
+func NewDBGraph(g *lpg.Graph) *DBGraph {
+	return &DBGraph{
+		G:       g,
+		NodeIds: make(map[*lpg.Node]int64),
+		Nodes:   make(map[int64]*lpg.Node),
+		EdgeIds: make(map[*lpg.Edge]int64),
+		Edges:   make(map[int64]*lpg.Edge),
+	}
+}
+
+func (dbg *DBGraph) NewNode(node *lpg.Node, dbID int64) {
+	dbg.Nodes[dbID] = node
+	dbg.NodeIds[node] = dbID
+}
+
+func (dbg *DBGraph) NewEdge(edge *lpg.Edge, dbID int64) {
+	dbg.Edges[dbID] = edge
+	dbg.EdgeIds[edge] = dbID
+}
+
 type Delta interface {
 	WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery
 	Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error
@@ -55,15 +84,15 @@ type UpdateEdgeDelta struct {
 	properties map[string]interface{}
 }
 
-func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges map[*lpg.Edge]int64, config Config) ([]Delta, error) {
+func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
-	dbEntitiesMap := ls.GetEntityInfo(dbGraph)
+	dbEntitiesMap := ls.GetEntityInfo(dbGraph.G)
 	nodeAssociations := make(map[*lpg.Node]*lpg.Node)
 	edgeAssociations := make(map[*lpg.Edge]*lpg.Edge)
 	deltas := make([]Delta, 0)
 	unassociatedDbNodes := make(map[*lpg.Node]struct{})
 	// Put all dbNodes into a set, We will remove those that are associated later
-	for dbNodes := dbGraph.GetNodes(); dbNodes.Next(); {
+	for dbNodes := dbGraph.G.GetNodes(); dbNodes.Next(); {
 		dbNode := dbNodes.Node()
 		unassociatedDbNodes[dbNode] = struct{}{}
 	}
@@ -82,7 +111,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 				}
 			}
 		}
-		deltas = append(deltas, mergeSubtree(n, foundDBEntity, dbGraph, dbGraphIds, dbEdges, nodeAssociations, edgeAssociations)...)
+		deltas = append(deltas, mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations)...)
 	}
 
 	// Remove all db nodes that are associated with a memnode
@@ -114,7 +143,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 		toCreate = append(toCreate, memNode)
 	}
 	for _, memNode := range toCreate {
-		n, d := mergeNewNode(memNode, dbGraph)
+		n, d := mergeNewNode(memNode, dbGraph.G)
 		if d != nil {
 			deltas = append(deltas, d)
 		}
@@ -195,7 +224,7 @@ func Merge(memGraph, dbGraph *lpg.Graph, dbGraphIds map[*lpg.Node]int64, dbEdges
 // counterparts. When merge is done, the subtree rooted at dbRoot
 // contains everything in the subtree under memRoot, and deltas
 // contain everything that changed.
-func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *lpg.Graph, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, nodeAssociations map[*lpg.Node]*lpg.Node, edgeAssociations map[*lpg.Edge]*lpg.Edge) []Delta {
+func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations map[*lpg.Node]*lpg.Node, edgeAssociations map[*lpg.Edge]*lpg.Edge) []Delta {
 	seenMemNodes := make(map[*lpg.Node]struct{})
 	queuedMemNodes := make(map[*lpg.Node]struct{})
 	// Add the memRoot to the queue
@@ -223,7 +252,7 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *lpg.Graph, dbNodeIds map[*
 		// If there is not a matching dbNode, create one
 		matchingDbNode := nodeAssociations[currentMemNode]
 		if matchingDbNode == nil {
-			newNode, delta := mergeNewNode(currentMemNode, dbGraph)
+			newNode, delta := mergeNewNode(currentMemNode, dbGraph.G)
 			matchingDbNode = newNode
 			ret = append(ret, delta)
 			nodeAssociations[currentMemNode] = matchingDbNode
@@ -314,7 +343,7 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *lpg.Graph, dbNodeIds map[*
 					nodeAssociations[toNode] = matchingAttribute
 				} else {
 					// No matching attribute node, create a new one
-					newNode, d := mergeNewNode(toNode, dbGraph)
+					newNode, d := mergeNewNode(toNode, dbGraph.G)
 					ret = append(ret, d)
 					nodeAssociations[toNode] = newNode
 					// And create a new edge
@@ -522,6 +551,16 @@ func findPropDiff(memObj, dbObj withProperty) map[string]interface{} {
 }
 
 func (un UpdateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+	hasProperties := false
+	for k := range un.properties {
+		if len(c.Shorten(k)) > 0 {
+			hasProperties = true
+		}
+	}
+	// If the properties to be updated has no intersection with the delta properties, then they are empty
+	if !hasProperties && len(un.labels) == 0 {
+		return DeltaQuery{}
+	}
 	vars := make(map[string]interface{})
 	sb := strings.Builder{}
 	prop := c.MakeProperties(un.dbNode, vars)
@@ -545,6 +584,9 @@ func (un UpdateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds ma
 
 func (un UpdateNodeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
 	q := un.WriteQuery(dbNodeIds, dbEdgeIds, c)
+	if len(q.Query) == 0 {
+		return nil
+	}
 	_, err := tx.Run(q.Query, q.Vars)
 	if err != nil {
 		return fmt.Errorf("While running %s: %w", q, err)
@@ -608,25 +650,28 @@ func (ue UpdateEdgeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int6
 	return err
 }
 
-func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config Config) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
+func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config Config) (*DBGraph, error) {
 	_, rootIds, _, _, err := s.CollectEntityDBIds(tx, config, memGraph)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	g := ls.NewDocumentGraph()
+	dbg := NewDBGraph(g)
 	if len(rootIds) == 0 {
-		return g, make(map[*lpg.Node]int64), make(map[*lpg.Edge]int64), nil
+		return dbg, nil
 	}
-	return loadGraphByEntities(tx, g, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
+	err = loadGraphByEntities(tx, dbg, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
+	if err != nil {
+		return nil, err
+	}
+	return dbg, nil
 }
 
-func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
+func loadGraphByEntities(tx neo4j.Transaction, grph *DBGraph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) error {
 	if len(rootIds) == 0 {
-		return nil, nil, nil, fmt.Errorf("Empty entity schema nodes")
+		return fmt.Errorf("Empty entity schema nodes")
 	}
 	// neo4j IDs
-	visitedNode := make(map[int64]*lpg.Node)
-	visitedEdge := make(map[int64]*lpg.Edge)
 	queue := make(map[uint64]struct{}, len(rootIds))
 	for _, id := range rootIds {
 		queue[uint64(id)] = struct{}{}
@@ -639,14 +684,14 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64,
 		}
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, q)
 		if err != nil {
-			return nil, nil, nil, err
+			return err
 		}
 		if len(srcNodes) == 0 || (len(adjNodes) == 0 && len(adjRelationships) == 0) {
 			break
 		}
 		queue = make(map[uint64]struct{})
 		makeNode := func(srcNode neo4jNode) *lpg.Node {
-			src := grph.NewNode(srcNode.labels, nil)
+			src := grph.G.NewNode(srcNode.labels, nil)
 			labels := make([]string, 0, len(srcNode.labels))
 			for _, lbl := range srcNode.labels {
 				labels = append(labels, config.Expand(lbl))
@@ -664,16 +709,16 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64,
 					panic(fmt.Errorf("Cannot set node value for %w %v", err, src))
 				}
 			}
-			visitedNode[srcNode.id] = src
+			grph.NewNode(src, srcNode.id)
 			return src
 		}
 		for _, srcNode := range srcNodes {
-			if _, seen := visitedNode[srcNode.id]; !seen {
+			if _, seen := grph.Nodes[srcNode.id]; !seen {
 				makeNode(srcNode)
 			}
 		}
 		for _, node := range adjNodes {
-			if _, seen := visitedNode[node.id]; !seen {
+			if _, seen := grph.Nodes[node.id]; !seen {
 				nd := makeNode(node)
 				if selectEntity != nil && selectEntity(nd) {
 					queue[uint64(node.id)] = struct{}{}
@@ -684,19 +729,13 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64,
 			}
 		}
 		for _, edge := range adjRelationships {
-			src := visitedNode[edge.startId]
-			target := visitedNode[edge.endId]
-			e := grph.NewEdge(src, target, config.Expand(edge.types), edge.props)
-			visitedEdge[edge.id] = e
+			if _, seen := grph.Edges[edge.id]; !seen {
+				src := grph.Nodes[edge.startId]
+				target := grph.Nodes[edge.endId]
+				e := grph.G.NewEdge(src, target, config.Expand(edge.types), edge.props)
+				grph.NewEdge(e, edge.id)
+			}
 		}
 	}
-	mappedIds := make(map[*lpg.Node]int64)
-	mappedEdgeIds := make(map[*lpg.Edge]int64)
-	for id, n := range visitedNode {
-		mappedIds[n] = id
-	}
-	for id, e := range visitedEdge {
-		mappedEdgeIds[e] = id
-	}
-	return grph, mappedIds, mappedEdgeIds, nil
+	return nil
 }

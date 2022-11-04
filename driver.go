@@ -321,16 +321,18 @@ func SetNodeValueAfterLoad(cfg Config, node *lpg.Node, input map[string]interfac
 func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, cfg Config) {
 	var buildNodeProperties func(key string, v interface{})
 	buildNodeProperties = func(key string, v interface{}) {
-		switch v.(type) {
+		switch val := v.(type) {
 		case bool:
-			node.SetProperty(key, ls.StringPropertyValue(key, fmt.Sprintf("%v", v.(bool))))
+			node.SetProperty(key, ls.StringPropertyValue(key, fmt.Sprintf("%v", val)))
 		case float64:
-			f := strconv.FormatFloat(v.(float64), 'f', -1, 64)
+			f := strconv.FormatFloat(val, 'f', -1, 64)
 			node.SetProperty(key, ls.StringPropertyValue(key, f))
 		case int:
-			node.SetProperty(key, ls.IntPropertyValue(key, v.(int)))
+			node.SetProperty(key, ls.IntPropertyValue(key, val))
+		case int64:
+			node.SetProperty(key, ls.IntPropertyValue(key, int(val)))
 		case string:
-			node.SetProperty(key, ls.StringPropertyValue(key, v.(string)))
+			node.SetProperty(key, ls.StringPropertyValue(key, val))
 		case []interface{}:
 			isl := v.([]interface{})
 			slProps := make([]string, 0, len(isl))
@@ -481,7 +483,7 @@ func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config)
 		return entityDBIds, entityIds, nil
 	}
 	idTerm := config.Shorten(ls.EntityIDTerm)
-	query := fmt.Sprintf("MATCH (n) WHERE n.`%s` IS NOT NULL RETURN ID(n), n.`%s`", idTerm, idTerm)
+	query := fmt.Sprintf("MATCH (n) WHERE n.`%s` IN $ids RETURN ID(n), n.`%s`", idTerm, idTerm)
 	idrec, err := tx.Run(query, map[string]interface{}{"ids": ids})
 	if err != nil {
 		return entityDBIds, entityIds, err
