@@ -443,7 +443,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, co
 	return dbIds, nil
 }
 
-func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *lpg.Graph) ([]*lpg.Node, []int64, []string, []string, error) {
+func CollectEntityRoots(grph *lpg.Graph) ([]string, []*lpg.Node) {
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]*lpg.Node, 0)
 
@@ -462,6 +462,11 @@ func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *
 			}
 		}
 	}
+	return nonemptyEntityNodeIds, entities
+}
+
+func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *lpg.Graph) ([]*lpg.Node, []int64, []string, []string, error) {
+	nonemptyEntityNodeIds, entities := CollectEntityRoots(grph)
 	entityDBIds, entityIds, err := s.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
 		return nil, nil, nil, nil, err
