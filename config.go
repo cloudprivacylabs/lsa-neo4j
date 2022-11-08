@@ -1,11 +1,13 @@
 package neo4j
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
-	"github.com/cloudprivacylabs/lpg"
+	"github.com/araddon/dateparse"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/nleeper/goment"
 )
 
 type Config struct {
@@ -70,16 +72,69 @@ func (cfg Config) MakeLabels(types []string) string {
 }
 
 // GetNativePropertyValue is called during building properties for save and when the expanded property key exists in the config.
-func (cfg Config) GetNativePropertyValue(node *lpg.Node, expandedPropertyKey, val string) interface{} {
-	if _, exists := cfg.PropertyTypes[expandedPropertyKey]; exists {
-		va := ls.GetValueAccessor(cfg.PropertyTypes[expandedPropertyKey])
-		native, err := va.GetNativeValue(val, node)
-		if err != nil {
-			panic(fmt.Errorf("Cannot get native value for %v, %w", node, err))
-		}
-		return native
+func (cfg Config) GetNeo4jPropertyValue(expandedPropertyKey string, val string) (interface{}, error) {
+	prop, exists := cfg.PropertyTypes[expandedPropertyKey]
+	if !exists {
+		return val, nil
 	}
-	return val
+	var propType string
+	var format string
+	prefix := strings.Index(prop, ",")
+	if prefix == -1 {
+		propType = prop
+	} else {
+		propType = strings.TrimSpace(prop[:prefix])
+		format = strings.TrimSpace(prop[prefix+1:])
+	}
+	var v interface{}
+	var err error
+	switch propType {
+	case "Integer":
+		v, err = strconv.Atoi(val)
+		if err != nil {
+			return nil, err
+		}
+	case "Float":
+		v, err = strconv.ParseFloat(val, 64)
+		if err != nil {
+			return nil, err
+		}
+	case "Boolean":
+		v, err = strconv.ParseBool(val)
+		if err != nil {
+			return nil, err
+		}
+	case "Date":
+		if format != "" {
+			gmt, err := goment.New(val, format)
+			if err != nil {
+				return nil, err
+			}
+			v = neo4j.DateOf(gmt.ToTime())
+		} else {
+			t, err := dateparse.ParseAny(val)
+			if err != nil {
+				return nil, err
+			}
+			v = neo4j.DateOf(t)
+		}
+	case "DateTime":
+		if format != "" {
+			gmt, err := goment.New(val, format)
+			if err != nil {
+				return nil, err
+			}
+			v = neo4j.LocalDateTimeOf(gmt.ToTime())
+		} else {
+			t, err := dateparse.ParseAny(val)
+			if err != nil {
+				return nil, err
+			}
+			v = neo4j.LocalDateTimeOf(t)
+		}
+	}
+
+	return nativeValueToNeo4jValue(v), nil
 }
 
 func (cfg Config) Shorten(fullName string) string {

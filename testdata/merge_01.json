@@ -1,0 +1,31 @@
+{
+    "description": "pre-existing graph in the database",
+    "nodes": [
+       {
+            "n":0,
+            "labels": [
+                    "https://lschema.org/DocumentNode",
+                    "https://lschema.org/Object",
+                    "Person"
+                ],
+            "properties": {
+                "https://lschema.org/entityId": "entityId",
+                "https://lschema.org/entitySchema": "Schema for person"
+            }
+        },
+        {
+            "n":1,
+            "labels": [
+                "https://lschema.org/DocumentNode",
+                "https://lschema.org/Value",
+                "test"
+                ],
+            "properties": { 
+                "value": ["1","2"]
+            }
+        }
+    ],
+    "edges": [
+        { "from": 0, "to": 1, "label": " " }
+    ]
+}
