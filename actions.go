@@ -34,7 +34,6 @@ func (q *JobQueue) Run(ctx *ls.Context, tx neo4j.Transaction, cfg Config, nodeMa
 	if batchSize == 0 {
 		batchSize = DEFAULT_BATCH_SIZE
 	}
-	vars := make(map[string]interface{})
 	for len(q.deleteNodes) > 0 {
 		batch := len(q.deleteNodes)
 		if batch > batchSize {
@@ -52,13 +51,24 @@ func (q *JobQueue) Run(ctx *ls.Context, tx neo4j.Transaction, cfg Config, nodeMa
 	for len(q.deleteEdges) > 0 {
 
 	}
-	for len(q.createNodes) > 0 {
-		batch := len(q.createNodes)
+	if err := CreateNodesBatch(ctx, tx, q.createNodes, nodeMap, cfg, batchSize); err != nil {
+		return err
+	}
+	if err := CreateEdgesBatch(ctx, tx, q.createEdges, nodeMap, cfg, batchSize); err != nil {
+		return err
+	}
+	return nil
+}
+
+func CreateNodesBatch(ctx *ls.Context, tx neo4j.Transaction, createNodes []*lpg.Node, nodeMap map[*lpg.Node]uint64, cfg Config, batchSize int) error {
+	vars := make(map[string]interface{})
+	for len(createNodes) > 0 {
+		batch := len(createNodes)
 		if batch > batchSize {
 			batch = batchSize
 		}
 		// create nodes in batches
-		query := buildCreateQuery(q.createNodes[:batch], cfg, vars)
+		query := buildCreateQuery(createNodes[:batch], cfg, vars)
 		ctx.GetLogger().Debug(map[string]interface{}{"createNodes": query, "vars": vars})
 		idrec, err := tx.Run(query, vars)
 		if err != nil {
@@ -71,19 +81,24 @@ func (q *JobQueue) Run(ctx *ls.Context, tx neo4j.Transaction, cfg Config, nodeMa
 		ctx.GetLogger().Debug(map[string]interface{}{"createNodes": "done", "records": records.Values})
 		// track database IDs into nodeMap
 		for i, rec := range records.Values {
-			nodeMap[q.createNodes[i]] = uint64(rec.(int64))
+			nodeMap[createNodes[i]] = uint64(rec.(int64))
 		}
 		// dequeue nodes based on batch size
-		q.createNodes = q.createNodes[batch:]
+		createNodes = createNodes[batch:]
 	}
-	for len(q.createEdges) > 0 {
-		batch := len(q.createEdges)
+	return nil
+}
+
+func CreateEdgesBatch(ctx *ls.Context, tx neo4j.Transaction, createEdges []*lpg.Edge, nodeMap map[*lpg.Node]uint64, cfg Config, batchSize int) error {
+	vars := make(map[string]interface{})
+	for len(createEdges) > 0 {
+		batch := len(createEdges)
 		if batch > batchSize {
 			batch = batchSize
 		}
 		// create edges in batches
-		query := buildConnectQuery(q.createEdges[:batch], cfg, nodeMap)
-		q.createEdges = q.createEdges[batch:]
+		query := buildConnectQuery(createEdges[:batch], cfg, nodeMap)
+		createEdges = createEdges[batch:]
 		_, err := tx.Run(query, vars)
 		if err != nil {
 			return err
