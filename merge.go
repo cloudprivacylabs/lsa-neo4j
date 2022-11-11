@@ -141,7 +141,6 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 		}
 		deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
 	}
-	duplicateCreateNode(deltas, "end")
 
 	// Remove all db nodes that are associated with a memnode
 	for memNodes := memGraph.GetNodes(); memNodes.Next(); {
@@ -175,7 +174,6 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 		n, d := mergeNewNode(memNode, dbGraph.G)
 		if d != nil {
 			deltas = append(deltas, d)
-			duplicateCreateNode(deltas, "178")
 		}
 		nodeAssociations[memNode] = n
 	}
@@ -286,7 +284,6 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations 
 			deltas = append(deltas, delta)
 			nodeAssociations[currentMemNode] = matchingDbNode
 			lineMap[currentMemNode] = 290
-			duplicateCreateNode(deltas, "290")
 		} else {
 			// There is matching node, merge it
 			d := mergeNodes(currentMemNode, matchingDbNode)
@@ -380,7 +377,6 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations 
 						deltas = append(deltas, d)
 						nodeAssociations[toMemNode] = newNode
 						associatedDbNode = newNode
-						duplicateCreateNode(deltas, "383")
 					}
 					// And create a new edge
 					e, d := mergeNewEdge(edge, nodeAssociations)
