@@ -33,7 +33,7 @@ var _ = Describe("Driver", func() {
 
 	var cfg Config
 	var grph *lpg.Graph
-	var eids []uint64
+	var eids []int64
 	var err error
 
 	BeforeEach(func() {

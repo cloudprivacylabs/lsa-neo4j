@@ -34,8 +34,6 @@ var _ = Describe("Merge", func() {
 	var memGraph *lpg.Graph
 	var err error
 	var deltas []Delta
-	var nids = make(map[*lpg.Node]int64)
-	var eids = make(map[*lpg.Edge]int64)
 
 	BeforeEach(func() {
 		ctx = context.Background()
@@ -66,21 +64,22 @@ var _ = Describe("Merge", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 		Expect(err).To(BeNil(), "must be valid transaction")
-		deltas, err = Merge(memGraph, ls.NewDocumentGraph(), nids, eids, cfg)
+		dbGraph := NewDBGraph(lpg.NewGraph())
+		deltas, err = Merge(memGraph, dbGraph, cfg)
 		Expect(err).To(BeNil(), "unable to post graph to empty database with merge")
 		// apply deltas to database objects
 		for _, delta := range SelectDelta(deltas, func(d Delta) bool {
 			_, ok := d.(CreateNodeDelta)
 			return ok
 		}) {
-			err := delta.Run(tx, nids, eids, cfg)
+			err := delta.Run(tx, dbGraph.NodeIds, dbGraph.EdgeIds, cfg)
 			Expect(err).To(BeNil(), "error posting to DB with delta: %v", delta)
 		}
 		for _, delta := range SelectDelta(deltas, func(d Delta) bool {
 			_, ok := d.(CreateNodeDelta)
 			return !ok
 		}) {
-			err := delta.Run(tx, nids, eids, cfg)
+			err := delta.Run(tx, dbGraph.NodeIds, dbGraph.EdgeIds, cfg)
 			Expect(err).To(BeNil(), "error posting to DB with delta: %v", delta)
 		}
 		err := tx.Commit()
@@ -92,9 +91,9 @@ var _ = Describe("Merge", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 
-		dbGraph, nids, eids, err := session.LoadDBGraph(tx, memGraph, cfg)
-		if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
-			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
+		loadedDbGraph, err := session.LoadDBGraph(tx, memGraph, cfg)
+		if !lpg.CheckIsomorphism(dbGraph.G, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(loadedDbGraph.G), testPrintGraph(expectedGraph))
 		}
 
 		// load graph from database and merge in-memory graph onto db graph
@@ -103,13 +102,13 @@ var _ = Describe("Merge", func() {
 		defer session.Close()
 		tx, err = session.BeginTransaction()
 		Expect(err).To(BeNil(), "must be valid transaction")
-		dbGraph, nids, eids, err = session.LoadDBGraph(tx, memGraph, cfg)
+		loadedDbGraph, err = session.LoadDBGraph(tx, memGraph, cfg)
 		Expect(err).To(BeNil(), "cannot load graph from database")
-		deltas, err = Merge(memGraph, dbGraph, nids, eids, cfg)
+		deltas, err = Merge(memGraph, loadedDbGraph, cfg)
 		Expect(err).To(BeNil(), "unable to merge memory graph onto db graph")
 		// apply deltas to database objects
 		for _, delta := range deltas {
-			err := delta.Run(tx, nids, eids, cfg)
+			err := delta.Run(tx, loadedDbGraph.NodeIds, loadedDbGraph.EdgeIds, cfg)
 			Expect(err).To(BeNil(), "error posting to DB with delta: %v", delta)
 		}
 		err = tx.Commit()
@@ -120,9 +119,9 @@ var _ = Describe("Merge", func() {
 		session = drv.NewSession()
 		defer session.Close()
 		tx, err = session.BeginTransaction()
-		dbGraph, nids, eids, err = session.LoadDBGraph(tx, memGraph, cfg)
-		if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
-			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
+		loadedDbGraph, err = session.LoadDBGraph(tx, memGraph, cfg)
+		if !lpg.CheckIsomorphism(dbGraph.G, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(loadedDbGraph.G), testPrintGraph(expectedGraph))
 		}
 	})
 })
@@ -146,8 +145,8 @@ func testPrintGraph(g *lpg.Graph) string {
 	return string(result)
 }
 
-func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, *lpg.Graph, []Delta, map[*lpg.Node]int64, map[*lpg.Edge]int64, Config, error) {
-	dbGraph, dbNodeIds, dbEdgeIds, err := mockLoadGraph(dbGraphFile)
+func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, *DBGraph, []Delta, Config, error) {
+	dbGraph, err := mockLoadGraph(dbGraphFile)
 	if err != nil {
 		return nil, nil, nil, Config{}, err
 	}
@@ -200,13 +199,13 @@ func checkEdgeEquivalence(e1, e2 *lpg.Edge) bool {
 }
 
 func TestMerge11_10(t *testing.T) {
-	_, dbGraph, _, _, _, _, err := testGraphMerge("testdata/merge_11.json", "testdata/merge_10.json")
+	_, dbGraph, _, _, err := testGraphMerge("testdata/merge_11.json", "testdata/merge_10.json")
 	expectedGraph, err := testLoadGraph("testdata/merge_12.json")
 	if err != nil {
 		t.Error(err)
 	}
-	if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
-		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
+	if !lpg.CheckIsomorphism(dbGraph.G, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph.G), testPrintGraph(expectedGraph))
 	}
 }
 
