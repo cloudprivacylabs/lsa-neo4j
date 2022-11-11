@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/cloudprivacylabs/lpg"
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
+	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/spf13/cobra"
 )
 
@@ -31,28 +34,55 @@ var (
 				return err
 			}
 
-			dbGraph, ids, edgeIds, err := session.LoadDBGraph(tx, memGraph, cfg)
+			dbGraph, err := session.LoadDBGraph(tx, memGraph, cfg)
 			if err != nil {
 				return err
 			}
-			dbGraphEmpty := dbGraph.NumNodes() == 0 && dbGraph.NumEdges() == 0
-			dbGraph, deltas, err := neo.Merge(memGraph, dbGraph, ids, edgeIds, cfg)
+			deltas, err := neo.Merge(memGraph, dbGraph, cfg)
 			if err != nil {
 				return err
 			}
-			if dbGraphEmpty {
-				dbGraphIds := make(map[*lpg.Node]int64)
-				if err := neo.CreateNodes(tx, deltas, cfg, dbGraphIds); err != nil {
-					return err
-				}
-				if err := neo.CreateEdges(tx, deltas, cfg, dbGraphIds); err != nil {
-					return err
-				}
+
+			ctx := ls.NewContext(context.Background())
+			createNodeDeltas := neo.SelectDelta(deltas, func(d neo.Delta) bool {
+				_, ok := d.(neo.CreateNodeDelta)
+				return ok
+			})
+			nodes := make([]*lpg.Node, 0, len(createNodeDeltas))
+			for _, x := range createNodeDeltas {
+				nodes = append(nodes, x.(neo.CreateNodeDelta).DBNode)
 			}
-			if err := neo.RunUpdateOperations(tx, deltas, cfg); err != nil {
-				tx.Rollback()
+			if err := neo.CreateNodesUnwind(ctx, tx, nodes, dbGraph.NodeIds, cfg); err != nil {
 				return err
 			}
+
+			createEdgeDeltas := neo.SelectDelta(deltas, func(d neo.Delta) bool {
+				_, ok := d.(neo.CreateEdgeDelta)
+				return ok
+			})
+			edges := make([]*lpg.Edge, 0, len(createEdgeDeltas))
+			for _, c := range createEdgeDeltas {
+				edges = append(edges, c.(neo.CreateEdgeDelta).DBEdge)
+			}
+			if err := neo.CreateEdgesUnwind(ctx, tx, edges, dbGraph.NodeIds, cfg); err != nil {
+				return err
+			}
+
+			updateDeltas := neo.SelectDelta(deltas, func(d neo.Delta) bool {
+				if _, ok := d.(neo.CreateNodeDelta); ok {
+					return false
+				}
+				if _, ok := d.(neo.CreateEdgeDelta); ok {
+					return false
+				}
+				return true
+			})
+			for _, c := range updateDeltas {
+				if err := c.Run(tx, dbGraph.NodeIds, dbGraph.EdgeIds, cfg); err != nil {
+					return err
+				}
+			}
+
 			tx.Commit()
 			return nil
 		},

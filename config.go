@@ -59,6 +59,17 @@ func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) 
 	return props
 }
 
+func (cfg Config) MakePropertiesObj(x withProperty) map[string]interface{} {
+	propMap := make(map[string]*ls.PropertyValue)
+	for k, v := range ls.PropertiesAsMap(x) {
+		short := cfg.Shorten(k)
+		if short != "" {
+			propMap[short] = v
+		}
+	}
+	return buildDBPropertiesForSaveObj(cfg, x, propMap)
+}
+
 func (cfg Config) MakeLabels(types []string) string {
 	var mapped []string
 	for _, t := range types {

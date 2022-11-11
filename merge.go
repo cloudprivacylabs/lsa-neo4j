@@ -64,7 +64,8 @@ func SelectDelta(in []Delta, flt func(Delta) bool) []Delta {
 }
 
 type CreateNodeDelta struct {
-	dbNode *lpg.Node
+	DBNode  *lpg.Node
+	MemNode *lpg.Node
 }
 
 type UpdateNodeDelta struct {
@@ -74,6 +75,8 @@ type UpdateNodeDelta struct {
 }
 
 type CreateEdgeDelta struct {
+	DBEdge *lpg.Edge
+
 	fromDbNode, toDbNode *lpg.Node
 	label                string
 	properties           map[string]interface{}
@@ -82,6 +85,31 @@ type CreateEdgeDelta struct {
 type UpdateEdgeDelta struct {
 	dbEdge     *lpg.Edge
 	properties map[string]interface{}
+}
+
+var lineMap = map[*lpg.Node]int{}
+
+func duplicateCreateNode(delta []Delta, msg string) bool {
+	for _, d := range delta {
+		n1, ok := d.(CreateNodeDelta)
+		if !ok {
+			continue
+		}
+		for _, x := range delta {
+			if x == d {
+				continue
+			}
+			n2, ok := x.(CreateNodeDelta)
+			if !ok {
+				continue
+			}
+			if n1.MemNode == n2.MemNode {
+				fmt.Println(msg, lineMap[n1.MemNode])
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
@@ -111,8 +139,9 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 				}
 			}
 		}
-		deltas = append(deltas, mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations)...)
+		deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
 	}
+	duplicateCreateNode(deltas, "end")
 
 	// Remove all db nodes that are associated with a memnode
 	for memNodes := memGraph.GetNodes(); memNodes.Next(); {
@@ -146,6 +175,7 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 		n, d := mergeNewNode(memNode, dbGraph.G)
 		if d != nil {
 			deltas = append(deltas, d)
+			duplicateCreateNode(deltas, "178")
 		}
 		nodeAssociations[memNode] = n
 	}
@@ -224,7 +254,7 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 // counterparts. When merge is done, the subtree rooted at dbRoot
 // contains everything in the subtree under memRoot, and deltas
 // contain everything that changed.
-func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations map[*lpg.Node]*lpg.Node, edgeAssociations map[*lpg.Edge]*lpg.Edge) []Delta {
+func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations map[*lpg.Node]*lpg.Node, edgeAssociations map[*lpg.Edge]*lpg.Edge, deltas []Delta) []Delta {
 	seenMemNodes := make(map[*lpg.Node]struct{})
 	queuedMemNodes := make(map[*lpg.Node]struct{})
 	// Add the memRoot to the queue
@@ -232,7 +262,6 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations 
 	if dbRoot != nil {
 		nodeAssociations[memRoot] = dbRoot
 	}
-	ret := make([]Delta, 0)
 	// Process the queue until nothing left
 	for len(queuedMemNodes) > 0 {
 
@@ -254,23 +283,24 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations 
 		if matchingDbNode == nil {
 			newNode, delta := mergeNewNode(currentMemNode, dbGraph.G)
 			matchingDbNode = newNode
-			ret = append(ret, delta)
+			deltas = append(deltas, delta)
 			nodeAssociations[currentMemNode] = matchingDbNode
+			lineMap[currentMemNode] = 290
+			duplicateCreateNode(deltas, "290")
 		} else {
 			// There is matching node, merge it
 			d := mergeNodes(currentMemNode, matchingDbNode)
 			if d != nil {
-				ret = append(ret, d)
+				deltas = append(deltas, d)
 			}
-			nodeAssociations[currentMemNode] = matchingDbNode
 		}
 
 		parentArray := currentMemNode.GetLabels().Has(ls.AttributeTypeArray)
 		// Find nodes that are one step away
 		for edges := currentMemNode.GetEdges(lpg.OutgoingEdge); edges.Next(); {
 			edge := edges.Edge()
-			toNode := edge.GetTo()
-			if edge.GetFrom() == toNode {
+			toMemNode := edge.GetTo()
+			if edge.GetFrom() == toMemNode {
 				// This is a self-loop
 
 				// Find a self-loop in dbnode with the same label
@@ -282,29 +312,29 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations 
 						edgeAssociations[edge] = dbEdge
 						d := mergeEdges(edge, dbEdge)
 						if d != nil {
-							ret = append(ret, d)
+							deltas = append(deltas, d)
 						}
 					}
 				}
 				if !found {
 					// Create the edge
 					e, d := mergeNewEdge(edge, nodeAssociations)
-					ret = append(ret, d)
+					deltas = append(deltas, d)
 					edgeAssociations[edge] = e
 				}
 				continue
 			}
 			// Do not cross into a new entity
-			if ls.IsNodeEntityRoot(toNode) {
+			if ls.IsNodeEntityRoot(toMemNode) {
 				continue
 			}
 			// Here, we found a new node that belongs to this entity
 			// Queue the new node, so it can be processed next time around
-			queuedMemNodes[toNode] = struct{}{}
+			queuedMemNodes[toMemNode] = struct{}{}
 
 			// Now we have to find the db counterpart of toNode
 			// If it is already known, we're done
-			if _, exists := nodeAssociations[toNode]; exists {
+			if _, exists := nodeAssociations[toMemNode]; exists {
 				continue
 			}
 
@@ -317,13 +347,13 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations 
 			for dbEdges := matchingDbNode.GetEdgesWithLabel(lpg.OutgoingEdge, edge.GetLabel()); dbEdges.Next(); {
 				dbEdge := dbEdges.Edge()
 				dbNode := dbEdge.GetTo()
-				if isNodeIdentical(toNode, dbNode) {
-					nodeAssociations[toNode] = dbNode
+				if isNodeIdentical(toMemNode, dbNode) {
+					nodeAssociations[toMemNode] = dbNode
 					edgeAssociations[edge] = dbEdge
 					found = true
 					break
 				}
-				if !parentArray && ls.AsPropertyValue(toNode.GetProperty(ls.SchemaNodeIDTerm)).IsEqual(ls.AsPropertyValue(dbNode.GetProperty(ls.SchemaNodeIDTerm))) {
+				if !parentArray && ls.AsPropertyValue(toMemNode.GetProperty(ls.SchemaNodeIDTerm)).IsEqual(ls.AsPropertyValue(dbNode.GetProperty(ls.SchemaNodeIDTerm))) {
 					if matchingAttribute == nil {
 						matchingAttribute = dbNode
 					} else {
@@ -336,25 +366,31 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations 
 			if !found {
 				if matchingAttribute != nil {
 					// We found the matching attribute node
-					d := mergeNodes(toNode, matchingAttribute)
+					d := mergeNodes(toMemNode, matchingAttribute)
 					if d != nil {
-						ret = append(ret, d)
+						deltas = append(deltas, d)
 					}
-					nodeAssociations[toNode] = matchingAttribute
+					nodeAssociations[toMemNode] = matchingAttribute
 				} else {
-					// No matching attribute node, create a new one
-					newNode, d := mergeNewNode(toNode, dbGraph.G)
-					ret = append(ret, d)
-					nodeAssociations[toNode] = newNode
+					// No matching attribute node, create a new one or use associated
+					associatedDbNode := nodeAssociations[toMemNode]
+					if associatedDbNode == nil {
+						// Create node
+						newNode, d := mergeNewNode(toMemNode, dbGraph.G)
+						deltas = append(deltas, d)
+						nodeAssociations[toMemNode] = newNode
+						associatedDbNode = newNode
+						duplicateCreateNode(deltas, "383")
+					}
 					// And create a new edge
 					e, d := mergeNewEdge(edge, nodeAssociations)
 					edgeAssociations[edge] = e
-					ret = append(ret, d)
+					deltas = append(deltas, d)
 				}
 			}
 		}
 	}
-	return ret
+	return deltas
 }
 
 // Return true if n1 contained in n2
@@ -497,6 +533,7 @@ func mergeNewEdge(memEdge *lpg.Edge, nodeAssociations map[*lpg.Node]*lpg.Node) (
 		toDbNode:   to,
 		label:      memEdge.GetLabel(),
 		properties: props,
+		DBEdge:     edge,
 	}
 }
 
@@ -505,7 +542,8 @@ func mergeNewNode(memNode *lpg.Node, dbGraph *lpg.Graph) (*lpg.Node, Delta) {
 	labels := memNode.GetLabels().Slice()
 	newNode := dbGraph.NewNode(labels, props)
 	return newNode, CreateNodeDelta{
-		dbNode: newNode,
+		DBNode:  newNode,
+		MemNode: memNode,
 	}
 }
 
@@ -596,8 +634,8 @@ func (un UpdateNodeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int6
 
 func (cn CreateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
-	prop := c.MakeProperties(cn.dbNode, vars)
-	labels := c.MakeLabels(cn.dbNode.GetLabels().Slice())
+	prop := c.MakeProperties(cn.DBNode, vars)
+	labels := c.MakeLabels(cn.DBNode.GetLabels().Slice())
 	return DeltaQuery{
 		Query: fmt.Sprintf("CREATE (n%s %s) RETURN ID(n)", labels, prop),
 		Vars:  vars,
@@ -615,7 +653,7 @@ func (cn CreateNodeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int6
 		return err
 	}
 	id := records.Values[0].(int64)
-	dbNodeIds[cn.dbNode] = id
+	dbNodeIds[cn.DBNode] = id
 	return nil
 }
 
@@ -667,18 +705,18 @@ func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config 
 	return dbg, nil
 }
 
-func loadGraphByEntities(tx neo4j.Transaction, grph *DBGraph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) error {
+func loadGraphByEntities(tx neo4j.Transaction, grph *DBGraph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) error {
 	if len(rootIds) == 0 {
 		return fmt.Errorf("Empty entity schema nodes")
 	}
 	// neo4j IDs
-	queue := make(map[uint64]struct{}, len(rootIds))
+	queue := make(map[int64]struct{}, len(rootIds))
 	for _, id := range rootIds {
-		queue[uint64(id)] = struct{}{}
+		queue[int64(id)] = struct{}{}
 	}
 
 	for len(queue) > 0 {
-		q := make([]uint64, 0, len(queue))
+		q := make([]int64, 0, len(queue))
 		for k := range queue {
 			q = append(q, k)
 		}
@@ -689,7 +727,7 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *DBGraph, rootIds []int64, c
 		if len(srcNodes) == 0 || (len(adjNodes) == 0 && len(adjRelationships) == 0) {
 			break
 		}
-		queue = make(map[uint64]struct{})
+		queue = make(map[int64]struct{})
 		makeNode := func(srcNode neo4jNode) *lpg.Node {
 			src := grph.G.NewNode(srcNode.labels, nil)
 			labels := make([]string, 0, len(srcNode.labels))
@@ -721,11 +759,11 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *DBGraph, rootIds []int64, c
 			if _, seen := grph.Nodes[node.id]; !seen {
 				nd := makeNode(node)
 				if selectEntity != nil && selectEntity(nd) {
-					queue[uint64(node.id)] = struct{}{}
+					queue[int64(node.id)] = struct{}{}
 				}
 			}
 			if _, ok := node.props[config.Shorten(ls.EntitySchemaTerm)]; !ok {
-				queue[uint64(node.id)] = struct{}{}
+				queue[int64(node.id)] = struct{}{}
 			}
 		}
 		for _, edge := range adjRelationships {
