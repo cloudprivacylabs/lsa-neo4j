@@ -149,41 +149,40 @@ func testPrintGraph(g *lpg.Graph) string {
 func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, *lpg.Graph, []Delta, map[*lpg.Node]int64, map[*lpg.Edge]int64, Config, error) {
 	dbGraph, dbNodeIds, dbEdgeIds, err := mockLoadGraph(dbGraphFile)
 	if err != nil {
-		return nil, nil, nil, nil, nil, Config{}, err
+		return nil, nil, nil, Config{}, err
 	}
 	memGraph, err := testLoadGraph(memGraphFile)
 	var cfg Config
 
 	err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, nil, nil, nil, nil, Config{}, err
+		return nil, nil, nil, Config{}, err
 	}
 	InitNamespaceTrie(&cfg)
-	d, err := Merge(memGraph, dbGraph, dbNodeIds, dbEdgeIds, cfg)
+	d, err := Merge(memGraph, dbGraph, cfg)
 	if err != nil {
-		return nil, nil, nil, nil, nil, Config{}, err
+		return nil, nil, nil, Config{}, err
 	}
-	return memGraph, dbGraph, d, dbNodeIds, dbEdgeIds, cfg, nil
+	return memGraph, dbGraph, d, cfg, nil
 }
 
-func mockLoadGraph(filename string) (*lpg.Graph, map[*lpg.Node]int64, map[*lpg.Edge]int64, error) {
+func mockLoadGraph(filename string) (*DBGraph, error) {
 	grph, err := testLoadGraph(filename)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
+	ret := NewDBGraph(grph)
 	var ix int
-	mockNodeIDs := make(map[*lpg.Node]int64)
 	for nodeItr := grph.GetNodes(); nodeItr.Next(); ix++ {
 		node := nodeItr.Node()
-		mockNodeIDs[node] = int64(ix)
+		ret.NewNode(node, int64(ix))
 	}
 	ix = 0
-	mockEdgeIDs := make(map[*lpg.Edge]int64)
 	for edgeItr := grph.GetEdges(); edgeItr.Next(); ix++ {
 		edge := edgeItr.Edge()
-		mockEdgeIDs[edge] = int64(ix)
+		ret.NewEdge(edge, int64(ix))
 	}
-	return grph, mockNodeIDs, mockEdgeIDs, nil
+	return ret, nil
 }
 
 func checkNodeEquivalence(n1, n2 *lpg.Node) bool {
@@ -212,43 +211,43 @@ func TestMerge11_10(t *testing.T) {
 }
 
 func TestMerge14_13(t *testing.T) {
-	_, dbGraph, _, _, _, _, err := testGraphMerge("testdata/merge_14.json", "testdata/merge_13.json")
+	_, dbGraph, _, _, err := testGraphMerge("testdata/merge_14.json", "testdata/merge_13.json")
 	expectedGraph, err := testLoadGraph("testdata/merge_15.json")
 	if err != nil {
 		t.Error(err)
 	}
-	if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
-		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
+	if !lpg.CheckIsomorphism(dbGraph.G, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph.G), testPrintGraph(expectedGraph))
 	}
 }
 
 func TestMerge16_17(t *testing.T) {
-	_, dbGraph, _, _, _, _, err := testGraphMerge("testdata/merge_16.json", "testdata/merge_17.json")
+	_, dbGraph, _, _, err := testGraphMerge("testdata/merge_16.json", "testdata/merge_17.json")
 	expectedGraph, err := testLoadGraph("testdata/merge_1617.json")
 	if err != nil {
 		t.Error(err)
 	}
-	if !lpg.CheckIsomorphism(dbGraph, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
-		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph), testPrintGraph(expectedGraph))
+	if !lpg.CheckIsomorphism(dbGraph.G, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
+		log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(dbGraph.G), testPrintGraph(expectedGraph))
 	}
 }
 
 func TestMergeG1Emp(t *testing.T) {
-	mem, db, _, _, _, _, err := testGraphMerge("testdata/g1.json", "testdata/empty.json")
+	mem, db, _, _, err := testGraphMerge("testdata/g1.json", "testdata/empty.json")
 	if err != nil {
 		t.Error(err)
 	}
-	if !lpg.CheckIsomorphism(mem, db, checkNodeEquivalence, checkEdgeEquivalence) {
+	if !lpg.CheckIsomorphism(mem, db.G, checkNodeEquivalence, checkEdgeEquivalence) {
 		t.Errorf("Not eq")
 	}
 }
 
 func TestMergeFromExistEmp(t *testing.T) {
-	mem, db, _, _, _, _, err := testGraphMerge("testdata/from_exist.json", "testdata/empty.json")
+	mem, db, _, _, err := testGraphMerge("testdata/from_exist.json", "testdata/empty.json")
 	if err != nil {
 		t.Error(err)
 	}
-	if !lpg.CheckIsomorphism(mem, db, checkNodeEquivalence, checkEdgeEquivalence) {
+	if !lpg.CheckIsomorphism(mem, db.G, checkNodeEquivalence, checkEdgeEquivalence) {
 		t.Errorf("Not eq")
 	}
 

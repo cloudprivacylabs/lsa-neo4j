@@ -35,7 +35,7 @@ var (
 					if err != nil {
 						return err
 					}
-					return session.LoadEntityNodes(tx, grph, []uint64{uint64(id)}, cfg, f)
+					return session.LoadEntityNodes(tx, grph, []int64{int64(id)}, cfg, f)
 				}
 				loadByEntityID := func(f func(*lpg.Node) bool) error {
 					return session.LoadEntityNodesByEntityId(tx, grph, []string{arg}, cfg, f)

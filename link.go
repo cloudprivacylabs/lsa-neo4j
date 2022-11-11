@@ -101,7 +101,7 @@ func (spec linkSpec) getForeignKeys(entityRoot *lpg.Node) ([][]string, error) {
 	return fks, nil
 }
 
-func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]uint64) error {
+func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]int64) error {
 	links := make([]linkSpec, 0)
 	// Does the entity have any outstanding links we need to work on?
 	var itrErr error
@@ -146,7 +146,7 @@ func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config,
 	return linkToThisEntity(ctx, tx, config, entityRoot, id, nodeMap)
 }
 
-func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]uint64) error {
+func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]int64) error {
 	foreignKeys, err := spec.getForeignKeys(entityRoot)
 	if err != nil {
 		return err
@@ -196,7 +196,7 @@ func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRo
 }
 
 // ID is entity id of entity root
-func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, ID []string, nodeMap map[*lpg.Node]uint64) error {
+func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, ID []string, nodeMap map[*lpg.Node]int64) error {
 	// TODO: Search for all nodes with Ref to this entity, and link them
 	vars := make(map[string]interface{})
 	_, ok := entityRoot.GetProperty(ls.EntitySchemaTerm)

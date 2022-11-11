@@ -122,10 +122,10 @@ github.com/cilium/ebpf v0.6.2/go.mod h1:4tRaxcgiL706VnOzHOdBlY8IEAIdxINsQBcU4xJJ
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cloudprivacylabs/lpg v1.0.10 h1:QF849RJGz4RyFvrLEutjXVNwaefnnLMtImMVeq3qlO0=
 github.com/cloudprivacylabs/lpg v1.0.10/go.mod h1:3bLpI1OIk3h/ZVfGhq3sdULexmVbd7qANVhVSYbvCe8=
-github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220930162948-3724bfdf6d24 h1:Kzp8mwO7Nn2J1a+gnuXXETYeMPDOqOTE0phKlejLmDk=
-github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220930162948-3724bfdf6d24/go.mod h1:qYB8erpCHtS0Y+vbhgQtcoM/iMYEEIJYFXSrMrOdWZQ=
-github.com/cloudprivacylabs/opencypher v1.0.0-beta-7.0.20220920225214-cab0c9322e95 h1:N8chnp0twK5omAEkWkqJ7WqoPfaeYnLffQ10JvEpv9Q=
-github.com/cloudprivacylabs/opencypher v1.0.0-beta-7.0.20220920225214-cab0c9322e95/go.mod h1:hHIgITNUzUjtcPrdD7YvAVv18tIoCyPnXOlMWd2p0/A=
+github.com/cloudprivacylabs/lsa v1.0.0-beta-18 h1:kj5KtS1SMg1ZcXdLt9YhSEwXT+RgRnu5GCfRdVGDTbU=
+github.com/cloudprivacylabs/lsa v1.0.0-beta-18/go.mod h1:BsrApuFrleLwwx5wr2cT7FbkIbfckemQDta1GOCErqg=
+github.com/cloudprivacylabs/opencypher v1.0.0-beta-9 h1:ziarbKpRQiZ58dE8GyyYPrkVC+ABo7sADTotPILpBV4=
+github.com/cloudprivacylabs/opencypher v1.0.0-beta-9/go.mod h1:3Ttn9wqZrtJxAFhmT16PUrS3O3cbJwWrI5cr08kh8nw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/cockroachdb/datadriven v0.0.0-20190809214429-80d97fb3cbaa/go.mod h1:zn76sxSg3SzpJ0PPJaLDCu+Bu0Lg3sKTORVIj19EIF8=
 github.com/containerd/aufs v0.0.0-20200908144142-dab0cbea06f4/go.mod h1:nukgQABAEopAHvB6j7cnP5zJ+/3aVcE7hCYqvIwAHyE=
@@ -528,8 +528,8 @@ github.com/neo4j/neo4j-go-driver v1.8.3 h1:yfuo9YBAlezdIiogu92GwEir/81RD81dNwS5m
 github.com/neo4j/neo4j-go-driver v1.8.3/go.mod h1:ncO5VaFWh0Nrt+4KT4mOZboaczBZcLuHrG+/sUeP8gI=
 github.com/neo4j/neo4j-go-driver/v4 v4.3.3 h1:QwM0IN1L6q1+N9cNqjv9Pmj4J4qCVauczQZdFsDafv8=
 github.com/neo4j/neo4j-go-driver/v4 v4.3.3/go.mod h1:G+DuMWSR9Auvbm6tk+fHNIegnfswAsmXgP/ibvwOY2Q=
-github.com/nleeper/goment v1.4.2 h1:r4c8KkCrsBJUnVi/IJ5HEqev5QY8aCWOXQtu+eYXtnI=
-github.com/nleeper/goment v1.4.2/go.mod h1:zDl5bAyDhqxwQKAvkSXMRLOdCowrdZz53ofRJc4VhTo=
+github.com/nleeper/goment v1.4.4 h1:GlMTpxvhueljArSunzYjN9Ri4SOmpn0Vh2hg2z/IIl8=
+github.com/nleeper/goment v1.4.4/go.mod h1:zDl5bAyDhqxwQKAvkSXMRLOdCowrdZz53ofRJc4VhTo=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=

@@ -6,19 +6,16 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/cloudprivacylabs/lpg v1.0.10
-	github.com/cloudprivacylabs/lsa v1.0.0-beta9.0.20220930162948-3724bfdf6d24
+	github.com/cloudprivacylabs/lsa v1.0.0-beta-18
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
-	github.com/nleeper/goment v1.4.2
+	github.com/nleeper/goment v1.4.4
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
 	github.com/spf13/cobra v1.1.3
 	github.com/testcontainers/testcontainers-go v0.13.0
 )
 
-require (
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
-)
+require gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -29,7 +26,7 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210803070921-b358b509191a // indirect
 	github.com/bserdar/jsonstream v0.0.0-20190428032403-9f1769267072 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
-	github.com/cloudprivacylabs/opencypher v1.0.0-beta-7.0.20220920225214-cab0c9322e95 // indirect
+	github.com/cloudprivacylabs/opencypher v1.0.0-beta-9 // indirect
 	github.com/containerd/cgroups v1.0.1 // indirect
 	github.com/containerd/containerd v1.5.9 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
@@ -46,6 +43,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/sys/mount v0.2.0 // indirect
 	github.com/moby/sys/mountinfo v0.5.0 // indirect

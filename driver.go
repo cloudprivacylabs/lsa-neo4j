@@ -8,6 +8,7 @@ package neo4j
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -60,9 +61,9 @@ func (s *Session) Logf(format string, a ...interface{}) {
 }
 
 // Insert creates or adds to a graph on a database; does not check existing nodes
-func Insert(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEntity func(lpg.Node) bool, config Config, batch int) ([]uint64, error) {
-	eids := make([]uint64, 0)
-	mappedEntities := make(map[*lpg.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
+func Insert(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEntity func(lpg.Node) bool, config Config, batch int) ([]int64, error) {
+	eids := make([]int64, 0)
+	mappedEntities := make(map[*lpg.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]*lpg.Node, 0)
 	allNodes := make(map[*lpg.Node]struct{})
@@ -126,10 +127,10 @@ func Insert(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.G
 }
 
 // SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j IDs of the entity nodes
-func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEntity func(*lpg.Node) bool, config Config, batch int) ([]uint64, error) {
+func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEntity func(*lpg.Node) bool, config Config, batch int) ([]int64, error) {
 	ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "start"})
-	eids := make([]uint64, 0)
-	mappedEntities := make(map[*lpg.Node]uint64) // holds all neo4j id's of entity schema and nonempty entity id
+	eids := make([]int64, 0)
+	mappedEntities := make(map[*lpg.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
 	allNodes := make(map[*lpg.Node]struct{})
 
 	entities, entityDBIds, entityIds, nonemptyEntityNodeIds, err := session.CollectEntityDBIds(tx, config, grph)
@@ -151,12 +152,12 @@ func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lp
 				if len(ids) > 0 {
 					eid := strings.Join(ids, ",")
 					if entityIds[ix] == eid {
-						mappedEntities[node] = uint64(entityDBIds[ix])
+						mappedEntities[node] = int64(entityDBIds[ix])
 						eids = append(eids, mappedEntities[node])
 					}
 				} else {
 					if entityIds[ix] == id {
-						mappedEntities[node] = uint64(entityDBIds[ix])
+						mappedEntities[node] = int64(entityDBIds[ix])
 						eids = append(eids, mappedEntities[node])
 					}
 				}
@@ -180,8 +181,8 @@ func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lp
 	jobs := &JobQueue{
 		createNodes: make([]*lpg.Node, 0),
 		createEdges: make([]*lpg.Edge, 0),
-		deleteNodes: make([]uint64, 0),
-		deleteEdges: make([]uint64, 0),
+		deleteNodes: make([]int64, 0),
+		deleteEdges: make([]int64, 0),
 	}
 	for _, entity := range entities {
 		id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
@@ -228,7 +229,7 @@ func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lp
 	return eids, nil
 }
 
-func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, config Config, selectEntity func(*lpg.Node) bool) error {
+func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, config Config, selectEntity func(*lpg.Node) bool) error {
 	_, err := loadEntityNodes(tx, grph, rootIds, config, findNeighbors, selectEntity)
 	return err
 }
@@ -239,11 +240,11 @@ func (s *Session) LoadEntityNodesByEntityId(tx neo4j.Transaction, grph *lpg.Grap
 	if err != nil {
 		return err
 	}
-	ids := make([]uint64, 0)
+	ids := make([]int64, 0)
 	for res.Next() {
 		record := res.Record()
 		v := record.Values[0].(int64)
-		ids = append(ids, uint64(v))
+		ids = append(ids, int64(v))
 	}
 
 	_, err = loadEntityNodes(tx, grph, ids, config, findNeighbors, selectEntity)
@@ -284,7 +285,7 @@ func newEdge(ob1 neo4j.Relationship) neo4jEdge {
 	return ob2
 }
 
-func findNeighbors(tx neo4j.Transaction, ids []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
+func findNeighbors(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
 	sources := make([]neo4jNode, 0)
 	targets := make([]neo4jNode, 0)
 	edges := make([]neo4jEdge, 0)
@@ -324,18 +325,18 @@ func SetNodeValueAfterLoad(cfg Config, node *lpg.Node, input map[string]interfac
 func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, cfg Config) {
 	var buildNodeProperties func(key string, v interface{})
 	buildNodeProperties = func(key string, v interface{}) {
-		switch v.(type) {
+		switch val := v.(type) {
 		case bool:
-			node.SetProperty(key, ls.StringPropertyValue(key, fmt.Sprintf("%v", v.(bool))))
+			node.SetProperty(key, ls.StringPropertyValue(key, fmt.Sprintf("%v", val)))
 		case float64:
-			f := strconv.FormatFloat(v.(float64), 'f', -1, 64)
+			f := strconv.FormatFloat(val, 'f', -1, 64)
 			node.SetProperty(key, ls.StringPropertyValue(key, f))
 		case int:
-			node.SetProperty(key, ls.IntPropertyValue(key, v.(int)))
+			node.SetProperty(key, ls.IntPropertyValue(key, val))
 		case int64:
-			node.SetProperty(key, ls.IntPropertyValue(key, int(v.(int64))))
+			node.SetProperty(key, ls.IntPropertyValue(key, int(val)))
 		case string:
-			node.SetProperty(key, ls.StringPropertyValue(key, v.(string)))
+			node.SetProperty(key, ls.StringPropertyValue(key, val))
 		case []interface{}:
 			isl := v.([]interface{})
 			slProps := make([]string, 0, len(isl))
@@ -365,15 +366,15 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 	}
 }
 
-func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, config Config, loadNeighbors func(neo4j.Transaction, []uint64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) ([]int64, error) {
+func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) ([]int64, error) {
 	if len(rootIds) == 0 {
 		return nil, fmt.Errorf("Empty entity schema nodes")
 	}
 	// neo4j IDs
 	visitedNode := make(map[int64]*lpg.Node)
-	queue := make([]uint64, 0, len(rootIds))
+	queue := make([]int64, 0, len(rootIds))
 	for _, id := range rootIds {
-		queue = append(queue, uint64(id))
+		queue = append(queue, int64(id))
 	}
 
 	for len(queue) > 0 {
@@ -430,11 +431,11 @@ func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, co
 				}
 				visitedNode[node.id] = nd
 				if selectEntity != nil && selectEntity(nd) {
-					queue = append(queue, uint64(node.id))
+					queue = append(queue, int64(node.id))
 				}
 			}
 			if _, ok := node.props[config.Shorten(ls.EntitySchemaTerm)]; !ok {
-				queue = append(queue, uint64(node.id))
+				queue = append(queue, int64(node.id))
 			}
 		}
 		for _, edge := range adjRelationships {
@@ -450,7 +451,7 @@ func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []uint64, co
 	return dbIds, nil
 }
 
-func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *lpg.Graph) ([]*lpg.Node, []int64, []string, []string, error) {
+func CollectEntityRoots(grph *lpg.Graph) ([]string, []*lpg.Node) {
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]*lpg.Node, 0)
 
@@ -469,6 +470,11 @@ func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *
 			}
 		}
 	}
+	return nonemptyEntityNodeIds, entities
+}
+
+func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *lpg.Graph) ([]*lpg.Node, []int64, []string, []string, error) {
+	nonemptyEntityNodeIds, entities := CollectEntityRoots(grph)
 	entityDBIds, entityIds, err := s.entityDBIds(tx, nonemptyEntityNodeIds, config)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -483,7 +489,7 @@ func (s *Session) entityDBIds(tx neo4j.Transaction, ids []string, config Config)
 		return entityDBIds, entityIds, nil
 	}
 	idTerm := config.Shorten(ls.EntityIDTerm)
-	query := fmt.Sprintf("MATCH (n) WHERE n.`%s` IS NOT NULL RETURN ID(n), n.`%s`", idTerm, idTerm)
+	query := fmt.Sprintf("MATCH (n) WHERE n.`%s` IN $ids RETURN ID(n), n.`%s`", idTerm, idTerm)
 	idrec, err := tx.Run(query, map[string]interface{}{"ids": ids})
 	if err != nil {
 		return entityDBIds, entityIds, err
@@ -518,6 +524,7 @@ func contains(node *lpg.Node, hm map[*lpg.Node]int64) bool {
 }
 
 func makeLabels(vars map[string]interface{}, types []string) string {
+	sort.Strings(types)
 	out := strings.Builder{}
 	for _, x := range types {
 		out.WriteRune(':')
@@ -699,6 +706,67 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 	}
 
 	return out.String()
+}
+
+func buildDBPropertiesForSaveObj(c Config, itemToSave withProperty, properties map[string]*ls.PropertyValue) map[string]interface{} {
+	ret := make(map[string]interface{})
+	for k, v := range properties {
+		expandedKey := c.Expand(k)
+		if v == nil {
+			continue
+		}
+		if v.IsString() {
+			switch k {
+			case c.Shorten(ls.AttributeIndexTerm):
+				ret[k] = v.AsInt()
+			case c.Shorten(ls.NodeValueTerm):
+				node, ok := itemToSave.(*lpg.Node)
+				if ok {
+					val, _ := ls.GetNodeValue(node)
+					n4jNative := nativeValueToNeo4jValue(val)
+					ret[k] = n4jNative
+				}
+			default:
+				if _, exists := c.PropertyTypes[expandedKey]; exists {
+					switch itemToSave.(type) {
+					case *lpg.Node, *lpg.Edge:
+						val, _ := itemToSave.GetProperty(expandedKey)
+						n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, val.(*ls.PropertyValue).AsString())
+						if err != nil {
+							panic(err)
+						}
+						ret[k] = n4jNative
+					default:
+						for _, v := range itemToSave.(mapWithProperty) {
+							n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, v.(*ls.PropertyValue).AsString())
+							if err != nil {
+								panic(err)
+							}
+							ret[k] = n4jNative
+						}
+					}
+				} else {
+					ret[k] = v.AsString()
+				}
+			}
+		} else if v.IsStringSlice() {
+			vsl := v.AsInterfaceSlice()
+			nsl := make([]interface{}, 0, len(vsl))
+			for _, vn := range vsl {
+				if _, exists := c.PropertyTypes[expandedKey]; exists {
+					n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, vn.(*ls.PropertyValue).AsString())
+					if err != nil {
+						panic(err)
+					}
+					nsl = append(nsl, n4jNative)
+				} else {
+					nsl = append(nsl, vn)
+				}
+			}
+			ret[k] = nsl
+		}
+	}
+	return ret
 }
 
 // Returns s quoted in backtick, for property names. Backticks are excaped using double backticks
