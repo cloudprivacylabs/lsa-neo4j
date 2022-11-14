@@ -220,13 +220,13 @@ func buildConnectQuery(edges []*lpg.Edge, c Config, hm map[*lpg.Node]int64, vars
 	return sb.String()
 }
 
-func CreateEdgesUnwind(ctx *ls.Context, tx neo4j.Transaction, edges []*lpg.Edge, nodeMap map[*lpg.Node]int64, cfg Config) error {
+func CreateEdgesUnwind(ctx *ls.Context, edges []*lpg.Edge, nodeMap map[*lpg.Node]int64, cfg Config) func(neo4j.Transaction) error {
 
 	labels := make(map[string][]*lpg.Edge)
 	for _, edge := range edges {
 		labels[edge.GetLabel()] = append(labels[edge.GetLabel()], edge)
 	}
-
+	unwindData := make(map[string][]map[string]interface{})
 	for label, insEdges := range labels {
 		unwind := make([]map[string]interface{}, 0)
 		for _, edge := range insEdges {
@@ -239,25 +239,35 @@ func CreateEdgesUnwind(ctx *ls.Context, tx neo4j.Transaction, edges []*lpg.Edge,
 			unwind = append(unwind, item)
 		}
 		labels := cfg.MakeLabels([]string{label})
-		query := fmt.Sprintf(`unwind $edges as edge 
+		unwindData[labels] = unwind
+	}
+	return func(tx neo4j.Transaction) error {
+		for labels, unwind := range unwindData {
+			query := fmt.Sprintf(`unwind $edges as edge 
 match(a) where ID(a)=edge.from with a,edge
 match(b) where ID(b)=edge.to 
 create (a)-[e%s]->(b) set e=edge.props`, labels)
-		_, err := tx.Run(query, map[string]interface{}{"edges": unwind})
-		if err != nil {
-			return err
+			_, err := tx.Run(query, map[string]interface{}{"edges": unwind})
+			if err != nil {
+				return err
+			}
 		}
+		return nil
 	}
-	return nil
 }
 
-func CreateNodesUnwind(ctx *ls.Context, tx neo4j.Transaction, nodes []*lpg.Node, nodeMap map[*lpg.Node]int64, cfg Config) error {
+func CreateNodesUnwind(ctx *ls.Context, nodes []*lpg.Node, nodeMap map[*lpg.Node]int64, cfg Config) func(neo4j.Transaction) error {
 	labels := make(map[string][]*lpg.Node)
 	for _, node := range nodes {
 		l := cfg.MakeLabels(node.GetLabels().Slice())
 		labels[l] = append(labels[l], node)
 	}
 
+	type udata struct {
+		insNodes []*lpg.Node
+		udata    []map[string]interface{}
+	}
+	unwindData := make(map[string]udata)
 	for label, insNodes := range labels {
 		unwind := make([]map[string]interface{}, 0)
 		for _, insNode := range insNodes {
@@ -267,20 +277,25 @@ func CreateNodesUnwind(ctx *ls.Context, tx neo4j.Transaction, nodes []*lpg.Node,
 			}
 			unwind = append(unwind, item)
 		}
-		query := fmt.Sprintf(`unwind $nodes as node 
-create (a%s) set a=node.props return ID(a)`, label)
-		result, err := tx.Run(query, map[string]interface{}{"nodes": unwind})
-		if err != nil {
-			return err
-		}
-		records, err := result.Collect()
-		if err != nil {
-			return err
-		}
-		for i := range records {
-			id := records[i].Values[0].(int64)
-			nodeMap[insNodes[i]] = id
-		}
+		unwindData[label] = udata{insNodes: insNodes, udata: unwind}
 	}
-	return nil
+	return func(tx neo4j.Transaction) error {
+		for label, unwind := range unwindData {
+			query := fmt.Sprintf(`unwind $nodes as node 
+create (a%s) set a=node.props return ID(a)`, label)
+			result, err := tx.Run(query, map[string]interface{}{"nodes": unwind.udata})
+			if err != nil {
+				return err
+			}
+			records, err := result.Collect()
+			if err != nil {
+				return err
+			}
+			for i := range records {
+				id := records[i].Values[0].(int64)
+				nodeMap[unwind.insNodes[i]] = id
+			}
+		}
+		return nil
+	}
 }
