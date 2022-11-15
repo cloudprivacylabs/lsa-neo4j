@@ -112,7 +112,7 @@ func duplicateCreateNode(delta []Delta, msg string) bool {
 	return false
 }
 
-func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
+func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config, entityActions map[string]string) ([]Delta, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph.G)
 	nodeAssociations := make(map[*lpg.Node]*lpg.Node)
@@ -139,7 +139,23 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 				}
 			}
 		}
-		deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+		sfx := strings.LastIndex(schemaPV.AsString(), "/")
+		if sfx != -1 {
+			if op, exists := entityActions[schemaPV.AsString()[:sfx]]; exists {
+				// [merge, nocreate]
+				f := strings.Fields(op)
+				if f[0] == "merge" && f[1] == "create" {
+					deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+				} else if f[0] == "merge" && f[1] == "nocreate" {
+					deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+				} else if f[0] == "nomerge" && f[1] == "create" {
+					continue
+				} else if f[0] == "nomerge" && f[1] == "nocreate" {
+					continue
+				}
+			}
+		}
+
 	}
 
 	// Remove all db nodes that are associated with a memnode
