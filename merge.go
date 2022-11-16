@@ -118,7 +118,7 @@ type EntityMergeAction struct {
 }
 
 func (e EntityMergeAction) GetMerge() bool {
-	if e == (EntityMergeAction{}) {
+	if e.Merge == nil {
 		return true
 	}
 	if *e.Merge {
@@ -128,36 +128,13 @@ func (e EntityMergeAction) GetMerge() bool {
 }
 
 func (e EntityMergeAction) GetCreate() bool {
-	if e == (EntityMergeAction{}) {
+	if e.Create == nil {
 		return true
 	}
 	if *e.Create {
 		return true
 	}
 	return *e.Create
-}
-
-func mergeSubtreeWithEntityAction(n, foundDBEntity *lpg.Node, nodeAssociations map[*lpg.Node]*lpg.Node, edgeAssociations map[*lpg.Edge]*lpg.Edge, dbGraph *DBGraph, nlayers []string, config Config) []Delta {
-	deltas := make([]Delta, 0)
-	for _, label := range nlayers {
-		if op, ok := config.EntityMergeActions[label]; ok {
-			merge, create := op.GetMerge(), op.GetCreate()
-			if merge && create {
-				deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
-			} else if merge && !create {
-				if dbGraph != nil {
-					deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
-				}
-			} else if !merge && create {
-				if dbGraph == nil {
-					deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
-				}
-			} else if !merge && !create {
-				break
-			}
-		}
-	}
-	return deltas
 }
 
 func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
@@ -188,7 +165,27 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 			}
 		}
 		nlayers := ls.FilterNonLayerTypes(n.GetLabels().Slice())
-		deltas = append(deltas, mergeSubtreeWithEntityAction(n, foundDBEntity, nodeAssociations, edgeAssociations, dbGraph, nlayers, config)...)
+		mergeActions := EntityMergeAction{}
+		for _, label := range nlayers {
+			if op, ok := config.EntityMergeActions[label]; ok {
+				mergeActions = op
+				break
+			}
+		}
+		merge, create := mergeActions.GetMerge(), mergeActions.GetCreate()
+		if merge && create {
+			deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+		} else if merge && !create {
+			if dbGraph != nil {
+				deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+			}
+		} else if !merge && create {
+			if dbGraph == nil {
+				deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+			}
+		} else if !merge && !create {
+			continue
+		}
 	}
 
 	// Remove all db nodes that are associated with a memnode

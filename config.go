@@ -11,10 +11,10 @@ import (
 )
 
 type Config struct {
-	TermMappings       map[string]string            `yaml:"termMappings"`
-	NamespaceMappings  map[string]string            `yaml:"namespaceMappings"`
-	PropertyTypes      map[string]string            `yaml:"propertyTypes"`
-	EntityMergeActions map[string]EntityMergeAction `yaml:"entityMergeActions"`
+	TermMappings       map[string]string            `json:"termMappings" yaml:"termMappings"`
+	NamespaceMappings  map[string]string            `json:"namespaceMappings" yaml:"namespaceMappings"`
+	PropertyTypes      map[string]string            `json:"propertyTypes" yaml:"propertyTypes"`
+	EntityMergeActions map[string]EntityMergeAction `json:"entityMergeActions" yaml:"entityMergeActions"`
 	trie               *Trie
 }
 
