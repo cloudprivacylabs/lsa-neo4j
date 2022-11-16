@@ -11,10 +11,11 @@ import (
 )
 
 type Config struct {
-	TermMappings      map[string]string `yaml:"termMappings"`
-	NamespaceMappings map[string]string `yaml:"namespaceMappings"`
-	PropertyTypes     map[string]string `yaml:"propertyTypes"`
-	trie              *Trie
+	TermMappings       map[string]string            `yaml:"termMappings"`
+	NamespaceMappings  map[string]string            `yaml:"namespaceMappings"`
+	PropertyTypes      map[string]string            `yaml:"propertyTypes"`
+	EntityMergeActions map[string]EntityMergeAction `yaml:"entityMergeActions"`
+	trie               *Trie
 }
 
 type withProperty interface {

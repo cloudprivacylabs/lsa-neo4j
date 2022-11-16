@@ -112,7 +112,55 @@ func duplicateCreateNode(delta []Delta, msg string) bool {
 	return false
 }
 
-func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config, entityActions map[string]string) ([]Delta, error) {
+type EntityMergeAction struct {
+	Merge  *bool
+	Create *bool
+}
+
+func (e EntityMergeAction) GetMerge() bool {
+	if e == (EntityMergeAction{}) {
+		return true
+	}
+	if *e.Merge {
+		return true
+	}
+	return *e.Merge
+}
+
+func (e EntityMergeAction) GetCreate() bool {
+	if e == (EntityMergeAction{}) {
+		return true
+	}
+	if *e.Create {
+		return true
+	}
+	return *e.Create
+}
+
+func mergeSubtreeWithEntityAction(n, foundDBEntity *lpg.Node, nodeAssociations map[*lpg.Node]*lpg.Node, edgeAssociations map[*lpg.Edge]*lpg.Edge, dbGraph *DBGraph, nlayers []string, config Config) []Delta {
+	deltas := make([]Delta, 0)
+	for _, label := range nlayers {
+		if op, ok := config.EntityMergeActions[label]; ok {
+			merge, create := op.GetMerge(), op.GetCreate()
+			if merge && create {
+				deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+			} else if merge && !create {
+				if dbGraph != nil {
+					deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+				}
+			} else if !merge && create {
+				if dbGraph == nil {
+					deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+				}
+			} else if !merge && !create {
+				break
+			}
+		}
+	}
+	return deltas
+}
+
+func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph.G)
 	nodeAssociations := make(map[*lpg.Node]*lpg.Node)
@@ -139,23 +187,8 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config, entityActions m
 				}
 			}
 		}
-		sfx := strings.LastIndex(schemaPV.AsString(), "/")
-		if sfx != -1 {
-			if op, exists := entityActions[schemaPV.AsString()[:sfx]]; exists {
-				// [merge, nocreate]
-				f := strings.Fields(op)
-				if f[0] == "merge" && f[1] == "create" {
-					deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
-				} else if f[0] == "merge" && f[1] == "nocreate" {
-					deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
-				} else if f[0] == "nomerge" && f[1] == "create" {
-					continue
-				} else if f[0] == "nomerge" && f[1] == "nocreate" {
-					continue
-				}
-			}
-		}
-
+		nlayers := ls.FilterNonLayerTypes(n.GetLabels().Slice())
+		deltas = append(deltas, mergeSubtreeWithEntityAction(n, foundDBEntity, nodeAssociations, edgeAssociations, dbGraph, nlayers, config)...)
 	}
 
 	// Remove all db nodes that are associated with a memnode

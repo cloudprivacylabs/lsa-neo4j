@@ -34,3 +34,16 @@ namespaceMappings:
   https://lschema.org/: ls
   https://lschema.org/A/: lsa
   https://lschema.org/Y/: lsy
+
+cacheBy: https://dartnet.info/graphModel/Person
+
+entityMergeActions:
+  https://dartnet.info/graphModel/Person:
+    merge: true
+    create: false
+  https://dartnet.info/graphModel/Measurement:
+    merge:
+    create:
+  https://dartnet.info/graphModel/Condition: 
+    merge: 
+    create:

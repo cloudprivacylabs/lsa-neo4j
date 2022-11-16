@@ -65,7 +65,7 @@ var _ = Describe("Merge", func() {
 		tx, err = session.BeginTransaction()
 		Expect(err).To(BeNil(), "must be valid transaction")
 		dbGraph := NewDBGraph(lpg.NewGraph())
-		deltas, err = Merge(memGraph, dbGraph, cfg, nil)
+		deltas, err = Merge(memGraph, dbGraph, cfg)
 		Expect(err).To(BeNil(), "unable to post graph to empty database with merge")
 		// apply deltas to database objects
 		for _, delta := range SelectDelta(deltas, func(d Delta) bool {
@@ -104,7 +104,7 @@ var _ = Describe("Merge", func() {
 		Expect(err).To(BeNil(), "must be valid transaction")
 		loadedDbGraph, err = session.LoadDBGraph(tx, memGraph, cfg)
 		Expect(err).To(BeNil(), "cannot load graph from database")
-		deltas, err = Merge(memGraph, loadedDbGraph, cfg, nil)
+		deltas, err = Merge(memGraph, loadedDbGraph, cfg)
 		Expect(err).To(BeNil(), "unable to merge memory graph onto db graph")
 		// apply deltas to database objects
 		for _, delta := range deltas {
@@ -158,10 +158,7 @@ func testGraphMerge(memGraphFile, dbGraphFile string) (*lpg.Graph, *DBGraph, []D
 		return nil, nil, nil, Config{}, err
 	}
 	InitNamespaceTrie(&cfg)
-	d, err := Merge(memGraph, dbGraph, cfg, map[string]string{
-		"https://dartnet.info/graphModel/Measurement": "merge nocreate",
-		"https://dartnet.info/graphModel/Person":      "merge create",
-	})
+	d, err := Merge(memGraph, dbGraph, cfg)
 	if err != nil {
 		return nil, nil, nil, Config{}, err
 	}
