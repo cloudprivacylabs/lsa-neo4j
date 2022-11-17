@@ -121,17 +121,11 @@ func (e EntityMergeAction) GetMerge() bool {
 	if e.Merge == nil {
 		return true
 	}
-	if *e.Merge {
-		return true
-	}
 	return *e.Merge
 }
 
 func (e EntityMergeAction) GetCreate() bool {
 	if e.Create == nil {
-		return true
-	}
-	if *e.Create {
 		return true
 	}
 	return *e.Create
