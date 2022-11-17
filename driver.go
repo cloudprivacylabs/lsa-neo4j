@@ -562,7 +562,6 @@ func Neo4jValueToNativeValue(val interface{}) interface{} {
 			Nanoseconds:  int64(x.Nanosecond()),
 			Location:     x.Local().Location(),
 		}
-		fmt.Println(tm.String())
 		return tm
 	case neo4j.Date:
 		x := val.Time()

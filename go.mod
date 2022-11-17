@@ -1,6 +1,6 @@
 module github.com/cloudprivacylabs/lsa-neo4j
 
-go 1.18
+go 1.19
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
