@@ -5,8 +5,7 @@ go 1.19
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
-	github.com/cloudprivacylabs/lpg v1.0.10
-	github.com/cloudprivacylabs/lsa v1.0.0-beta-18
+	github.com/cloudprivacylabs/lpg v1.0.11
 	github.com/neo4j/neo4j-go-driver/v4 v4.3.3
 	github.com/nleeper/goment v1.4.4
 	github.com/onsi/ginkgo/v2 v2.1.4
@@ -26,7 +25,7 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210803070921-b358b509191a // indirect
 	github.com/bserdar/jsonstream v0.0.0-20190428032403-9f1769267072 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
-	github.com/cloudprivacylabs/opencypher v1.0.0-beta-9 // indirect
+	github.com/cloudprivacylabs/opencypher v1.0.0-beta-11 // indirect
 	github.com/containerd/cgroups v1.0.1 // indirect
 	github.com/containerd/containerd v1.5.9 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
