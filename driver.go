@@ -325,7 +325,7 @@ func SetNodeValueAfterLoad(cfg Config, node *lpg.Node, input map[string]interfac
 	if !ok {
 		return nil
 	}
-	return neo4jValueToNativeValue(v)
+	return Neo4jValueToNativeValue(v)
 }
 
 // BuildNodePropertiesAfterLoad is during the loading of nodes from database. This function sets all node properties
@@ -370,7 +370,7 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 		if expandedKey == ls.NodeValueTerm {
 			continue
 		}
-		buildNodeProperties(expandedKey, neo4jValueToNativeValue(v))
+		buildNodeProperties(expandedKey, Neo4jValueToNativeValue(v))
 	}
 }
 
@@ -550,7 +550,7 @@ func makeLabels(vars map[string]interface{}, types []string) string {
 }
 
 // neo4jValueToNativeValue converts a neo4j value to a native go value
-func neo4jValueToNativeValue(val interface{}) interface{} {
+func Neo4jValueToNativeValue(val interface{}) interface{} {
 	switch val := val.(type) {
 	case neo4j.LocalDateTime:
 		x := val.Time()
@@ -576,7 +576,6 @@ func neo4jValueToNativeValue(val interface{}) interface{} {
 			Nanoseconds:  int64(x.Nanosecond()),
 			Location:     x.Local().Location(),
 		}
-		fmt.Println(tm.String())
 		return tm
 	case neo4j.Date:
 		x := val.Time()
