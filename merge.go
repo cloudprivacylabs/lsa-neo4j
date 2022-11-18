@@ -112,25 +112,6 @@ func duplicateCreateNode(delta []Delta, msg string) bool {
 	return false
 }
 
-type EntityMergeAction struct {
-	Merge  *bool
-	Create *bool
-}
-
-func (e EntityMergeAction) GetMerge() bool {
-	if e.Merge == nil {
-		return true
-	}
-	return *e.Merge
-}
-
-func (e EntityMergeAction) GetCreate() bool {
-	if e.Create == nil {
-		return true
-	}
-	return *e.Create
-}
-
 func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph.G)

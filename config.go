@@ -18,6 +18,25 @@ type Config struct {
 	trie               *Trie
 }
 
+type EntityMergeAction struct {
+	Merge  *bool `json:"merge" yaml:"merge"`
+	Create *bool `json:"create" yaml:"create"`
+}
+
+func (e EntityMergeAction) GetMerge() bool {
+	if e.Merge == nil {
+		return true
+	}
+	return *e.Merge
+}
+
+func (e EntityMergeAction) GetCreate() bool {
+	if e.Create == nil {
+		return true
+	}
+	return *e.Create
+}
+
 type withProperty interface {
 	ForEachProperty(func(string, interface{}) bool) bool
 	GetProperty(string) (interface{}, bool)
