@@ -112,6 +112,25 @@ func duplicateCreateNode(delta []Delta, msg string) bool {
 	return false
 }
 
+type EntityMergeAction struct {
+	Merge  *bool
+	Create *bool
+}
+
+func (e EntityMergeAction) GetMerge() bool {
+	if e.Merge == nil {
+		return true
+	}
+	return *e.Merge
+}
+
+func (e EntityMergeAction) GetCreate() bool {
+	if e.Create == nil {
+		return true
+	}
+	return *e.Create
+}
+
 func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
 	memEntitiesMap := ls.GetEntityInfo(memGraph)
 	dbEntitiesMap := ls.GetEntityInfo(dbGraph.G)
@@ -139,7 +158,28 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 				}
 			}
 		}
-		deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+		nlayers := ls.FilterNonLayerTypes(n.GetLabels().Slice())
+		mergeActions := EntityMergeAction{}
+		for _, label := range nlayers {
+			if op, ok := config.EntityMergeActions[label]; ok {
+				mergeActions = op
+				break
+			}
+		}
+		merge, create := mergeActions.GetMerge(), mergeActions.GetCreate()
+		if merge && create {
+			deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+		} else if merge && !create {
+			if dbGraph != nil {
+				deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+			}
+		} else if !merge && create {
+			if dbGraph == nil {
+				deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas)
+			}
+		} else if !merge && !create {
+			continue
+		}
 	}
 
 	// Remove all db nodes that are associated with a memnode
