@@ -685,7 +685,7 @@ func (ue UpdateEdgeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int6
 }
 
 func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config Config) (*DBGraph, error) {
-	_, rootIds, _, _, err := s.CollectEntityDBIds(tx, config, memGraph)
+	_, rootIds, _, err := s.CollectEntityDBIds(tx, config, memGraph)
 	if err != nil {
 		return nil, err
 	}
@@ -720,7 +720,7 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *DBGraph, rootIds []int64, c
 		if err != nil {
 			return err
 		}
-		if len(srcNodes) == 0 || (len(adjNodes) == 0 && len(adjRelationships) == 0) {
+		if len(srcNodes) == 0 {
 			break
 		}
 		queue = make(map[int64]struct{})
