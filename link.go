@@ -51,7 +51,6 @@ func getLinkSpec(docNode *lpg.Node) *linkSpec {
 	case "from", "fromTarget":
 		ret.forward = false
 	}
-
 	return &ret
 }
 

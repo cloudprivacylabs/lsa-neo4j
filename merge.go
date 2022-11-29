@@ -699,6 +699,24 @@ func (ue UpdateEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds ma
 	}
 }
 
+// LinkMergedEntities will find the new entities from the delta and link them
+func LinkMergedEntities(ctx *ls.Context, tx neo4j.Transaction, cfg Config, delta []Delta, nodeMap map[*lpg.Node]int64) error {
+	rootNodes := make([]*lpg.Node, 0)
+	for _, d := range delta {
+		if n, ok := d.(CreateNodeDelta); ok {
+			if ls.IsNodeEntityRoot(n.DBNode) {
+				rootNodes = append(rootNodes, n.DBNode)
+			}
+		}
+	}
+	for _, node := range rootNodes {
+		if err := LinkNodesForNewEntity(ctx, tx, cfg, node, nodeMap); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (ue UpdateEdgeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
 	q := ue.WriteQuery(dbNodeIds, dbEdgeIds, c)
 	_, err := tx.Run(q.Query, q.Vars)
