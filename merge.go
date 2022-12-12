@@ -709,11 +709,11 @@ func LinkMergedEntities(ctx *ls.Context, tx neo4j.Transaction, cfg Config, delta
 			}
 		}
 	}
-	for _, node := range rootNodes {
-		if err := LinkNodesForNewEntity(ctx, tx, cfg, node, nodeMap); err != nil {
-			return err
-		}
-	}
+	// for _, node := range rootNodes {
+	// 	if err := LinkNodesForNewEntity(ctx, tx, cfg, node, nodeMap); err != nil {
+	// 		return err
+	// 	}
+	// }
 	return nil
 }
 

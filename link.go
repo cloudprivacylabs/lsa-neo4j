@@ -101,6 +101,13 @@ func (spec linkSpec) getForeignKeys(entityRoot *lpg.Node) ([][]string, error) {
 }
 
 func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]int64) error {
+	if err := LinkEntitiesByForeignKeys(ctx, tx, config, entityRoot, nodeMap); err != nil {
+		return err
+	}
+	return AddLinksToThisEntity(ctx, tx, config, entityRoot, nodeMap)
+}
+
+func LinkEntitiesByForeignKeys(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]int64) error {
 	links := make([]linkSpec, 0)
 	// Does the entity have any outstanding links we need to work on?
 	var itrErr error
@@ -135,14 +142,7 @@ func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config,
 			return err
 		}
 	}
-
-	// Are there any links pointing to this entity in the DB?
-	idTerm, ok := entityRoot.GetProperty(ls.EntityIDTerm)
-	if !ok {
-		return nil
-	}
-	id := ls.AsPropertyValue(idTerm, ok).MustStringSlice()
-	return linkToThisEntity(ctx, tx, config, entityRoot, id, nodeMap)
+	return nil
 }
 
 func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]int64) error {
@@ -195,10 +195,18 @@ func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRo
 }
 
 // ID is entity id of entity root
-func linkToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, ID []string, nodeMap map[*lpg.Node]int64) error {
-	// TODO: Search for all nodes with Ref to this entity, and link them
+func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]int64) error {
+	// Are there any links pointing to this entity in the DB?
+	idTerm, ok := entityRoot.GetProperty(ls.EntityIDTerm)
+	if !ok {
+		return nil
+	}
+	ID := ls.AsPropertyValue(idTerm, ok).MustStringSlice()
+	if len(ID) == 0 {
+		return nil
+	}
 	vars := make(map[string]interface{})
-	_, ok := entityRoot.GetProperty(ls.EntitySchemaTerm)
+	_, ok = entityRoot.GetProperty(ls.EntitySchemaTerm)
 	if !ok {
 		return errors.New("invalid schema node, given entity root must contain schema node id property")
 	}
