@@ -1,12 +1,10 @@
 package neo4j
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
 type NodesetInput interface {
@@ -19,26 +17,26 @@ type Nodeset struct {
 	ID     string
 	Labels []string
 	Data   map[string]NodesetData
-	Rows   map[string]itrRows
+	Rows   ItrRows
 }
 
-type itrRows struct {
-	r    int
-	rows [][]string
+type ItrRows struct {
+	R    int
+	Rows [][]string
 }
 
-func (ir *itrRows) next() ([]string, error) {
-	ir.r++
-	if ir.r >= len(ir.rows) {
+func (ir *ItrRows) next() ([]string, error) {
+	ir.R++
+	if ir.R >= len(ir.Rows) {
 		return nil, io.EOF
 	}
-	return ir.rows[ir.r], nil
+	return ir.Rows[ir.R], nil
 }
 
 type NodesetData struct {
 	ID                 string
 	Labels             []string
-	Properties         map[string]string
+	Properties         map[string]interface{}
 	LinkedToOtherNodes bool
 }
 
@@ -51,10 +49,7 @@ func (ns Nodeset) ColumnNames() []string {
 }
 
 func (ns Nodeset) Next() ([]string, error) {
-	for _, k := range ns.Rows {
-		return k.next()
-	}
-	return nil, nil
+	return ns.Rows.next()
 }
 
 func (ns Nodeset) Reset() error {
@@ -72,13 +67,6 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 		}
 		return ""
 	}
-	/*
-		A
-		A
-		B
-		A
-		C
-	*/
 	seenIDs := make(map[string]struct{})
 	for {
 		if err := input.Reset(); err != nil {
@@ -97,9 +85,9 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 			// Process a new nodeset
 			nodeset := Nodeset{
 				ID:   nodesetId,
-				Rows: make(map[string]itrRows),
+				Rows: ItrRows{Rows: make([][]string, 0)},
 			}
-			nodesetRows := nodeset.Rows[nodesetId].rows
+			nodesetRows := nodeset.Rows.Rows
 			nodesetRows = append(nodesetRows, row)
 			// process a row
 			processed = true
@@ -129,48 +117,13 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 	return ret, nil
 }
 
-func BuildNodesets(ctx *ls.Context, nodesets map[string]Nodeset, cfg Config) func(neo4j.Transaction) error {
-	labels := make(map[string][]*lpg.Node)
-	for _, nodeset := range nodesets {
-		l := cfg.MakeLabels(nodeset.Labels)
-		labels[l] = append(labels[l], node)
+func buildNodesetNodes(nodesets map[string]Nodeset) []*lpg.Node {
+	grph := ls.NewDocumentGraph()
+	nodes := make([]*lpg.Node, 0)
+	for _, ns := range nodesets {
+		nodes = append(nodes, grph.NewNode(ns.Labels, ns.Data[ns.ID].Properties))
 	}
-
-	type udata struct {
-		insNodes []*lpg.Node
-		udata    []map[string]interface{}
-	}
-	unwindData := make(map[string]udata)
-	for label, insNodes := range labels {
-		unwind := make([]map[string]interface{}, 0)
-		for _, insNode := range insNodes {
-			props := cfg.MakePropertiesObj(insNode)
-			item := map[string]interface{}{
-				"props": props,
-			}
-			unwind = append(unwind, item)
-		}
-		unwindData[label] = udata{insNodes: insNodes, udata: unwind}
-	}
-	return func(tx neo4j.Transaction) error {
-		for label, unwind := range unwindData {
-			query := fmt.Sprintf(`unwind $nodes as node 
-create (a%s) set a=node.props return ID(a)`, label)
-			result, err := tx.Run(query, map[string]interface{}{"nodes": unwind.udata})
-			if err != nil {
-				return err
-			}
-			records, err := result.Collect()
-			if err != nil {
-				return err
-			}
-			for i := range records {
-				id := records[i].Values[0].(int64)
-				nodeMap[unwind.insNodes[i]] = id
-			}
-		}
-		return nil
-	}
+	return nodes
 }
 
 func diff(oldNodeset, newNodeset Nodeset) (insertions []string, deletions []string, updates []string) {

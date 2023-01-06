@@ -16,14 +16,14 @@ var (
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
-			var ns neo.Nodeset
-			ns.input, _ = cmd.Flags().GetString("input")
+			var operation string
+			input, _ := cmd.Flags().GetString("input")
 			applyF, _ := cmd.Flags().GetString("apply")
 			deleteF, _ := cmd.Flags().GetString("delete")
 			if applyF != "" {
-				ns.operation = applyF
+				operation = applyF
 			} else if deleteF != "" {
-				ns.operation = deleteF
+				operation = deleteF
 			} else {
 				return fmt.Errorf("err: more than one command given")
 			}
@@ -39,25 +39,36 @@ var (
 			if headerRow >= startRow {
 				return fmt.Errorf("Header row is ahead of start row")
 			}
-			data, err := readSpreadsheetFile(ns.input)
+			data, err := readSpreadsheetFile(input)
 			if err != nil {
 				return err
 			}
+			ns := newNodeset(data)
 			return nil
 		},
 	}
 )
 
-/*
-A
-A
-B
-C
-C
-A
-*/
+func newNodeset(sheet [][]string, headerStart int) neo.Nodeset {
+	// range through headers, look for nodeset_id
+	// scan down from nodeset_id and add row to nodeset
+	ns := neo.Nodeset{
+		Rows: neo.ItrRows{Rows: make([][]string, 0)},
+	}
+	for cIdx, header := range sheet[headerStart] {
+		if header == "nodeset_id" {
+			for j := cIdx; j < len(sheet); j++ {
+				if sheet[j][cIdx] != "" || sheet[j][cIdx] != "nodeset_id" {
+					ns.Rows.Rows = append(ns.Rows.Rows, sheet[j])
+				}
+			}
+			break
+		}
+	}
+	return ns
+}
 
-func readSpreadsheetFile(fileName string) (map[string][][]string, error) {
+func readSpreadsheetFile(fileName string) ([][]string, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
@@ -68,13 +79,9 @@ func readSpreadsheetFile(fileName string) (map[string][][]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		return map[string][][]string{fileName: data}, nil
+		return data, nil
 	}
 	return readExcel(file)
-}
-
-func parseNodesetData(data map[string][][]string) error {
-
 }
 
 func init() {
