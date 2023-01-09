@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
+	lsacsv "github.com/cloudprivacylabs/lsa/pkg/csv"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +17,7 @@ var (
 		Short: "prompts nodeset commands: apply or delete",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			drv := getNeoDriver(cmd)
+			// drv := getNeoDriver(cmd)
 			var operation string
 			input, _ := cmd.Flags().GetString("input")
 			applyF, _ := cmd.Flags().GetString("apply")
@@ -39,49 +41,88 @@ var (
 			if headerRow >= startRow {
 				return fmt.Errorf("Header row is ahead of start row")
 			}
-			data, err := readSpreadsheetFile(input)
+			data, err := ReadSpreadsheetFile(input)
 			if err != nil {
 				return err
 			}
-			ns := newNodeset(data)
+			ssi := &spreadsheetInput{
+				rows:      data,
+				at:        0,
+				headerRow: headerRow,
+			}
+			nodesets, err := neo.ParseNodesetData(ssi)
+			if err != nil {
+				return err
+			}
+			if err := commitNodesetsOperation(nodesets, operation); err != nil {
+
+			}
 			return nil
 		},
 	}
 )
 
-func newNodeset(sheet [][]string, headerStart int) neo.Nodeset {
-	// range through headers, look for nodeset_id
-	// scan down from nodeset_id and add row to nodeset
-	ns := neo.Nodeset{
-		Rows: neo.ItrRows{Rows: make([][]string, 0)},
+func commitNodesetsOperation(nodesets map[string]neo.Nodeset, operation string) error {
+	if operation == "apply" {
+
+	} else {
+
 	}
-	for cIdx, header := range sheet[headerStart] {
-		if header == "nodeset_id" {
-			for j := cIdx; j < len(sheet); j++ {
-				if sheet[j][cIdx] != "" || sheet[j][cIdx] != "nodeset_id" {
-					ns.Rows.Rows = append(ns.Rows.Rows, sheet[j])
-				}
-			}
-			break
-		}
-	}
-	return ns
+	return nil
 }
 
-func readSpreadsheetFile(fileName string) ([][]string, error) {
+type spreadsheetInput struct {
+	rows      [][]string
+	at        int
+	headerRow int
+}
+
+func (s *spreadsheetInput) ColumnNames() []string {
+	cols := make([]string, 0)
+	for _, c := range s.rows[s.headerRow] {
+		cols = append(cols, c)
+	}
+	return cols
+}
+
+func (s *spreadsheetInput) Reset() error {
+	s.at = s.headerRow + 1
+	if s.at >= len(s.rows) {
+		return io.EOF
+	}
+	return nil
+}
+
+func (s *spreadsheetInput) Next() ([]string, error) {
+	if s.at >= len(s.rows) {
+		return nil, io.EOF
+	}
+	ret := s.rows[s.at]
+	s.at++
+	return ret, nil
+}
+
+func ReadSpreadsheetFile(fileName string) ([][]string, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 	if strings.HasSuffix(strings.ToLower(fileName), ".csv") {
-		data, err := readCSV(file, os.Getenv("CSV_SEPARATOR"))
+		data, err := lsacsv.ReadCSV(file, os.Getenv("CSV_SEPARATOR"))
 		if err != nil {
 			return nil, err
 		}
 		return data, nil
 	}
-	return readExcel(file)
+	xlsxSheet, err := lsacsv.ReadExcel(file)
+	if err != nil {
+		return nil, err
+	}
+	for _, sheet := range xlsxSheet {
+		return sheet, nil
+	}
+	return nil, nil
 }
 
 func init() {

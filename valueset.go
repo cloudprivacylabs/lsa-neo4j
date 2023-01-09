@@ -1,10 +1,9 @@
 package neo4j
 
 import (
+	"fmt"
 	"io"
-
-	"github.com/cloudprivacylabs/lpg"
-	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"strings"
 )
 
 type NodesetInput interface {
@@ -17,43 +16,13 @@ type Nodeset struct {
 	ID     string
 	Labels []string
 	Data   map[string]NodesetData
-	Rows   ItrRows
-}
-
-type ItrRows struct {
-	R    int
-	Rows [][]string
-}
-
-func (ir *ItrRows) next() ([]string, error) {
-	ir.R++
-	if ir.R >= len(ir.Rows) {
-		return nil, io.EOF
-	}
-	return ir.Rows[ir.R], nil
 }
 
 type NodesetData struct {
 	ID                 string
 	Labels             []string
-	Properties         map[string]interface{}
+	Properties         map[string][]string
 	LinkedToOtherNodes bool
-}
-
-func (ns Nodeset) ColumnNames() []string {
-	cols := make([]string, 0)
-	for _, d := range ns.Data {
-		cols = append(cols, d.ID)
-	}
-	return cols
-}
-
-func (ns Nodeset) Next() ([]string, error) {
-	return ns.Rows.next()
-}
-
-func (ns Nodeset) Reset() error {
-
 }
 
 func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
@@ -61,54 +30,117 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 	ret := make(map[string]Nodeset)
 	getColumn := func(row []string, header string) string {
 		for cIdx, c := range input.ColumnNames() {
-			if c == header {
+			if c == header && cIdx < len(row) {
 				return row[cIdx]
 			}
 		}
 		return ""
 	}
-	seenIDs := make(map[string]struct{})
 	for {
 		if err := input.Reset(); err != nil {
 			return nil, err
 		}
-		var prevNodesetID string
-		for row, err := input.Next(); ; {
+		var currNodesetID string
+		var cerr error
+		var nodeset Nodeset
+		// needs termination condition -- endless loop
+		for {
+			row, err := input.Next()
 			if err == io.EOF {
-				seenIDs[prevNodesetID] = struct{}{}
+				if currNodesetID != "" {
+					ret[currNodesetID] = nodeset
+				} else {
+					processed = false
+				}
+				currNodesetID = ""
 				break
 			}
-			if err != nil {
+			if cerr != nil {
 				return nil, err
 			}
 			nodesetId := getColumn(row, "nodeset_id")
-			// Process a new nodeset
-			nodeset := Nodeset{
-				ID:   nodesetId,
-				Rows: ItrRows{Rows: make([][]string, 0)},
+			if _, seen := ret[nodesetId]; seen {
+				continue
 			}
-			nodesetRows := nodeset.Rows.Rows
-			nodesetRows = append(nodesetRows, row)
+			currNodesetID = nodesetId
+			nodeset = Nodeset{
+				ID:     currNodesetID,
+				Labels: make([]string, 0),
+				Data: map[string]NodesetData{
+					currNodesetID: NodesetData{
+						ID:         currNodesetID,
+						Labels:     make([]string, 0),
+						Properties: make(map[string][]string),
+					},
+				},
+			}
+			// // Process a new nodeset, parse row and add properties nodeset
+			parseRow := func(row []string, ns *Nodeset) error {
+				for idx, val := range row {
+					if idx >= len(input.ColumnNames()) {
+						fmt.Println(input.ColumnNames()[idx])
+						return fmt.Errorf("index out of bounds: retrieving from %v at index %d", row, idx)
+					}
+					header := input.ColumnNames()[idx]
+					if header == "node_labels" {
+						// filter labels, may be bracket enclosed or space separated [A, A] or A A
+						rl := strings.TrimSpace(row[idx])
+						if strings.HasPrefix(rl, "(") || strings.HasPrefix(rl, "[") || strings.HasPrefix(rl, "{") {
+							removeEnclosures := func(s string, rem ...string) string {
+								for _, r := range rem {
+									s = strings.ReplaceAll(s, r, "")
+								}
+								return s
+							}
+							// [A, A, A] -> A A A
+							rl = removeEnclosures(rl, "{", "}", "(", ")", "[", "]", ",")
+							// space delimiter
+						}
+						if nsl, ok := ns.Data[currNodesetID]; ok {
+							nsl.Labels = append(nsl.Labels, strings.Split(rl, " ")...)
+							ns.Data[currNodesetID] = nsl
+						}
+						// ns.Data[currNodesetID].Labels = append(ns.Data[currNodesetID].Labels, strings.Split(rl, " ")...)
+					} else {
+						ns.Data[currNodesetID].Properties[input.ColumnNames()[idx]] = append(ns.Data[currNodesetID].Properties[input.ColumnNames()[idx]], val)
+					}
+				}
+				return nil
+			}
+			if err := parseRow(row, &nodeset); err != nil {
+				return nil, err
+			}
+
+			// nodesetRows := nodeset
+			// nodesetRows = append(nodesetRows, row)
 			// process a row
 			processed = true
-			for r, err := input.Next(); ; {
+			for {
+				r, err := input.Next()
+				if err == io.EOF {
+					// err = err
+					break
+				}
 				if err != nil {
 					return nil, err
 				}
 				// continue scanning with only with the same nodesetID
-				if prevNodesetID != "" && nodesetId != prevNodesetID {
+				if currNodesetID != "" && nodesetId != currNodesetID {
 					continue
 				}
-				nID := getColumn(row, "nodeset_id")
-				// ns := Nodeset{
-				// 	ID: nID,
-				// 	Rows: map[string][][]string{nodesetId: r},
-				// }
-				prevNodesetID = nID
-				nodesetRows = append(nodesetRows, r)
+				// nID := getColumn(row, "nodeset_id")
+				// // ns := Nodeset{
+				// // 	ID: nID,
+				// // 	Rows: map[string][][]string{nodesetId: r},
+				// // }
+				// currNodesetID = nID
+				if err := parseRow(r, &nodeset); err != nil {
+					return nil, err
+				}
+				// nodesetRows = append(nodesetRows, r)
 				// process row
+
 			}
-			ret[nodesetId] = nodeset
 		}
 		if !processed {
 			break
@@ -117,17 +149,17 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 	return ret, nil
 }
 
-func buildNodesetNodes(nodesets map[string]Nodeset) []*lpg.Node {
-	grph := ls.NewDocumentGraph()
-	nodes := make([]*lpg.Node, 0)
-	for _, ns := range nodesets {
-		nodes = append(nodes, grph.NewNode(ns.Labels, ns.Data[ns.ID].Properties))
-	}
-	return nodes
-}
+// func buildNodesetNodes(nodesets map[string]Nodeset) []*lpg.Node {
+// 	grph := ls.NewDocumentGraph()
+// 	nodes := make([]*lpg.Node, 0)
+// 	for _, ns := range nodesets {
+// 		nodes = append(nodes, grph.NewNode(ns.Labels, ns.Data[ns.ID].Properties))
+// 	}
+// 	return nodes
+// }
 
 func diff(oldNodeset, newNodeset Nodeset) (insertions []string, deletions []string, updates []string) {
-
+	return nil, nil, nil
 }
 
 /*
@@ -138,42 +170,14 @@ Find NodesetData that are in both oldNodeset and NewNodeset: make sure labels an
 
 Also write:
 */
-func LoadNodeset(nodesetId string) Nodeset
+func LoadNodeset(nodesetId string) Nodeset {
+	return Nodeset{}
+}
 
-// func ParseNodesetData(data map[string][][]string, headerColStart int) []NodesetInput {
-// 	nsi := make([]NodesetInput, 0)
-// 	var prevNodesetID string
-// 	for _, sheet := range data {
-// 	ROW:
-// 		for r := 0; r < len(sheet); r++ {
-// 			for c := 0; c < len(sheet[r]); c++ {
-// 				if c == headerColStart {
-// 					if sheet[r][c] == "nodeset_id" {
-// 						nodeset := Nodeset{data: make(map[string][][]string)}
-// 						for j := r + 1; j < len(sheet); j++ {
-// 							if sheet[j][c] == "" {
-// 								continue
-// 							}
-// 							if j != r+1 && sheet[j][c] != prevNodesetID {
-// 								continue
-// 							}
-// 							prevNodesetID = sheet[j][c]
-// 							// scan down
-// 							nodeset.data[sheet[j][c]] = append(nodeset.data[sheet[j][c]], sheet[j])
-// 							nsi = append(nsi, nodeset)
-// 							clearRow(sheet[j])
-// 							continue ROW
-// 						}
-// 					}
-// 				}
-// 			}
-// 		}
-// 	}
-// 	return nsi
-// }
+func NodesetApply(nodesets map[string]Nodeset) error {
+	return nil
+}
 
-// func clearRow(row []string) {
-// 	for ix := range row {
-// 		row[ix] = ""
-// 	}
-// }
+func NodesetDelete(nodesets map[string]Nodeset) error {
+	return nil
+}
