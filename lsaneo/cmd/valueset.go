@@ -8,6 +8,7 @@ import (
 
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	lsacsv "github.com/cloudprivacylabs/lsa/pkg/csv"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +18,15 @@ var (
 		Short: "prompts nodeset commands: apply or delete",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// drv := getNeoDriver(cmd)
+			drv := getNeoDriver(cmd)
+			session := drv.NewSession()
+			defer session.Close()
+			var tx neo4j.Transaction
+			var err error
+			tx, err = session.BeginTransaction()
+			if err != nil {
+				return err
+			}
 			var operation string
 			input, _ := cmd.Flags().GetString("input")
 			applyF, _ := cmd.Flags().GetString("apply")
@@ -29,7 +38,6 @@ var (
 			} else {
 				return fmt.Errorf("err: more than one command given")
 			}
-			var err error
 			startRow, err := cmd.Flags().GetInt("startRow")
 			if err != nil {
 				return err
@@ -41,7 +49,7 @@ var (
 			if headerRow >= startRow {
 				return fmt.Errorf("Header row is ahead of start row")
 			}
-			data, err := ReadSpreadsheetFile(input)
+			data, err := readSpreadsheetFile(input)
 			if err != nil {
 				return err
 			}
@@ -54,7 +62,7 @@ var (
 			if err != nil {
 				return err
 			}
-			if err := commitNodesetsOperation(nodesets, operation); err != nil {
+			if err := commitNodesetsOperation(tx, nodesets, operation); err != nil {
 
 			}
 			return nil
@@ -62,11 +70,15 @@ var (
 	}
 )
 
-func commitNodesetsOperation(nodesets map[string]neo.Nodeset, operation string) error {
+func commitNodesetsOperation(tx neo4j.Transaction, nodesets map[string]neo.Nodeset, operation string) error {
 	if operation == "apply" {
-
+		if err := neo.NodesetApply(tx, nodesets); err != nil {
+			return err
+		}
 	} else {
-
+		if err := neo.NodesetDelete(tx, nodesets); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -78,11 +90,7 @@ type spreadsheetInput struct {
 }
 
 func (s *spreadsheetInput) ColumnNames() []string {
-	cols := make([]string, 0)
-	for _, c := range s.rows[s.headerRow] {
-		cols = append(cols, c)
-	}
-	return cols
+	return s.rows[s.headerRow]
 }
 
 func (s *spreadsheetInput) Reset() error {
@@ -102,7 +110,7 @@ func (s *spreadsheetInput) Next() ([]string, error) {
 	return ret, nil
 }
 
-func ReadSpreadsheetFile(fileName string) ([][]string, error) {
+func readSpreadsheetFile(fileName string) ([][]string, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err

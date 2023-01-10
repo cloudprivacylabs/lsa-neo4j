@@ -11,7 +11,7 @@ type expected struct {
 }
 
 func TestParseNodesetData(t *testing.T) {
-	sheet, err := ReadSpreadsheetFile("../../testdata/apply_01.csv")
+	sheet, err := readSpreadsheetFile("../../testdata/apply_01.csv")
 	if err != nil {
 		t.Error(err)
 	}
