@@ -71,12 +71,8 @@ var (
 )
 
 func commitNodesetsOperation(tx neo4j.Transaction, nodesets map[string]neo.Nodeset, operation string) error {
-	if operation == "apply" {
-		if err := neo.NodesetApply(tx, nodesets); err != nil {
-			return err
-		}
-	} else {
-		if err := neo.NodesetDelete(tx, nodesets); err != nil {
+	for _, ns := range nodesets {
+		if err := ns.Execute(tx, operation); err != nil {
 			return err
 		}
 	}

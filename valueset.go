@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"io"
+	"reflect"
 	"strings"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -18,7 +19,8 @@ type NodesetInput interface {
 type Nodeset struct {
 	ID     string
 	Labels []string
-	Data   map[string]NodesetData
+	// Data[x] gives NodesetData with Nodeset.ID = x
+	Data map[string]NodesetData
 }
 
 type NodesetData struct {
@@ -45,7 +47,6 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 		}
 		var currNodesetID string
 		var nodeset Nodeset
-		// needs termination condition -- endless loop
 		for {
 			row, err := input.Next()
 			if err == io.EOF {
@@ -65,39 +66,34 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 			nodeset = Nodeset{
 				ID:     currNodesetID,
 				Labels: make([]string, 0),
-				Data: map[string]NodesetData{
-					currNodesetID: NodesetData{
-						ID:         currNodesetID,
-						Labels:     make([]string, 0),
-						Properties: make(map[string]interface{}),
-					},
-				},
+				Data:   make(map[string]NodesetData),
 			}
-			// // Process a new nodeset, parse row and add properties nodeset
+			// Process a new nodeset, parse row and add properties nodeset
 			parseRow := func(row []string) error {
+				var nsDataID string
 				for idx := 0; idx < len(input.ColumnNames()); idx++ {
 					val := row[idx]
 					header := input.ColumnNames()[idx]
-					if header == "node_labels" {
-						if nsl, ok := nodeset.Data[currNodesetID]; ok {
-							removeEnclosures := func(s string, rem ...string) string {
-								for _, r := range rem {
-									s = strings.ReplaceAll(s, r, "")
-								}
-								return s
+					if header == "nodeset_id" {
+						continue
+					} else if header == "concept_id" {
+						nsDataID = val
+						if _, seen := nodeset.Data[nsDataID]; !seen {
+							nodeset.Data[nsDataID] = NodesetData{
+								ID:         nsDataID,
+								Labels:     make([]string, 0),
+								Properties: make(map[string]interface{}),
 							}
-							fields := strings.Fields(row[idx])
-							labels := make([]string, 0)
-							for _, f := range fields {
-								labels = append(labels, removeEnclosures(f, "{", "}", "(", ")", "[", "]", ","))
-							}
-							nsl.Labels = append(nsl.Labels, labels...)
-							nodeset.Data[currNodesetID] = nsl
+						}
+					} else if header == "node_labels" {
+						if nsl, ok := nodeset.Data[nsDataID]; ok {
+							nsl.Labels = append(nsl.Labels, strings.Fields(row[idx])...)
+							nodeset.Data[nsDataID] = nsl
 						}
 					} else {
-						props, _ := nodeset.Data[currNodesetID].Properties[input.ColumnNames()[idx]].([]string)
+						props, _ := nodeset.Data[nsDataID].Properties[input.ColumnNames()[idx]].([]string)
 						props = append(props, val)
-						nodeset.Data[currNodesetID].Properties[input.ColumnNames()[idx]] = props
+						nodeset.Data[nsDataID].Properties[input.ColumnNames()[idx]] = props
 					}
 				}
 				return nil
@@ -130,67 +126,53 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 	return ret, nil
 }
 
-func buildNodesetNodes(nodeset Nodeset) []*lpg.Node {
-	grph := ls.NewDocumentGraph()
-	nodes := make([]*lpg.Node, 0)
-	for _, nsD := range nodeset.Data {
-		nodes = append(nodes, grph.NewNode(nsD.Labels, nsD.Properties))
-	}
-	return nodes
-}
+// func buildNodesetNodes(nodeset Nodeset) []*lpg.Node {
+// 	grph := ls.NewDocumentGraph()
+// 	nodes := make([]*lpg.Node, 0)
+// 	for _, nsD := range nodeset.Data {
+// 		nodes = append(nodes, grph.NewNode(nsD.Labels, nsD.Properties))
+// 	}
+// 	return nodes
+// }
 
-func diff(oldNodeset, newNodeset Nodeset) (insertions Nodeset, deletions Nodeset, updates Nodeset) {
-	oldLabels := oldNodeset.Data[oldNodeset.ID].Labels
-	newLabels := newNodeset.Data[newNodeset.ID].Labels
-	oldProps := oldNodeset.Data[oldNodeset.ID].Properties
-	newProps := newNodeset.Data[newNodeset.ID].Properties
-	seenOldLabels := make(map[string]struct{})
-	seenNewLabels := make(map[string]struct{})
-	for _, l := range oldLabels {
-		seenOldLabels[l] = struct{}{}
-	}
-	for _, l := range newLabels {
-		seenNewLabels[l] = struct{}{}
-	}
-	for k, v := range oldProps {
-		// in old, not in new
-		if w, ok := newProps[k]; !ok || v != w {
-			deletions.Data[oldNodeset.ID].Properties[k] = v
-		} else {
-			// in old, in new
-			updates.Data[oldNodeset.ID].Properties[k] = v
+// oldNodeset is nodeset pulled from DB
+func diff(oldNodeset, newNodeset Nodeset) (insertions NodesetData, deletions []string, updates NodesetData) {
+	// compare roots
+	if oldNodeset.ID != newNodeset.ID {
+		// update
+		updates.ID = newNodeset.ID
+		if !reflect.DeepEqual(oldNodeset.Labels, newNodeset.Labels) {
+			// update
+			updates.Labels = newNodeset.Labels
 		}
 	}
-	for k, v := range newProps {
-		// in new, not in old
-		if w, ok := oldProps[k]; !ok || v != w {
-			insertions.Data[oldNodeset.ID].Properties[k] = v
-		} else {
-			// in new, in old
-			updates.Data[oldNodeset.ID].Properties[k] = v
+	seenOldNodesetData := make(map[*NodesetData]struct{})
+	for _, oldNsData := range oldNodeset.Data {
+		for _, newNsData := range newNodeset.Data {
+			// if newNodeset is not in oldNodeset (newNodeset must === oldNodeset)
+			if _, has := seenOldNodesetData[&newNsData]; !has {
+				// delete
+				deletions = append(deletions, oldNsData.ID)
+			}
+			for k, v := range newNsData.Properties {
+				// if oldNodeset does not have property
+				if _, has := oldNsData.Properties[k]; !has {
+					// insert
+					insertions.Properties[k] = v
+				} else {
+					// compare, nop or update
+					if !reflect.DeepEqual(oldNsData.Properties, newNsData.Properties) {
+						// update
+						updates.Properties[k] = v
+					}
+				}
+			}
+			if !lpg.NewStringSet(oldNsData.Labels...).IsEqual(lpg.NewStringSet(newNsData.Labels...)) {
+				// update - setting labels to those in newNodeset but not in oldNodeset
+				updates.Labels = findLabelDiff(lpg.NewStringSet(newNsData.Labels...), (lpg.NewStringSet(oldNsData.Labels...)))
+			}
+			seenOldNodesetData[&oldNsData] = struct{}{}
 		}
-	}
-	uSeen := make(map[string]struct{})
-	for _, l := range oldLabels {
-		if _, seen := seenNewLabels[l]; !seen {
-			// in old, not in new
-			deletions.Labels = append(deletions.Labels, l)
-		} else {
-			// in old, in new
-			uSeen[l] = struct{}{}
-		}
-	}
-	for _, l := range newLabels {
-		if _, seen := seenOldLabels[l]; !seen {
-			// in new, not in old
-			insertions.Labels = append(deletions.Labels, l)
-		} else {
-			// in new, in old
-			uSeen[l] = struct{}{}
-		}
-	}
-	for l := range uSeen {
-		updates.Labels = append(updates.Labels, l)
 	}
 	return insertions, deletions, updates
 }
@@ -204,64 +186,62 @@ Find NodesetData that are in both oldNodeset and NewNodeset: make sure labels an
 Also write:
 */
 func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
-	query := "MATCH (root:`NODESET` {nodeset_id: $id})-[:$id*]->(m) return root,m"
+	query := "MATCH (root:`NODESET` {nodeset_id: $id})-[:$id]->(m) return root,m"
 	idrec, err := tx.Run(query, map[string]interface{}{"id": nodesetId})
 	if err != nil {
 		return Nodeset{}, err
 	}
-	ns := Nodeset{ID: nodesetId}
+	ns := Nodeset{
+		ID:     nodesetId,
+		Labels: make([]string, 0),
+		Data:   make(map[string]NodesetData),
+	}
+	first := false
 	for idrec.Next() {
 		rec := idrec.Record()
-		nsCenter := rec.Values[0].(neo4j.Node)
-		nsDegree := rec.Values[1].(neo4j.Node)
-		ns.Labels = nsCenter.Labels
-		if nsl, ok := ns.Data[nodesetId]; ok {
-			for _, label := range nsDegree.Labels {
-				nsl.Labels = append(nsl.Labels, label)
-				ns.Data[nodesetId] = nsl
+		if !first {
+			nsCenter := rec.Values[0].(neo4j.Node)
+			ns.Labels = nsCenter.Labels
+			first = true
+		}
+		nsLeaf := rec.Values[1].(neo4j.Node)
+		var nsLeafEntityId string
+		for k := range nsLeaf.Props {
+			if k == ls.EntityIDTerm {
+				nsLeafEntityId = k
 			}
 		}
-		if nsp, ok := ns.Data[nodesetId]; ok {
-			nsp.Properties = nsDegree.Props
-			ns.Data[nodesetId] = nsp
+		ns.Data[nsLeafEntityId] = NodesetData{
+			ID:         nsLeafEntityId,
+			Labels:     nsLeaf.Labels,
+			Properties: nsLeaf.Props,
 		}
 	}
 	return ns, nil
 }
 
-func NodesetApply(tx neo4j.Transaction, nodesets map[string]Nodeset) error {
-	for _, ns := range nodesets {
-		db_ns, err := LoadNodeset(tx, ns.ID)
-		if err != nil {
-			return err
-		}
-		// get diff
-		inserts, _, updates := diff(ns, db_ns)
-		insertDBNodes := buildNodesetNodes(inserts)
-		updateDBNodes := buildNodesetNodes(updates)
+func (ns Nodeset) Execute(tx neo4j.Transaction, op string) error {
+	db_ns, err := LoadNodeset(tx, ns.ID)
+	inserts, deletes, updates := diff(ns, db_ns)
+	if err != nil {
+		return err
 	}
-	return nil
-}
-
-func NodesetDelete(tx neo4j.Transaction, nodesets map[string]Nodeset) error {
-	for _, ns := range nodesets {
-		db_ns, err := LoadNodeset(tx, ns.ID)
-		if err != nil {
+	switch op {
+	case "apply":
+		// update properties
+		if _, err := tx.Run("MATCH (n) WHERE n.entityId = $eid SET n = $props", map[string]interface{}{"eid": updates.ID, "props": updates.Properties}); err != nil {
 			return err
 		}
-		// get diff
-		_, deletes, updates := diff(ns, db_ns)
-		for cId, nsD := range deletes.Data {
-
-			query := `MATCH (n {id: $id}) WITH [key in keys(n) WHERE not(n[key] is null) | n[key]] AS values UNWIND values AS value WITH DISTINCT value 
-			MATCH(n) WHERE values = $props MATCH (n) WHERE labels(n)=$labels 
-			CALL { WITH n DETACH DELETE n }`
-			_, err = tx.Run(query, map[string]interface{}{"id": cId, "labels": nsD.Labels, "$props": nsD.Properties})
-			if err != nil {
-				return err
-			}
+		// update labels
+		// WITH ['SPX', 'QQQ'] as x MATCH (n) WHERE n.entityId='lol' FOREACH(u in x | set n:u) return n
+		formatLabels := strings.Join(updates.Labels, ":")
+		if _, err := tx.Run("MATCH (n) WHERE n.entityId = $eid FOREACH(x in $labels | SET n:x)", map[string]interface{}{"eid": updates.ID}); err != nil {
+			return err
 		}
-		updateDBNodes := buildNodesetNodes(updates)
+	case "delete":
+		if _, err := tx.Run("MATCH (n) WHERE n.entityId in $deletes DETACH DELETE n", map[string]interface{}{"deletes": deletes}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
