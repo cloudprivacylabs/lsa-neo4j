@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -18,8 +19,9 @@ type NodesetInput interface {
 }
 
 type Nodeset struct {
-	ID     string
-	Labels []string
+	ID         string
+	Labels     []string
+	Properties map[string]interface{}
 	// Data[x] gives NodesetData with Nodeset.ID = x
 	Data map[string]NodesetData
 }
@@ -137,11 +139,31 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 // }
 
 // oldNodeset is nodeset pulled from DB
-func diff(oldNodeset, newNodeset Nodeset) (insertions []NodesetData, deletions []string, updates []NodesetData) {
-	// compare roots
-	if !lpg.NewStringSet(oldNodeset.Labels...).IsEqual(lpg.NewStringSet(newNodeset.Labels...)) {
-		// update
-		newNodeset.Labels = findLabelDiff(lpg.NewStringSet(oldNodeset.Labels...), (lpg.NewStringSet(newNodeset.Labels...)))
+func diff(oldNodeset, newNodeset *Nodeset) (rootOp string, insertions []NodesetData, deletions []string, updates []NodesetData) {
+	// if DB nodeset does not exists, insert new nodeset
+	if oldNodeset.ID == "" {
+		root := NodesetData{
+			ID:         newNodeset.ID,
+			Properties: newNodeset.Properties,
+			Labels:     newNodeset.Labels,
+		}
+		insertions = append(insertions, root)
+		rootOp = "insertRoot"
+	} else {
+		// delete DB nodeset if newNodeset is empty
+		if newNodeset.ID == "" {
+			deletions = append(deletions, oldNodeset.ID)
+			rootOp = "deleteRoot"
+		} else if oldNodeset != newNodeset {
+			// update to use newNodeset if oldNodeset is not equal
+			root := NodesetData{
+				ID:         newNodeset.ID,
+				Properties: newNodeset.Properties,
+				Labels:     newNodeset.Labels,
+			}
+			updates = append(updates, root)
+			rootOp = "updateRoot"
+		}
 	}
 	for oid, oldNsData := range oldNodeset.Data {
 		newNsData, exists := newNodeset.Data[oid]
@@ -151,17 +173,22 @@ func diff(oldNodeset, newNodeset Nodeset) (insertions []NodesetData, deletions [
 				Labels:     make([]string, 0),
 				Properties: make(map[string]interface{}),
 			}
+			changed := false
 			if !lpg.NewStringSet(oldNsData.Labels...).IsEqual(lpg.NewStringSet(newNsData.Labels...)) {
-				// update - setting labels to those in newNodeset but not in oldNodeset
-				update.Labels = findLabelDiff(lpg.NewStringSet(newNsData.Labels...), (lpg.NewStringSet(oldNsData.Labels...)))
+				// update - setting labels to those in newNodeset
+				update.Labels = newNsData.Labels
+				changed = true
 			}
 			// if props are not equal, update to use newNodeset properties
 			if !reflect.DeepEqual(oldNsData.Properties, newNsData.Properties) {
 				for k, v := range newNsData.Properties {
 					update.Properties[k] = v
 				}
+				changed = true
 			}
-			updates = append(updates, update)
+			if changed {
+				updates = append(updates, update)
+			}
 		} else {
 			deletions = append(deletions, oid)
 		}
@@ -172,7 +199,7 @@ func diff(oldNodeset, newNodeset Nodeset) (insertions []NodesetData, deletions [
 			insertions = append(insertions, newNsData)
 		}
 	}
-	return insertions, deletions, updates
+	return rootOp, insertions, deletions, updates
 }
 
 func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
@@ -210,22 +237,59 @@ func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
 	return ns, nil
 }
 
-func (ns Nodeset) Execute(tx neo4j.Transaction, inserts, updates []NodesetData, deletions []string) error {
-	if len(updates) > 0 {
-		for _, update := range updates {
-			// update properties
-			if _, err := tx.Run("MATCH (n) WHERE n.entityId = $eid SET n = $props", map[string]interface{}{"eid": update.ID, "props": update.Properties}); err != nil {
-				return err
+func Execute(tx neo4j.Transaction, oldNodeset, newNodeset *Nodeset, rootOp string, inserts, updates []NodesetData, deletions []string) error {
+	type groupedNodesetData struct {
+		labels lpg.StringSet
+		data   []NodesetData
+	}
+	groupByLabel := func(nsD []NodesetData) []groupedNodesetData {
+		ret := make([]groupedNodesetData, 0)
+		for _, ns := range nsD {
+			grpNodesetData := groupedNodesetData{
+				labels: lpg.NewStringSet(sort.StringSlice(ns.Labels)...),
+				data:   nsD,
 			}
-			// update labels
-			if _, err := tx.Run(fmt.Sprintf("MATCH (n) WHERE n.entityId = $eid SET n:%s", makeLabels(nil, update.Labels)), map[string]interface{}{"eid": update.ID}); err != nil {
+			ret = append(ret, grpNodesetData)
+		}
+		return ret
+	}
+	type udata struct {
+		udata []map[string]interface{}
+	}
+	if len(updates) > 0 {
+		unwindData := make(map[string]udata)
+		for _, update := range groupByLabel(updates) {
+			for ix, label := range update.labels.Slice() {
+				unwind := make([]map[string]interface{}, 0)
+				item := map[string]interface{}{
+					"props": update.data[ix].Properties,
+				}
+				unwind = append(unwind, item)
+				unwindData[label] = udata{udata: unwind}
+			}
+		}
+		for label, unwind := range unwindData {
+			query := fmt.Sprintf(`unwind $nodes as node MATCH (n) WHERE n.entityId = node.ID SET n=node.props, n%s`, label)
+			if _, err := tx.Run(query, map[string]interface{}{"nodes": unwind.udata}); err != nil {
 				return err
 			}
 		}
 	}
 	if len(inserts) > 0 {
-		for _, ins := range inserts {
-			if _, err := tx.Run(fmt.Sprintf("CREATE (n%s %s) RETURN ID(n)", ins.Labels, ins.Properties), map[string]interface{}{}); err != nil {
+		unwindData := make(map[string]udata)
+		for _, insert := range groupByLabel(inserts) {
+			for ix, label := range insert.labels.Slice() {
+				unwind := make([]map[string]interface{}, 0)
+				item := map[string]interface{}{
+					"props": insert.data[ix].Properties,
+				}
+				unwind = append(unwind, item)
+				unwindData[label] = udata{udata: unwind}
+			}
+		}
+		for label, unwind := range unwindData {
+			query := fmt.Sprintf(`unwind $nodes as node create (a%s) set a=node.props`, label)
+			if _, err := tx.Run(query, map[string]interface{}{"nodes": unwind.udata}); err != nil {
 				return err
 			}
 		}
@@ -246,13 +310,14 @@ func CommitNodesetsOperation(tx neo4j.Transaction, nodesets map[string]Nodeset, 
 		}
 		switch operation {
 		case "apply":
-			inserts, deletes, updates := diff(db_ns, ns)
-			if err := ns.Execute(tx, inserts, updates, deletes); err != nil {
+			// insert, update
+			rootOp, inserts, deletes, updates := diff(&db_ns, &ns)
+			if err := Execute(tx, &db_ns, &ns, rootOp, inserts, updates, deletes); err != nil {
 				return err
 			}
 		case "delete":
-			inserts, deletes, updates := diff(Nodeset{}, ns)
-			if err := ns.Execute(tx, inserts, updates, deletes); err != nil {
+			rootOp, inserts, deletes, updates := diff(&db_ns, &Nodeset{})
+			if err := Execute(tx, &db_ns, &ns, rootOp, inserts, updates, deletes); err != nil {
 				return err
 			}
 		}
