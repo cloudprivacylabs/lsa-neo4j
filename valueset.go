@@ -1,6 +1,7 @@
 package neo4j
 
 import (
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -136,55 +137,44 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 // }
 
 // oldNodeset is nodeset pulled from DB
-func diff(oldNodeset, newNodeset Nodeset) (insertions NodesetData, deletions []string, updates NodesetData) {
+func diff(oldNodeset, newNodeset Nodeset) (insertions []NodesetData, deletions []string, updates []NodesetData) {
 	// compare roots
-	if oldNodeset.ID != newNodeset.ID {
+	if !lpg.NewStringSet(oldNodeset.Labels...).IsEqual(lpg.NewStringSet(newNodeset.Labels...)) {
 		// update
-		updates.ID = newNodeset.ID
-		if !reflect.DeepEqual(oldNodeset.Labels, newNodeset.Labels) {
-			// update
-			updates.Labels = newNodeset.Labels
-		}
+		newNodeset.Labels = findLabelDiff(lpg.NewStringSet(oldNodeset.Labels...), (lpg.NewStringSet(newNodeset.Labels...)))
 	}
-	seenOldNodesetData := make(map[*NodesetData]struct{})
-	for _, oldNsData := range oldNodeset.Data {
-		for _, newNsData := range newNodeset.Data {
-			// if newNodeset is not in oldNodeset (newNodeset must === oldNodeset)
-			if _, has := seenOldNodesetData[&newNsData]; !has {
-				// delete
-				deletions = append(deletions, oldNsData.ID)
-			}
-			for k, v := range newNsData.Properties {
-				// if oldNodeset does not have property
-				if _, has := oldNsData.Properties[k]; !has {
-					// insert
-					insertions.Properties[k] = v
-				} else {
-					// compare, nop or update
-					if !reflect.DeepEqual(oldNsData.Properties, newNsData.Properties) {
-						// update
-						updates.Properties[k] = v
-					}
-				}
+	for oid, oldNsData := range oldNodeset.Data {
+		newNsData, exists := newNodeset.Data[oid]
+		if exists {
+			update := NodesetData{
+				ID:         oid,
+				Labels:     make([]string, 0),
+				Properties: make(map[string]interface{}),
 			}
 			if !lpg.NewStringSet(oldNsData.Labels...).IsEqual(lpg.NewStringSet(newNsData.Labels...)) {
 				// update - setting labels to those in newNodeset but not in oldNodeset
-				updates.Labels = findLabelDiff(lpg.NewStringSet(newNsData.Labels...), (lpg.NewStringSet(oldNsData.Labels...)))
+				update.Labels = findLabelDiff(lpg.NewStringSet(newNsData.Labels...), (lpg.NewStringSet(oldNsData.Labels...)))
 			}
-			seenOldNodesetData[&oldNsData] = struct{}{}
+			// if props are not equal, update to use newNodeset properties
+			if !reflect.DeepEqual(oldNsData.Properties, newNsData.Properties) {
+				for k, v := range newNsData.Properties {
+					update.Properties[k] = v
+				}
+			}
+			updates = append(updates, update)
+		} else {
+			deletions = append(deletions, oid)
+		}
+	}
+	for nid, newNsData := range newNodeset.Data {
+		_, exists := oldNodeset.Data[nid]
+		if !exists {
+			insertions = append(insertions, newNsData)
 		}
 	}
 	return insertions, deletions, updates
 }
 
-/*
-where insertions and deletions are node ids. (NodesetData.ID)
-Find NodesetData that are in oldNodeset but not in NewNodeset -> deletions
-Find NodesetData that are in newNodeset but not in oldNodeset: -> insertions
-Find NodesetData that are in both oldNodeset and NewNodeset: make sure labels and props are same, if not -> updates
-
-Also write:
-*/
 func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
 	query := "MATCH (root:`NODESET` {nodeset_id: $id})-[:$id]->(m) return root,m"
 	idrec, err := tx.Run(query, map[string]interface{}{"id": nodesetId})
@@ -220,27 +210,51 @@ func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
 	return ns, nil
 }
 
-func (ns Nodeset) Execute(tx neo4j.Transaction, op string) error {
-	db_ns, err := LoadNodeset(tx, ns.ID)
-	inserts, deletes, updates := diff(ns, db_ns)
-	if err != nil {
-		return err
+func (ns Nodeset) Execute(tx neo4j.Transaction, inserts, updates []NodesetData, deletions []string) error {
+	if len(updates) > 0 {
+		for _, update := range updates {
+			// update properties
+			if _, err := tx.Run("MATCH (n) WHERE n.entityId = $eid SET n = $props", map[string]interface{}{"eid": update.ID, "props": update.Properties}); err != nil {
+				return err
+			}
+			// update labels
+			if _, err := tx.Run(fmt.Sprintf("MATCH (n) WHERE n.entityId = $eid SET n:%s", makeLabels(nil, update.Labels)), map[string]interface{}{"eid": update.ID}); err != nil {
+				return err
+			}
+		}
 	}
-	switch op {
-	case "apply":
-		// update properties
-		if _, err := tx.Run("MATCH (n) WHERE n.entityId = $eid SET n = $props", map[string]interface{}{"eid": updates.ID, "props": updates.Properties}); err != nil {
+	if len(inserts) > 0 {
+		for _, ins := range inserts {
+			if _, err := tx.Run(fmt.Sprintf("CREATE (n%s %s) RETURN ID(n)", ins.Labels, ins.Properties), map[string]interface{}{}); err != nil {
+				return err
+			}
+		}
+	}
+	if len(deletions) > 0 {
+		if _, err := tx.Run("MATCH (n) WHERE n.entityId in $deletes DETACH DELETE n", map[string]interface{}{"deletes": deletions}); err != nil {
 			return err
 		}
-		// update labels
-		// WITH ['SPX', 'QQQ'] as x MATCH (n) WHERE n.entityId='lol' FOREACH(u in x | set n:u) return n
-		formatLabels := strings.Join(updates.Labels, ":")
-		if _, err := tx.Run("MATCH (n) WHERE n.entityId = $eid FOREACH(x in $labels | SET n:x)", map[string]interface{}{"eid": updates.ID}); err != nil {
+	}
+	return nil
+}
+
+func CommitNodesetsOperation(tx neo4j.Transaction, nodesets map[string]Nodeset, operation string) error {
+	for _, ns := range nodesets {
+		db_ns, err := LoadNodeset(tx, ns.ID)
+		if err != nil {
 			return err
 		}
-	case "delete":
-		if _, err := tx.Run("MATCH (n) WHERE n.entityId in $deletes DETACH DELETE n", map[string]interface{}{"deletes": deletes}); err != nil {
-			return err
+		switch operation {
+		case "apply":
+			inserts, deletes, updates := diff(db_ns, ns)
+			if err := ns.Execute(tx, inserts, updates, deletes); err != nil {
+				return err
+			}
+		case "delete":
+			inserts, deletes, updates := diff(Nodeset{}, ns)
+			if err := ns.Execute(tx, inserts, updates, deletes); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

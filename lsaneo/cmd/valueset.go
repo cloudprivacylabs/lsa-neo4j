@@ -62,22 +62,13 @@ var (
 			if err != nil {
 				return err
 			}
-			if err := commitNodesetsOperation(tx, nodesets, operation); err != nil {
+			if err := neo.CommitNodesetsOperation(tx, nodesets, operation); err != nil {
 
 			}
 			return nil
 		},
 	}
 )
-
-func commitNodesetsOperation(tx neo4j.Transaction, nodesets map[string]neo.Nodeset, operation string) error {
-	for _, ns := range nodesets {
-		if err := ns.Execute(tx, operation); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 type spreadsheetInput struct {
 	rows      [][]string
