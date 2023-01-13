@@ -129,15 +129,6 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 	return ret, nil
 }
 
-// func buildNodesetNodes(nodeset Nodeset) []*lpg.Node {
-// 	grph := ls.NewDocumentGraph()
-// 	nodes := make([]*lpg.Node, 0)
-// 	for _, nsD := range nodeset.Data {
-// 		nodes = append(nodes, grph.NewNode(nsD.Labels, nsD.Properties))
-// 	}
-// 	return nodes
-// }
-
 // oldNodeset is nodeset pulled from DB
 func diff(oldNodeset, newNodeset *Nodeset) (rootOp string, insertions []NodesetData, deletions []string, updates []NodesetData) {
 	// if DB nodeset does not exists, insert new nodeset
@@ -239,17 +230,19 @@ func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
 
 func Execute(tx neo4j.Transaction, oldNodeset, newNodeset *Nodeset, rootOp string, inserts, updates []NodesetData, deletions []string) error {
 	type groupedNodesetData struct {
-		labels lpg.StringSet
-		data   []NodesetData
+		labelExpr string
+		data      []NodesetData
 	}
-	groupByLabel := func(nsD []NodesetData) []groupedNodesetData {
+	groupByLabel := func(nodesetData []NodesetData) []groupedNodesetData {
 		ret := make([]groupedNodesetData, 0)
-		for _, ns := range nsD {
-			grpNodesetData := groupedNodesetData{
-				labels: lpg.NewStringSet(sort.StringSlice(ns.Labels)...),
-				data:   nsD,
-			}
-			ret = append(ret, grpNodesetData)
+		hm := make(map[string][]NodesetData)
+		for _, nsD := range nodesetData {
+			nsD.Labels = sort.StringSlice(nsD.Labels)
+			labelExpr := ""
+			hm[labelExpr] = append(hm[labelExpr], nsD)
+		}
+		for expr, nsData := range hm {
+			ret = append(ret, groupedNodesetData{labelExpr: expr, data: nsData})
 		}
 		return ret
 	}
@@ -258,15 +251,13 @@ func Execute(tx neo4j.Transaction, oldNodeset, newNodeset *Nodeset, rootOp strin
 	}
 	if len(updates) > 0 {
 		unwindData := make(map[string]udata)
-		for _, update := range groupByLabel(updates) {
-			for ix, label := range update.labels.Slice() {
-				unwind := make([]map[string]interface{}, 0)
-				item := map[string]interface{}{
-					"props": update.data[ix].Properties,
-				}
-				unwind = append(unwind, item)
-				unwindData[label] = udata{udata: unwind}
+		for ix, update := range groupByLabel(updates) {
+			unwind := make([]map[string]interface{}, 0)
+			item := map[string]interface{}{
+				"props": update.data[ix].Properties,
 			}
+			unwind = append(unwind, item)
+			unwindData[update.labelExpr] = udata{udata: unwind}
 		}
 		for label, unwind := range unwindData {
 			query := fmt.Sprintf(`unwind $nodes as node MATCH (n) WHERE n.entityId = node.ID SET n=node.props, n%s`, label)
@@ -277,15 +268,13 @@ func Execute(tx neo4j.Transaction, oldNodeset, newNodeset *Nodeset, rootOp strin
 	}
 	if len(inserts) > 0 {
 		unwindData := make(map[string]udata)
-		for _, insert := range groupByLabel(inserts) {
-			for ix, label := range insert.labels.Slice() {
-				unwind := make([]map[string]interface{}, 0)
-				item := map[string]interface{}{
-					"props": insert.data[ix].Properties,
-				}
-				unwind = append(unwind, item)
-				unwindData[label] = udata{udata: unwind}
+		for ix, insert := range groupByLabel(inserts) {
+			unwind := make([]map[string]interface{}, 0)
+			item := map[string]interface{}{
+				"props": insert.data[ix].Properties,
 			}
+			unwind = append(unwind, item)
+			unwindData[insert.labelExpr] = udata{udata: unwind}
 		}
 		for label, unwind := range unwindData {
 			query := fmt.Sprintf(`unwind $nodes as node create (a%s) set a=node.props`, label)
