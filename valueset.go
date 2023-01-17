@@ -80,6 +80,7 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 					val := row[idx]
 					header := input.ColumnNames()[idx]
 					if header == "nodeset_id" {
+						currNodesetID = val
 						continue
 					} else if header == "concept_id" {
 						nsDataID = val
@@ -116,6 +117,7 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 					return nil, err
 				}
 				// continue scanning with only with the same nodesetID
+				nodesetId = getColumn(r, "nodeset_id")
 				if currNodesetID != "" && nodesetId != currNodesetID {
 					continue
 				}
@@ -268,6 +270,7 @@ func Execute(tx neo4j.Transaction, cfg Config, oldNodeset, newNodeset Nodeset, r
 		labelExpr string
 		data      []NodesetData
 	}
+	// incoming data missing (1) ESF
 	groupByLabel := func(nodesetData []NodesetData) []groupedNodesetData {
 		ret := make([]groupedNodesetData, 0)
 		hm := make(map[string][]NodesetData)
@@ -297,8 +300,11 @@ func Execute(tx neo4j.Transaction, cfg Config, oldNodeset, newNodeset Nodeset, r
 			}
 		}
 	}
+	fmt.Println(groupByLabel(inserts))
 	if len(inserts) > 0 {
 		for _, insert := range groupByLabel(inserts) {
+			fmt.Println(insert.labelExpr)
+			fmt.Println(insert.data)
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
 			query := fmt.Sprintf("UNWIND $nodes AS node CREATE (n%s) SET n=node.Properties WITH n MATCH(root:`NODESET` {nodeset_id: %s}) MERGE(root)-[:%s]->(n)",
 				insert.labelExpr, quoteStringLiteral(newNodeset.ID), newNodeset.ID)

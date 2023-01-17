@@ -66,6 +66,7 @@ var (
 				case "apply":
 					// insert, update
 					rootOp, inserts, deletes, updates := neo.NodesetDiff(db_ns, ns)
+					// fmt.Println((inserts))
 					if err := neo.Execute(tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
 						tx.Rollback()
 						return err
