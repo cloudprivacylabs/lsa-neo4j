@@ -4,44 +4,45 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 type DBGraph struct {
 	G *lpg.Graph
 
-	NodeIds map[*lpg.Node]int64
-	Nodes   map[int64]*lpg.Node
-	EdgeIds map[*lpg.Edge]int64
-	Edges   map[int64]*lpg.Edge
+	NodeIds map[*lpg.Node]string
+	Nodes   map[string]*lpg.Node
+	EdgeIds map[*lpg.Edge]string
+	Edges   map[string]*lpg.Edge
 }
 
 func NewDBGraph(g *lpg.Graph) *DBGraph {
 	return &DBGraph{
 		G:       g,
-		NodeIds: make(map[*lpg.Node]int64),
-		Nodes:   make(map[int64]*lpg.Node),
-		EdgeIds: make(map[*lpg.Edge]int64),
-		Edges:   make(map[int64]*lpg.Edge),
+		NodeIds: make(map[*lpg.Node]string),
+		Nodes:   make(map[string]*lpg.Node),
+		EdgeIds: make(map[*lpg.Edge]string),
+		Edges:   make(map[string]*lpg.Edge),
 	}
 }
 
-func (dbg *DBGraph) NewNode(node *lpg.Node, dbID int64) {
+func (dbg *DBGraph) NewNode(node *lpg.Node, dbID string) {
 	dbg.Nodes[dbID] = node
 	dbg.NodeIds[node] = dbID
 }
 
-func (dbg *DBGraph) NewEdge(edge *lpg.Edge, dbID int64) {
+func (dbg *DBGraph) NewEdge(edge *lpg.Edge, dbID string) {
 	dbg.Edges[dbID] = edge
 	dbg.EdgeIds[edge] = dbID
 }
 
 type Delta interface {
-	WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery
-	Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error
+	WriteQuery(session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) DeltaQuery
+	Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) error
 }
 
 type DeltaQuery struct {
@@ -85,31 +86,6 @@ type CreateEdgeDelta struct {
 type UpdateEdgeDelta struct {
 	dbEdge     *lpg.Edge
 	properties map[string]interface{}
-}
-
-var lineMap = map[*lpg.Node]int{}
-
-func duplicateCreateNode(delta []Delta, msg string) bool {
-	for _, d := range delta {
-		n1, ok := d.(CreateNodeDelta)
-		if !ok {
-			continue
-		}
-		for _, x := range delta {
-			if x == d {
-				continue
-			}
-			n2, ok := x.(CreateNodeDelta)
-			if !ok {
-				continue
-			}
-			if n1.MemNode == n2.MemNode {
-				fmt.Println(msg, lineMap[n1.MemNode])
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
@@ -304,7 +280,6 @@ func mergeSubtree(memRoot, dbRoot *lpg.Node, dbGraph *DBGraph, nodeAssociations 
 			matchingDbNode = newNode
 			deltas = append(deltas, delta)
 			nodeAssociations[currentMemNode] = matchingDbNode
-			lineMap[currentMemNode] = 290
 		} else {
 			// There is matching node, merge it
 			d := mergeNodes(currentMemNode, matchingDbNode)
@@ -491,14 +466,14 @@ func isNodeIdentical(n1, n2 *lpg.Node) bool {
 	return eq
 }
 
-func buildCreateNodeQueries(in []Delta, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) []DeltaQuery {
+func buildCreateNodeQueries(session *Session, in []Delta, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) []DeltaQuery {
 	deltas := SelectDelta(in, func(d Delta) bool {
 		_, ok := d.(CreateNodeDelta)
 		return ok
 	})
 	ret := make([]DeltaQuery, 0, len(deltas))
 	for _, delta := range deltas {
-		ret = append(ret, delta.WriteQuery(dbNodeIds, dbEdgeIds, c))
+		ret = append(ret, delta.WriteQuery(session, dbNodeIds, dbEdgeIds, c))
 	}
 	return ret
 }
@@ -605,7 +580,7 @@ func findPropDiff(memObj, dbObj withProperty) map[string]interface{} {
 	return ret
 }
 
-func (un UpdateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+func (un UpdateNodeDelta) WriteQuery(session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) DeltaQuery {
 	hasProperties := false
 	for k := range un.properties {
 		if len(c.Shorten(k)) > 0 {
@@ -625,11 +600,11 @@ func (un UpdateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds ma
 		panic(fmt.Sprintf("Node ID not known: %s", un.dbNode))
 	}
 	if len(labels) > 0 && len(prop) > 0 {
-		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d SET n = %v SET n%s", id, prop, labels))
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE %s SET n = %v SET n%s", session.IDEqFunc("n", id), prop, labels))
 	} else if len(labels) == 0 && len(prop) > 0 {
-		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d SET n = %v", id, prop))
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE  %s SET n = %v", session.IDEqFunc("n", id), prop))
 	} else if len(prop) == 0 && len(labels) > 0 {
-		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE ID(n) = %d SET n:%s", id, labels))
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE  %s SET n:%s", session.IDEqFunc("n", id), labels))
 	}
 	return DeltaQuery{
 		Query: sb.String(),
@@ -637,70 +612,70 @@ func (un UpdateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds ma
 	}
 }
 
-func (un UpdateNodeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
-	q := un.WriteQuery(dbNodeIds, dbEdgeIds, c)
+func (un UpdateNodeDelta) Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) error {
+	q := un.WriteQuery(session, dbNodeIds, dbEdgeIds, c)
 	if len(q.Query) == 0 {
 		return nil
 	}
-	_, err := tx.Run(q.Query, q.Vars)
+	_, err := tx.Run(ctx, q.Query, q.Vars)
 	if err != nil {
 		return fmt.Errorf("While running %s: %w", q, err)
 	}
 	return nil
 }
 
-func (cn CreateNodeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+func (cn CreateNodeDelta) WriteQuery(session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
 	prop := c.MakeProperties(cn.DBNode, vars)
 	labels := c.MakeLabels(cn.DBNode.GetLabels().Slice())
 	return DeltaQuery{
-		Query: fmt.Sprintf("CREATE (n%s %s) RETURN ID(n)", labels, prop),
+		Query: fmt.Sprintf("CREATE (n%s %s) RETURN %s", labels, prop, session.IDFunc("n")),
 		Vars:  vars,
 	}
 }
 
-func (cn CreateNodeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
-	q := cn.WriteQuery(dbNodeIds, dbEdgeIds, c)
-	rec, err := tx.Run(q.Query, q.Vars)
+func (cn CreateNodeDelta) Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) error {
+	q := cn.WriteQuery(session, dbNodeIds, dbEdgeIds, c)
+	rec, err := tx.Run(ctx, q.Query, q.Vars)
 	if err != nil {
 		return fmt.Errorf("While running %s: %w", q, err)
 	}
-	records, err := rec.Single()
+	records, err := rec.Single(ctx)
 	if err != nil {
 		return err
 	}
-	id := records.Values[0].(int64)
+	id := records.Values[0].(string)
 	dbNodeIds[cn.DBNode] = id
 	return nil
 }
 
-func (ce CreateEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+func (ce CreateEdgeDelta) WriteQuery(session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
 	label := c.MakeLabels([]string{ce.label})
 	props := c.MakeProperties(mapWithProperty(ce.properties), vars)
 	return DeltaQuery{
-		Query: fmt.Sprintf("MATCH (n) WHERE ID(n) = %d MATCH (m) WHERE ID(m) = %d CREATE (n)-[%s %s]->(m)", dbNodeIds[ce.fromDbNode], dbNodeIds[ce.toDbNode], label, props),
+		Query: fmt.Sprintf("MATCH (n) WHERE  %s MATCH (m) WHERE  %s CREATE (n)-[%s %s]->(m)", session.IDEqFunc("n", dbNodeIds[ce.fromDbNode]), session.IDEqFunc("m", dbNodeIds[ce.toDbNode]), label, props),
 		Vars:  vars,
 	}
 }
 
-func (ce CreateEdgeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
-	q := ce.WriteQuery(dbNodeIds, dbEdgeIds, c)
-	_, err := tx.Run(q.Query, q.Vars)
+func (ce CreateEdgeDelta) Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) error {
+	q := ce.WriteQuery(session, dbNodeIds, dbEdgeIds, c)
+	_, err := tx.Run(ctx, q.Query, q.Vars)
 	return err
 }
 
-func (ue UpdateEdgeDelta) WriteQuery(dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) DeltaQuery {
+func (ue UpdateEdgeDelta) WriteQuery(session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) DeltaQuery {
 	vars := make(map[string]interface{})
 	props := c.MakeProperties(mapWithProperty(ue.properties), vars)
 	return DeltaQuery{
-		Query: fmt.Sprintf("MATCH ()-[e]->() WHERE ID(e) = %d set e=%s", dbEdgeIds[ue.dbEdge], props),
+		Query: fmt.Sprintf("MATCH ()-[e]->() WHERE %s set e=%s", session.IDEqFunc("e", dbEdgeIds[ue.dbEdge]), props),
 		Vars:  vars,
 	}
 }
 
 // LinkMergedEntities will find the new entities from the delta and link them
-func LinkMergedEntities(ctx *ls.Context, tx neo4j.Transaction, cfg Config, delta []Delta, nodeMap map[*lpg.Node]int64) error {
+func LinkMergedEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, cfg Config, delta []Delta, nodeMap map[*lpg.Node]string) error {
 	rootNodes := make([]*lpg.Node, 0)
 	for _, d := range delta {
 		if n, ok := d.(CreateNodeDelta); ok {
@@ -717,14 +692,16 @@ func LinkMergedEntities(ctx *ls.Context, tx neo4j.Transaction, cfg Config, delta
 	return nil
 }
 
-func (ue UpdateEdgeDelta) Run(tx neo4j.Transaction, dbNodeIds map[*lpg.Node]int64, dbEdgeIds map[*lpg.Edge]int64, c Config) error {
-	q := ue.WriteQuery(dbNodeIds, dbEdgeIds, c)
-	_, err := tx.Run(q.Query, q.Vars)
+func (ue UpdateEdgeDelta) Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) error {
+	q := ue.WriteQuery(session, dbNodeIds, dbEdgeIds, c)
+	_, err := tx.Run(ctx, q.Query, q.Vars)
 	return err
 }
 
-func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config Config) (*DBGraph, error) {
-	_, rootIds, _, err := s.CollectEntityDBIds(tx, config, memGraph)
+func (s *Session) LoadDBGraph(ctx *ls.Context, tx neo4j.ExplicitTransaction, memGraph *lpg.Graph, config Config, cache *Neo4jCache) (*DBGraph, error) {
+	start := time.Now()
+	_, rootIds, _, err := s.CollectEntityDBIds(ctx, tx, config, memGraph, cache)
+	fmt.Printf("Collect entity DB ids: %v\n", time.Since(start))
 	if err != nil {
 		return nil, err
 	}
@@ -733,36 +710,38 @@ func (s *Session) LoadDBGraph(tx neo4j.Transaction, memGraph *lpg.Graph, config 
 	if len(rootIds) == 0 {
 		return dbg, nil
 	}
-	err = loadGraphByEntities(tx, dbg, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
+	start = time.Now()
+	err = loadGraphByEntities(ctx, tx, s, dbg, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
+	fmt.Printf("Load entities: %v\n", time.Since(start))
 	if err != nil {
 		return nil, err
 	}
 	return dbg, nil
 }
 
-func loadGraphByEntities(tx neo4j.Transaction, grph *DBGraph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) error {
+func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *DBGraph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) error {
 	if len(rootIds) == 0 {
 		return fmt.Errorf("Empty entity schema nodes")
 	}
 	// neo4j IDs
-	queue := make(map[int64]struct{}, len(rootIds))
+	queue := make(map[string]struct{}, len(rootIds))
 	for _, id := range rootIds {
-		queue[int64(id)] = struct{}{}
+		queue[id] = struct{}{}
 	}
 
 	for len(queue) > 0 {
-		q := make([]int64, 0, len(queue))
+		q := make([]string, 0, len(queue))
 		for k := range queue {
 			q = append(q, k)
 		}
-		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, q)
+		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, q)
 		if err != nil {
 			return err
 		}
 		if len(srcNodes) == 0 {
 			break
 		}
-		queue = make(map[int64]struct{})
+		queue = make(map[string]struct{})
 		makeNode := func(srcNode neo4jNode) *lpg.Node {
 			src := grph.G.NewNode(srcNode.labels, nil)
 			labels := make([]string, 0, len(srcNode.labels))
@@ -794,11 +773,11 @@ func loadGraphByEntities(tx neo4j.Transaction, grph *DBGraph, rootIds []int64, c
 			if _, seen := grph.Nodes[node.id]; !seen {
 				nd := makeNode(node)
 				if selectEntity != nil && selectEntity(nd) {
-					queue[int64(node.id)] = struct{}{}
+					queue[node.id] = struct{}{}
 				}
 			}
 			if _, ok := node.props[config.Shorten(ls.EntitySchemaTerm)]; !ok {
-				queue[int64(node.id)] = struct{}{}
+				queue[node.id] = struct{}{}
 			}
 		}
 		for _, edge := range adjRelationships {
