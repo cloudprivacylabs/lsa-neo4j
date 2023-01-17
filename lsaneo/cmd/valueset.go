@@ -8,7 +8,8 @@ import (
 
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	lsacsv "github.com/cloudprivacylabs/lsa/pkg/csv"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"github.com/spf13/cobra"
 )
 
@@ -19,11 +20,12 @@ var (
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
-			session := drv.NewSession()
-			defer session.Close()
-			var tx neo4j.Transaction
+			ctx := ls.DefaultContext()
+			session := drv.NewSession(ctx)
+			defer session.Close(ctx)
+			var tx neo4j.ExplicitTransaction
 			var err error
-			tx, err = session.BeginTransaction()
+			tx, err = session.BeginTransaction(ctx)
 			if err != nil {
 				return err
 			}
@@ -58,7 +60,7 @@ var (
 				return err
 			}
 			for _, ns := range nodesets {
-				db_ns, err := neo.LoadNodeset(tx, ns.ID)
+				db_ns, err := neo.LoadNodeset(ctx, tx, ns.ID)
 				if err != nil {
 					return err
 				}
@@ -66,20 +68,19 @@ var (
 				case "apply":
 					// insert, update
 					rootOp, inserts, deletes, updates := neo.NodesetDiff(db_ns, ns)
-					// fmt.Println((inserts))
-					if err := neo.Execute(tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
-						tx.Rollback()
+					if err := neo.Execute(ctx, tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
+						tx.Rollback(ctx)
 						return err
 					}
 				case "delete":
 					rootOp, inserts, deletes, updates := neo.NodesetDiff(db_ns, neo.Nodeset{})
-					if err := neo.Execute(tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
-						tx.Rollback()
+					if err := neo.Execute(ctx, tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
+						tx.Rollback(ctx)
 						return err
 					}
 				}
 			}
-			tx.Commit()
+			tx.Commit(ctx)
 			return nil
 		},
 	}

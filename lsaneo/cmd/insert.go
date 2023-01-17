@@ -22,6 +22,7 @@ var (
 			inputFormat, _ := cmd.Flags().GetString("input")
 			batchSize, _ := cmd.Flags().GetInt("batch")
 			var cfg neo.Config
+			ctx := ls.DefaultContext()
 			if cfgfile, _ := cmd.Flags().GetString("cfg"); len(cfgfile) == 0 {
 				err := cmdutil.ReadJSONOrYAML("lsaneo.config.yaml", &cfg)
 				if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -47,20 +48,20 @@ var (
 				if err != nil {
 					return err
 				}
-				session := drv.NewSession()
-				defer session.Close()
-				tx, err := session.BeginTransaction()
+				session := drv.NewSession(ctx)
+				defer session.Close(ctx)
+				tx, err := session.BeginTransaction(ctx)
 				if err != nil {
 					return err
 				}
 
 				_, err = neo.Insert(ls.DefaultContext(), session, tx, g, func(lpg.Node) bool { return true }, cfg, batchSize)
 				if err != nil {
-					tx.Rollback()
+					tx.Rollback(ctx)
 					return err
 				}
 
-				tx.Commit()
+				tx.Commit(ctx)
 			}
 			return nil
 		},

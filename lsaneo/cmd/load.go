@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"os"
-	"strconv"
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
@@ -16,10 +15,11 @@ var (
 		Short: "load entity nodes from database",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := ls.DefaultContext()
 			drv := getNeoDriver(cmd)
-			session := drv.NewSession()
-			defer session.Close()
-			tx, err := session.BeginTransaction()
+			session := drv.NewSession(ctx)
+			defer session.Close(ctx)
+			tx, err := session.BeginTransaction(ctx)
 			if err != nil {
 				return err
 			}
@@ -31,14 +31,14 @@ var (
 			for _, arg := range args {
 				grph := ls.NewDocumentGraph()
 				loadByID := func(f func(*lpg.Node) bool) error {
-					id, err := strconv.ParseInt(arg, 10, 64)
-					if err != nil {
-						return err
-					}
-					return session.LoadEntityNodes(tx, grph, []int64{int64(id)}, cfg, f)
+					// id, err := strconv.ParseInt(arg, 10, 64)
+					// if err != nil {
+					// 	return err
+					// }
+					return session.LoadEntityNodes(ctx, tx, grph, []string{arg}, cfg, f)
 				}
 				loadByEntityID := func(f func(*lpg.Node) bool) error {
-					return session.LoadEntityNodesByEntityId(tx, grph, []string{arg}, cfg, f)
+					return session.LoadEntityNodesByEntityId(ctx, tx, grph, []string{arg}, cfg, f)
 				}
 				var load func(func(*lpg.Node) bool) error
 				if nodeIds {

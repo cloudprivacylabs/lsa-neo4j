@@ -14,6 +14,7 @@ import (
 	"github.com/Masterminds/sprig"
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
+	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"github.com/spf13/cobra"
 )
@@ -60,7 +61,7 @@ SET c.standard = CASE $standard_concept WHEN "S" THEN TRUE else null END
 `,
 		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-
+			ctx := ls.DefaultContext()
 			dry, _ := cmd.Flags().GetBool("dry")
 
 			tmplInput, _ := cmd.Flags().GetString("cmdtemplate")
@@ -108,8 +109,8 @@ SET c.standard = CASE $standard_concept WHEN "S" THEN TRUE else null END
 			}
 			var session *neo.Session
 			if !dry {
-				session = drv.NewSession()
-				defer session.Close()
+				session = drv.NewSession(ctx)
+				defer session.Close(ctx)
 			}
 
 			batchSize, err := cmd.Flags().GetInt("batchsize")
@@ -188,7 +189,7 @@ SET c.standard = CASE $standard_concept WHEN "S" THEN TRUE else null END
 						log.Fatal(err)
 					}
 				} else {
-					_, err := session.WriteTransaction(txFunc)
+					// _, err := session.WriteTransaction(txFunc)
 					if err != nil {
 						log.Fatal(err)
 					}

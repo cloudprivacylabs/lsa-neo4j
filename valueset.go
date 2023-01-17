@@ -1,6 +1,7 @@
 package neo4j
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"reflect"
@@ -10,7 +11,7 @@ import (
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/fatih/structs"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 type NodesetInput interface {
@@ -88,7 +89,7 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 							nodeset.Data[nsDataID] = NodesetData{
 								ID:         nsDataID,
 								Labels:     make([]string, 0),
-								Properties: make(map[string]interface{}),
+								Properties: map[string]interface{}{ls.EntityIDTerm: val},
 							}
 						}
 					} else if header == "node_labels" {
@@ -184,9 +185,9 @@ func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp string, insertions []No
 	return rootOp, insertions, deletions, updates
 }
 
-func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
+func LoadNodeset(ctx context.Context, tx neo4j.ExplicitTransaction, nodesetId string) (Nodeset, error) {
 	query := fmt.Sprintf("MATCH (root:`NODESET` {nodeset_id: %s})-[:%s]->(m) return root,m", quoteStringLiteral(nodesetId), nodesetId)
-	idrec, err := tx.Run(query, map[string]interface{}{})
+	idrec, err := tx.Run(ctx, query, map[string]interface{}{})
 	if err != nil {
 		return Nodeset{}, err
 	}
@@ -195,10 +196,15 @@ func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
 		Data:   make(map[string]NodesetData),
 	}
 	first := false
-	for idrec.Next() {
+	for idrec.Next(ctx) {
 		rec := idrec.Record()
 		if !first {
 			nsCenter := rec.Values[0].(neo4j.Node)
+			for k, v := range nsCenter.Props {
+				if k == "nodeset_id" {
+					ns.ID = v.(string)
+				}
+			}
 			ns.Labels = nsCenter.Labels
 			first = true
 		}
@@ -246,23 +252,23 @@ func buildProps(props map[string]interface{}, vars map[string]interface{}) strin
 	return out.String()
 }
 
-func Execute(tx neo4j.Transaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp string, inserts, updates, deletes []NodesetData) error {
+func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp string, inserts, updates, deletes []NodesetData) error {
 	// root op
 	// new nodeset - update/insert - merge? (for update)
 	// db nodeset - delete
 	switch rootOp {
 	case "insertRoot":
 		vars := make(map[string]interface{})
-		if _, err := tx.Run(fmt.Sprintf("CREATE (n %s %s)", cfg.MakeLabels(newNodeset.Labels), buildProps(newNodeset.Properties, vars)), vars); err != nil {
+		if _, err := tx.Run(ctx, fmt.Sprintf("CREATE (n %s %s)", cfg.MakeLabels(newNodeset.Labels), buildProps(newNodeset.Properties, vars)), vars); err != nil {
 			return err
 		}
 	case "updateRoot":
-		if _, err := tx.Run(fmt.Sprintf("MATCH (n) WHERE n.entityId = $eid SET n.props=$props, n%s", cfg.MakeLabels(oldNodeset.Labels)), map[string]interface{}{
+		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) WHERE n.entityId = $eid SET n.props=$props, n%s", cfg.MakeLabels(oldNodeset.Labels)), map[string]interface{}{
 			"eid": oldNodeset.ID, "props": oldNodeset.Properties}); err != nil {
 			return err
 		}
 	case "deleteRoot":
-		if _, err := tx.Run("MATCH (n) WHERE n.entityId = $eid DETACH DELETE n", map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
+		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n {nodeset_id: $eid})-[r:%s]->() DELETE r", oldNodeset.ID), map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
 			return err
 		}
 	}
@@ -295,26 +301,23 @@ func Execute(tx neo4j.Transaction, cfg Config, oldNodeset, newNodeset Nodeset, r
 		for ix, update := range groupByLabel(updates) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data), "props": update.data[ix].Properties}
 			query := fmt.Sprintf(`unwind $nodes as node MATCH (n) WHERE n.entityId = node.ID SET n=node.Properties, n%s`, update.labelExpr)
-			if _, err := tx.Run(query, unwindData); err != nil {
+			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}
 		}
 	}
-	fmt.Println(groupByLabel(inserts))
 	if len(inserts) > 0 {
 		for _, insert := range groupByLabel(inserts) {
-			fmt.Println(insert.labelExpr)
-			fmt.Println(insert.data)
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
-			query := fmt.Sprintf("UNWIND $nodes AS node CREATE (n%s) SET n=node.Properties WITH n MATCH(root:`NODESET` {nodeset_id: %s}) MERGE(root)-[:%s]->(n)",
+			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s) ON CREATE SET n=node.Properties SET n=node.Properties WITH n MATCH(root:`NODESET` {nodeset_id: %s}) MERGE(root)-[:%s]->(n)",
 				insert.labelExpr, quoteStringLiteral(newNodeset.ID), newNodeset.ID)
-			if _, err := tx.Run(query, unwindData); err != nil {
+			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}
 		}
 	}
 	if len(deletes) > 0 {
-		if _, err := tx.Run("MATCH (n) WHERE n.entityId IN $deletes DETACH DELETE n", map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
+		if _, err := tx.Run(ctx, "MATCH (n) WHERE n.`https://lschema.org/entityId` IN $deletes DETACH DELETE n", map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
 			return err
 		}
 	}

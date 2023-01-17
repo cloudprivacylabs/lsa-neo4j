@@ -9,6 +9,8 @@ require (
 	github.com/cloudprivacylabs/lpg v1.0.11
 	github.com/cloudprivacylabs/lsa v1.0.0-beta20
 	github.com/cloudprivacylabs/opencypher v1.0.0-beta-13
+	github.com/fatih/structs v1.1.0
+	github.com/neo4j/neo4j-go-driver/v4 v4.4.4
 	github.com/neo4j/neo4j-go-driver/v5 v5.4.0
 	github.com/nleeper/goment v1.4.4
 	github.com/onsi/ginkgo/v2 v2.1.4
@@ -35,7 +37,6 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
-	github.com/fatih/structs v1.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
