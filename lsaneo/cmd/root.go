@@ -4,7 +4,7 @@ import (
 	"log"
 
 	neo "github.com/cloudprivacylabs/lsa-neo4j"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +30,7 @@ func init() {
 	rootCmd.PersistentFlags().String("db", "", "Database name")
 }
 
-func getDriver(cmd *cobra.Command) neo4j.Driver {
+func getDriver(cmd *cobra.Command) neo4j.DriverWithContext {
 	dbUri, _ := cmd.Flags().GetString("uri")
 	user, _ := cmd.Flags().GetString("user")
 	pwd, _ := cmd.Flags().GetString("pwd")
@@ -41,7 +41,7 @@ func getDriver(cmd *cobra.Command) neo4j.Driver {
 	} else {
 		auth = neo4j.NoAuth()
 	}
-	driver, err := neo4j.NewDriver(dbUri, auth)
+	driver, err := neo4j.NewDriverWithContext(dbUri, auth)
 	if err != nil {
 		log.Fatal(err)
 	}

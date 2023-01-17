@@ -6,7 +6,7 @@ import (
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 var DEFAULT_BATCH_SIZE = 1000
@@ -14,14 +14,14 @@ var DEFAULT_BATCH_SIZE = 1000
 type JobQueue struct {
 	createNodes []*lpg.Node
 	createEdges []*lpg.Edge
-	deleteNodes []int64
-	deleteEdges []int64
+	deleteNodes []string
+	deleteEdges []string
 }
 
 type DeleteEntity struct {
 	Config
 	*lpg.Graph
-	entityId int64
+	entityId string
 }
 
 type CreateEntity struct {
@@ -30,7 +30,7 @@ type CreateEntity struct {
 	*lpg.Node
 }
 
-func (q *JobQueue) Run(ctx *ls.Context, tx neo4j.Transaction, cfg Config, nodeMap map[*lpg.Node]int64, batchSize int) error {
+func (q *JobQueue) Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, cfg Config, nodeMap map[*lpg.Node]string, batchSize int) error {
 	if batchSize == 0 {
 		batchSize = DEFAULT_BATCH_SIZE
 	}
@@ -41,7 +41,7 @@ func (q *JobQueue) Run(ctx *ls.Context, tx neo4j.Transaction, cfg Config, nodeMa
 		}
 		// delete nodes in batches
 		ctx.GetLogger().Debug(map[string]interface{}{"delete nodes": q.deleteNodes[:batch]})
-		_, err := tx.Run("MATCH (m) WHERE ID(m) in $ids DETACH DELETE m", map[string]interface{}{"ids": q.deleteNodes[:batch]})
+		_, err := tx.Run(ctx, fmt.Sprintf("MATCH (m) WHERE %s in $ids DETACH DELETE m", session.IDFunc("m")), map[string]interface{}{"ids": q.deleteNodes[:batch]})
 		if err != nil {
 			return err
 		}
@@ -54,13 +54,13 @@ func (q *JobQueue) Run(ctx *ls.Context, tx neo4j.Transaction, cfg Config, nodeMa
 	if err := CreateNodesBatch(ctx, tx, q.createNodes, nodeMap, cfg, batchSize); err != nil {
 		return err
 	}
-	if err := CreateEdgesBatch(ctx, tx, q.createEdges, nodeMap, cfg, batchSize); err != nil {
+	if err := CreateEdgesBatch(ctx, tx, session, q.createEdges, nodeMap, cfg, batchSize); err != nil {
 		return err
 	}
 	return nil
 }
 
-func CreateNodesBatch(ctx *ls.Context, tx neo4j.Transaction, createNodes []*lpg.Node, nodeMap map[*lpg.Node]int64, cfg Config, batchSize int) error {
+func CreateNodesBatch(ctx *ls.Context, tx neo4j.ExplicitTransaction, createNodes []*lpg.Node, nodeMap map[*lpg.Node]string, cfg Config, batchSize int) error {
 	for len(createNodes) > 0 {
 		vars := make(map[string]interface{})
 		batch := len(createNodes)
@@ -70,18 +70,18 @@ func CreateNodesBatch(ctx *ls.Context, tx neo4j.Transaction, createNodes []*lpg.
 		// create nodes in batches
 		query := buildCreateQuery(createNodes[:batch], cfg, vars)
 		ctx.GetLogger().Debug(map[string]interface{}{"createNodes": query, "vars": vars})
-		idrec, err := tx.Run(query, vars)
+		idrec, err := tx.Run(ctx, query, vars)
 		if err != nil {
 			return err
 		}
-		records, err := idrec.Single()
+		records, err := idrec.Single(ctx)
 		if err != nil {
 			return err
 		}
 		ctx.GetLogger().Debug(map[string]interface{}{"createNodes": "done", "records": records.Values})
 		// track database IDs into nodeMap
 		for i, rec := range records.Values {
-			nodeMap[createNodes[i]] = int64(rec.(int64))
+			nodeMap[createNodes[i]] = rec.(neo4j.Node).ElementId
 		}
 		// dequeue nodes based on batch size
 		createNodes = createNodes[batch:]
@@ -89,7 +89,7 @@ func CreateNodesBatch(ctx *ls.Context, tx neo4j.Transaction, createNodes []*lpg.
 	return nil
 }
 
-func CreateEdgesBatch(ctx *ls.Context, tx neo4j.Transaction, createEdges []*lpg.Edge, nodeMap map[*lpg.Node]int64, cfg Config, batchSize int) error {
+func CreateEdgesBatch(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, createEdges []*lpg.Edge, nodeMap map[*lpg.Node]string, cfg Config, batchSize int) error {
 	for len(createEdges) > 0 {
 		vars := make(map[string]interface{})
 		batch := len(createEdges)
@@ -97,9 +97,9 @@ func CreateEdgesBatch(ctx *ls.Context, tx neo4j.Transaction, createEdges []*lpg.
 			batch = batchSize
 		}
 		// create edges in batches
-		query := buildConnectQuery(createEdges[:batch], cfg, nodeMap, vars)
+		query := buildConnectQuery(session, createEdges[:batch], cfg, nodeMap, vars)
 		createEdges = createEdges[batch:]
-		_, err := tx.Run(query, vars)
+		_, err := tx.Run(ctx, query, vars)
 		if err != nil {
 			return err
 		}
@@ -108,21 +108,21 @@ func CreateEdgesBatch(ctx *ls.Context, tx neo4j.Transaction, createEdges []*lpg.
 }
 
 // DeleteEntity.Queue will find all connected nodes to the given entity in the database and delete them
-func (d *DeleteEntity) Queue(tx neo4j.Transaction, q *JobQueue, selectEntity func(*lpg.Node) bool) error {
-	ids, err := loadEntityNodes(tx, d.Graph, []int64{d.entityId}, d.Config, findNeighbors, selectEntity)
+func (d *DeleteEntity) Queue(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, q *JobQueue, selectEntity func(*lpg.Node) bool) error {
+	ids, err := loadEntityNodes(ctx, tx, session, d.Graph, []string{d.entityId}, d.Config, findNeighbors, selectEntity)
 	if err != nil {
 		return err
 	}
 	for _, id := range ids {
-		if id != 0 {
-			q.deleteNodes = append(q.deleteNodes, int64(id))
+		if len(id) != 0 {
+			q.deleteNodes = append(q.deleteNodes, id)
 		}
 	}
 	return nil
 }
 
 // CreateEntity.Queue will find all connected nodes to the given entity and create, stopping at different entity boundaries
-func (c *CreateEntity) Queue(tx neo4j.Transaction, q *JobQueue) error {
+func (c *CreateEntity) Queue(ctx *ls.Context, tx neo4j.ExplicitTransaction, q *JobQueue) error {
 	ls.IterateDescendants(c.Node, func(n *lpg.Node) bool {
 		if !n.GetLabels().Has(ls.DocumentNodeTerm) {
 			return true
@@ -166,7 +166,7 @@ func buildCreateQuery(nodes []*lpg.Node, c Config, vars map[string]interface{}) 
 	}
 	builder := strings.Builder{}
 	for ix := range nodes {
-		builder.WriteString(fmt.Sprintf("ID(n%d)", ix))
+		builder.WriteString(fmt.Sprintf("n%d", ix))
 		// Add a comma until the end of query
 		if ix < len(nodes)-1 {
 			builder.WriteString(",")
@@ -176,13 +176,14 @@ func buildCreateQuery(nodes []*lpg.Node, c Config, vars map[string]interface{}) 
 }
 
 // query to create edges and connect existing nodes in the database
-func buildConnectQuery(edges []*lpg.Edge, c Config, hm map[*lpg.Node]int64, vars map[string]interface{}) string {
+func buildConnectQuery(session *Session, edges []*lpg.Edge, c Config, hm map[*lpg.Node]string, vars map[string]interface{}) string {
 	if len(edges) == 0 {
 		return ""
 	}
 	first := true
 	sb := strings.Builder{}
-	scopeNodes := make(map[int64]struct{})
+	scopeNodes := make(map[string]struct{})
+	nodeIndexes := make(map[string]int) // This is required to name nodes by id
 	for ix, edge := range edges {
 		if first {
 			first = false
@@ -191,21 +192,31 @@ func buildConnectQuery(edges []*lpg.Edge, c Config, hm map[*lpg.Node]int64, vars
 		}
 		from := hm[edge.GetFrom()]
 		to := hm[edge.GetTo()]
+		fromIx, ok := nodeIndexes[from]
+		if !ok {
+			fromIx = len(nodeIndexes)
+			nodeIndexes[from] = fromIx
+		}
+		toIx, ok := nodeIndexes[to]
+		if !ok {
+			toIx = len(nodeIndexes)
+			nodeIndexes[to] = toIx
+		}
 		label := c.MakeLabels([]string{edge.GetLabel()})
 		prop := c.MakeProperties(edge, vars)
 
 		_, fromInScope := scopeNodes[from]
 		_, toInScope := scopeNodes[to]
 		if !fromInScope && !toInScope {
-			fmt.Fprintf(&sb, "match (n%d),(n%d) where ID(n%d)=%d and ID(n%d)=%d ", from, to, from, from, to, to)
+			fmt.Fprintf(&sb, "match (n%d),(n%d) where %s and %s ", fromIx, toIx, session.IDEqFunc(fmt.Sprintf("n%d", fromIx), from), session.IDEqFunc(fmt.Sprintf("n%d", toIx), to))
 		} else if fromInScope && !toInScope {
-			fmt.Fprintf(&sb, "match (n%d) where ID(n%d)=%d ", to, to, to)
+			fmt.Fprintf(&sb, "match (n%d) where %s ", toIx, session.IDEqFunc(fmt.Sprintf("n%d", toIx), to))
 		} else if !fromInScope && toInScope {
-			fmt.Fprintf(&sb, "match (n%d) where ID(n%d)=%d ", from, from, from)
+			fmt.Fprintf(&sb, "match (n%d) where %s ", fromIx, session.IDEqFunc(fmt.Sprintf("n%d", fromIx), from))
 		}
 		scopeNodes[from] = struct{}{}
 		scopeNodes[to] = struct{}{}
-		fmt.Fprintf(&sb, "create (n%d)-[e%d %s %s]->(n%d) ", from, ix, label, prop, to)
+		fmt.Fprintf(&sb, "create (n%d)-[e%d %s %s]->(n%d) ", fromIx, ix, label, prop, toIx)
 	}
 	sb.WriteString(" return ")
 	first = true
@@ -220,7 +231,7 @@ func buildConnectQuery(edges []*lpg.Edge, c Config, hm map[*lpg.Node]int64, vars
 	return sb.String()
 }
 
-func CreateEdgesUnwind(ctx *ls.Context, edges []*lpg.Edge, nodeMap map[*lpg.Node]int64, cfg Config) func(neo4j.Transaction) error {
+func CreateEdgesUnwind(ctx *ls.Context, session *Session, edges []*lpg.Edge, nodeMap map[*lpg.Node]string, cfg Config) func(neo4j.ExplicitTransaction) error {
 
 	labels := make(map[string][]*lpg.Edge)
 	for _, edge := range edges {
@@ -232,8 +243,8 @@ func CreateEdgesUnwind(ctx *ls.Context, edges []*lpg.Edge, nodeMap map[*lpg.Node
 		for _, edge := range insEdges {
 			props := cfg.MakePropertiesObj(edge)
 			item := map[string]interface{}{
-				"from":  nodeMap[edge.GetFrom()],
-				"to":    nodeMap[edge.GetTo()],
+				"from":  session.IDValue(nodeMap[edge.GetFrom()]),
+				"to":    session.IDValue(nodeMap[edge.GetTo()]),
 				"props": props,
 			}
 			unwind = append(unwind, item)
@@ -241,13 +252,13 @@ func CreateEdgesUnwind(ctx *ls.Context, edges []*lpg.Edge, nodeMap map[*lpg.Node
 		labels := cfg.MakeLabels([]string{label})
 		unwindData[labels] = unwind
 	}
-	return func(tx neo4j.Transaction) error {
+	return func(tx neo4j.ExplicitTransaction) error {
 		for labels, unwind := range unwindData {
 			query := fmt.Sprintf(`unwind $edges as edge 
-match(a) where ID(a)=edge.from with a,edge
-match(b) where ID(b)=edge.to 
-create (a)-[e%s]->(b) set e=edge.props`, labels)
-			_, err := tx.Run(query, map[string]interface{}{"edges": unwind})
+match(a) where %s with a,edge
+match(b) where %s 
+create (a)-[e%s]->(b) set e=edge.props`, session.IDEqFunc("a", "edge.from"), session.IDEqFunc("b", "edge.to"), labels)
+			_, err := tx.Run(ctx, query, map[string]interface{}{"edges": unwind})
 			if err != nil {
 				return err
 			}
@@ -256,7 +267,7 @@ create (a)-[e%s]->(b) set e=edge.props`, labels)
 	}
 }
 
-func CreateNodesUnwind(ctx *ls.Context, nodes []*lpg.Node, nodeMap map[*lpg.Node]int64, cfg Config) func(neo4j.Transaction) error {
+func CreateNodesUnwind(ctx *ls.Context, nodes []*lpg.Node, nodeMap map[*lpg.Node]string, cfg Config) func(neo4j.ExplicitTransaction) error {
 	labels := make(map[string][]*lpg.Node)
 	for _, node := range nodes {
 		l := cfg.MakeLabels(node.GetLabels().Slice())
@@ -279,21 +290,20 @@ func CreateNodesUnwind(ctx *ls.Context, nodes []*lpg.Node, nodeMap map[*lpg.Node
 		}
 		unwindData[label] = udata{insNodes: insNodes, udata: unwind}
 	}
-	return func(tx neo4j.Transaction) error {
+	return func(tx neo4j.ExplicitTransaction) error {
 		for label, unwind := range unwindData {
 			query := fmt.Sprintf(`unwind $nodes as node 
-create (a%s) set a=node.props return ID(a)`, label)
-			result, err := tx.Run(query, map[string]interface{}{"nodes": unwind.udata})
+create (a%s) set a=node.props return a`, label)
+			result, err := tx.Run(ctx, query, map[string]interface{}{"nodes": unwind.udata})
 			if err != nil {
 				return err
 			}
-			records, err := result.Collect()
+			records, err := result.Collect(ctx)
 			if err != nil {
 				return err
 			}
 			for i := range records {
-				id := records[i].Values[0].(int64)
-				nodeMap[unwind.insNodes[i]] = id
+				nodeMap[unwind.insNodes[i]] = records[i].Values[0].(neo4j.Node).ElementId
 			}
 		}
 		return nil

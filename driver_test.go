@@ -9,7 +9,7 @@ import (
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/layers/cmd/cmdutil"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
@@ -33,7 +33,7 @@ var _ = Describe("Driver", func() {
 
 	var cfg Config
 	var grph *lpg.Graph
-	var eids []int64
+	var eids []string
 	var err error
 
 	BeforeEach(func() {

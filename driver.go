@@ -2,30 +2,40 @@
 //
 // The input graph node IDs are stored in `neo4j_id` property. All
 // other properties and labels are stored verbatim.
-//
-//
 package neo4j
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bserdar/slicemap"
+
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/lsa/pkg/types"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/cloudprivacylabs/opencypher"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 type Driver struct {
-	drv    neo4j.Driver
+	drv    neo4j.DriverWithContext
 	dbName string
+
+	// ID(objectName)=id
+	IDEqFunc func(objectName, id string) string
+	// ID(objectName)
+	IDFunc func(objectName string) string
+	// IDValue returns the actual ID value as a string or int64
+	IDValue func(string) interface{}
 }
 
 type Session struct {
-	neo4j.Session
+	neo4j.SessionWithContext
+	*Driver
 }
 
 const (
@@ -36,24 +46,40 @@ type ErrMultipleFound string
 
 func (e ErrMultipleFound) Error() string { return "Multiple found: " + string(e) }
 
-func NewDriver(driver neo4j.Driver, databaseName string) *Driver {
-	return &Driver{
+func NewDriver(driver neo4j.DriverWithContext, databaseName string) *Driver {
+	drv := &Driver{
 		drv:    driver,
 		dbName: databaseName,
 	}
+	srv, err := driver.GetServerInfo(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	if srv.ProtocolVersion().Major >= 5 {
+		drv.IDEqFunc = func(objectName, id string) string { return fmt.Sprintf("elementId(%s)=\"%s\"", objectName, id) }
+		drv.IDFunc = func(objectName string) string { return fmt.Sprintf("elementId(%s)", objectName) }
+		drv.IDValue = func(value string) interface{} { return value }
+	} else {
+		drv.IDEqFunc = func(objectName, id string) string { return fmt.Sprintf("id(%s)=%s", objectName, id) }
+		drv.IDFunc = func(objectName string) string { return fmt.Sprintf("id(%s)", objectName) }
+		drv.IDValue = func(value string) interface{} { v, _ := strconv.Atoi(value); return int64(v) }
+	}
+	return drv
 }
 
 func (d *Driver) Close() {
-	d.drv.Close()
+	d.drv.Close(context.Background())
 }
 
-func (d *Driver) NewSession() *Session {
-	s := d.drv.NewSession(neo4j.SessionConfig{DatabaseName: d.dbName})
-	return &Session{s}
+func (d *Driver) NewSession(ctx context.Context) *Session {
+	s := d.drv.NewSession(ctx, neo4j.SessionConfig{DatabaseName: d.dbName})
+	return &Session{SessionWithContext: s,
+		Driver: d,
+	}
 }
 
-func (s *Session) Close() {
-	s.Session.Close()
+func (s *Session) Close(ctx context.Context) {
+	s.SessionWithContext.Close(ctx)
 }
 
 func (s *Session) Logf(format string, a ...interface{}) {
@@ -61,9 +87,9 @@ func (s *Session) Logf(format string, a ...interface{}) {
 }
 
 // Insert creates or adds to a graph on a database; does not check existing nodes
-func Insert(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEntity func(lpg.Node) bool, config Config, batch int) ([]int64, error) {
-	eids := make([]int64, 0)
-	mappedEntities := make(map[*lpg.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
+func Insert(ctx *ls.Context, session *Session, tx neo4j.ExplicitTransaction, grph *lpg.Graph, selectEntity func(lpg.Node) bool, config Config, batch int) ([]string, error) {
+	eids := make([]string, 0)
+	mappedEntities := make(map[*lpg.Node]string) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
 	entities := make([]*lpg.Node, 0)
 	allNodes := make(map[*lpg.Node]struct{})
@@ -105,155 +131,65 @@ func Insert(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.G
 		}
 		if _, exists := creates[id]; exists {
 			c := &CreateEntity{Config: config, Graph: grph, Node: entity}
-			if err := c.Queue(tx, jobs); err != nil {
+			if err := c.Queue(ctx, tx, jobs); err != nil {
 				return nil, err
 			}
 
 		}
 	}
-	if err := jobs.Run(ctx, tx, config, mappedEntities, batch); err != nil {
+	if err := jobs.Run(ctx, tx, session, config, mappedEntities, batch); err != nil {
 		return nil, err
 	}
 
 	// Link nodes
 	for node := range allNodes {
 		if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-			if err := LinkNodesForNewEntity(ctx, tx, config, node, mappedEntities); err != nil {
+			if err := LinkNodesForNewEntity(ctx, tx, session, config, node, mappedEntities); err != nil {
 				return nil, err
 			}
 		}
 	}
 	return eids, nil
 }
-
-// SaveGraph creates a graph filtered by nodes with entity id term and returns the neo4j IDs of the entity nodes
-func SaveGraph(ctx *ls.Context, session *Session, tx neo4j.Transaction, grph *lpg.Graph, selectEntity func(*lpg.Node) bool, config Config, batch int) ([]int64, error) {
-	// ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "start"})
-	// eids := make([]int64, 0)
-	// mappedEntities := make(map[*lpg.Node]int64) // holds all neo4j id's of entity schema and nonempty entity id
-	// allNodes := make(map[*lpg.Node]struct{})
-
-	// entities, entityDBIds, entityInfo, err := session.CollectEntityDBIds(tx, config, grph)
-	// ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "collectedEntityNodes", "nEntityNodes": len(entities)})
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "getEntityIDs", "entityDBIds": entityDBIds})
-
-	// // map DB ids
-	// for nodeItr := grph.GetNodes(); nodeItr.Next(); {
-	// 	node := nodeItr.Node()
-	// 	allNodes[node] = struct{}{}
-	// }
-	// for i := range entities {
-	// 	mappedEntities[entities[i]] = entityDBIds[i]
-	// }
-
-	// ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "mappedDBIds", "mappedEntities": mappedEntities})
-
-	// updates := make(map[string]struct{})
-	// creates := make(map[string]struct{})
-	// for _, id := range entityIds {
-	// 	updates[id] = struct{}{}
-	// }
-	// for _, id := range nonemptyEntityNodeIds {
-	// 	if _, exists := updates[id]; !exists {
-	// 		creates[id] = struct{}{}
-	// 	}
-	// }
-
-	// jobs := &JobQueue{
-	// 	createNodes: make([]*lpg.Node, 0),
-	// 	createEdges: make([]*lpg.Edge, 0),
-	// 	deleteNodes: make([]int64, 0),
-	// 	deleteEdges: make([]int64, 0),
-	// }
-	// for _, entity := range entities {
-	// 	id := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsString()
-	// 	ids := ls.AsPropertyValue(entity.GetProperty(ls.EntityIDTerm)).AsStringSlice()
-	// 	if id == "" {
-	// 		if len(ids) < 0 {
-	// 			continue
-	// 		}
-	// 		id = strings.Join(ids, ",")
-	// 	}
-	// 	if _, exists := updates[id]; exists {
-	// 		d := &DeleteEntity{Config: config, Graph: grph, entityId: mappedEntities[entity]}
-	// 		if err := d.Queue(tx, jobs, selectEntity); err != nil {
-	// 			return nil, err
-	// 		}
-	// 		c := &CreateEntity{Config: config, Graph: grph, Node: entity}
-	// 		if err := c.Queue(tx, jobs); err != nil {
-	// 			return nil, err
-	// 		}
-
-	// 	} else if _, exists = creates[id]; exists {
-	// 		c := &CreateEntity{Config: config, Graph: grph, Node: entity}
-	// 		if err := c.Queue(tx, jobs); err != nil {
-	// 			return nil, err
-	// 		}
-	// 	}
-	// }
-	// if err := jobs.Run(ctx, tx, config, mappedEntities, batch); err != nil {
-	// 	return nil, err
-	// }
-
-	// ctx.GetLogger().Debug(map[string]interface{}{"saveGraph": "linking"})
-	// // Link nodes
-	// // for node := range allNodes {
-	// // 	if _, exists := node.GetProperty(ls.EntitySchemaTerm); exists {
-	// // 		if err := LinkNodesForNewEntity(ctx, tx, config, node, mappedEntities); err != nil {
-	// // 			return nil, err
-	// // 		}
-	// // 	}
-	// // }
-	// for _, id := range mappedEntities {
-	// 	eids = append(eids, id)
-	// }
-	// return eids, nil
-	return nil, nil
-}
-
-func (s *Session) LoadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, config Config, selectEntity func(*lpg.Node) bool) error {
-	_, err := loadEntityNodes(tx, grph, rootIds, config, findNeighbors, selectEntity)
+func (s *Session) LoadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, grph *lpg.Graph, rootIds []string, config Config, selectEntity func(*lpg.Node) bool) error {
+	_, err := loadEntityNodes(ctx, tx, s, grph, rootIds, config, findNeighbors, selectEntity)
 	return err
 }
 
-func (s *Session) LoadEntityNodesByEntityId(tx neo4j.Transaction, grph *lpg.Graph, rootIds []string, config Config, selectEntity func(*lpg.Node) bool) error {
+func (s *Session) LoadEntityNodesByEntityId(ctx *ls.Context, tx neo4j.ExplicitTransaction, grph *lpg.Graph, rootIds []string, config Config, selectEntity func(*lpg.Node) bool) error {
 	idTerm := config.Shorten(ls.EntityIDTerm)
-	res, err := tx.Run(fmt.Sprintf("match (root) where root.`%s` in $ids return id(root)", idTerm), map[string]interface{}{"ids": rootIds})
+	res, err := tx.Run(ctx, fmt.Sprintf("match (root) where root.`%s` in $ids return %s", idTerm, s.IDFunc("root")), map[string]interface{}{"ids": rootIds})
 	if err != nil {
 		return err
 	}
-	ids := make([]int64, 0)
-	for res.Next() {
+	ids := make([]string, 0)
+	for res.Next(ctx) {
 		record := res.Record()
-		v := record.Values[0].(int64)
-		ids = append(ids, int64(v))
+		v := record.Values[0].(string)
+		ids = append(ids, v)
 	}
 
-	_, err = loadEntityNodes(tx, grph, ids, config, findNeighbors, selectEntity)
+	_, err = loadEntityNodes(ctx, tx, s, grph, ids, config, findNeighbors, selectEntity)
 	return err
 }
 
 type neo4jNode struct {
-	id     int64
+	id     string
 	labels []string
 	props  map[string]interface{}
 }
 
 type neo4jEdge struct {
-	id      int64
-	startId int64
-	endId   int64
+	id      string
+	startId string
+	endId   string
 	types   string
 	props   map[string]interface{}
 }
 
 func newNode(ob1 neo4j.Node) neo4jNode {
 	ob2 := neo4jNode{
-		id:     ob1.Id,
+		id:     ob1.ElementId,
 		labels: ob1.Labels,
 		props:  ob1.Props,
 	}
@@ -262,28 +198,28 @@ func newNode(ob1 neo4j.Node) neo4jNode {
 
 func newEdge(ob1 neo4j.Relationship) neo4jEdge {
 	ob2 := neo4jEdge{
-		id:      ob1.Id,
-		startId: ob1.StartId,
-		endId:   ob1.EndId,
+		id:      ob1.ElementId,
+		startId: ob1.StartElementId,
+		endId:   ob1.EndElementId,
 		types:   ob1.Type,
 		props:   ob1.Props,
 	}
 	return ob2
 }
 
-func findNeighbors(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
+func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, ids []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
 	sources := make([]neo4jNode, 0)
 	targets := make([]neo4jNode, 0)
 	edges := make([]neo4jEdge, 0)
-	remainingIds := make(map[int64]struct{})
+	remainingIds := make(map[string]struct{})
 	for _, x := range ids {
 		remainingIds[x] = struct{}{}
 	}
-	idrec, err := tx.Run("MATCH (n)-[e]->(m) where id(n) in $id RETURN n,m,e", map[string]interface{}{"id": ids})
+	idrec, err := tx.Run(ctx, fmt.Sprintf("MATCH (n)-[e]->(m) where %s in $id RETURN n,m,e", session.IDFunc("n")), map[string]interface{}{"id": ids})
 	if err != nil {
 		return sources, targets, edges, err
 	}
-	for idrec.Next() {
+	for idrec.Next(ctx) {
 		record := idrec.Record()
 		sources = append(sources, newNode(record.Values[0].(neo4j.Node)))
 		targets = append(targets, newNode(record.Values[1].(neo4j.Node)))
@@ -303,15 +239,15 @@ func findNeighbors(tx neo4j.Transaction, ids []int64) ([]neo4jNode, []neo4jNode,
 	if len(remainingIds) == 0 {
 		return sources, targets, edges, nil
 	}
-	rem := make([]int64, 0, len(remainingIds))
+	rem := make([]string, 0, len(remainingIds))
 	for x := range remainingIds {
 		rem = append(rem, x)
 	}
-	idrec, err = tx.Run("MATCH (n) where id(n) in $id RETURN n", map[string]interface{}{"id": rem})
+	idrec, err = tx.Run(ctx, fmt.Sprintf("MATCH (n) where %s in $id RETURN n", session.IDFunc("n")), map[string]interface{}{"id": rem})
 	if err != nil {
 		return sources, targets, edges, err
 	}
-	for idrec.Next() {
+	for idrec.Next(ctx) {
 		record := idrec.Record()
 		sources = append(sources, newNode(record.Values[0].(neo4j.Node)))
 	}
@@ -374,19 +310,19 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 	}
 }
 
-func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, config Config, loadNeighbors func(neo4j.Transaction, []int64) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) ([]int64, error) {
+func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *lpg.Graph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) ([]string, error) {
 	if len(rootIds) == 0 {
 		return nil, fmt.Errorf("Empty entity schema nodes")
 	}
 	// neo4j IDs
-	visitedNode := make(map[int64]*lpg.Node)
-	queue := make([]int64, 0, len(rootIds))
+	visitedNode := make(map[string]*lpg.Node)
+	queue := make([]string, 0, len(rootIds))
 	for _, id := range rootIds {
-		queue = append(queue, int64(id))
+		queue = append(queue, id)
 	}
 
 	for len(queue) > 0 {
-		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(tx, queue)
+		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, queue)
 		queue = queue[len(queue):]
 		if err != nil {
 			return nil, err
@@ -414,7 +350,11 @@ func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, con
 						panic(fmt.Errorf("Cannot set node value for %w %v", err, src))
 					}
 				}
-				visitedNode[srcNode.id] = src
+				if selectEntity == nil || selectEntity(src) {
+					visitedNode[srcNode.id] = src
+				} else {
+					src.DetachAndRemove()
+				}
 			}
 		}
 		for _, node := range adjNodes {
@@ -437,29 +377,35 @@ func loadEntityNodes(tx neo4j.Transaction, grph *lpg.Graph, rootIds []int64, con
 						panic(fmt.Errorf("Cannot set node value for %w %v", err, nd))
 					}
 				}
-				visitedNode[node.id] = nd
-				if selectEntity != nil && selectEntity(nd) {
-					queue = append(queue, int64(node.id))
+				if selectEntity == nil || selectEntity(nd) {
+					visitedNode[node.id] = nd
+					queue = append(queue, node.id)
+				} else {
+					nd.DetachAndRemove()
 				}
-			}
-			if _, ok := node.props[config.Shorten(ls.EntitySchemaTerm)]; !ok {
-				queue = append(queue, int64(node.id))
 			}
 		}
 		for _, edge := range adjRelationships {
 			src := visitedNode[edge.startId]
+			if src == nil {
+				continue
+			}
 			target := visitedNode[edge.endId]
+			if target == nil {
+				continue
+			}
 			grph.NewEdge(src, target, config.Expand(edge.types), edge.props)
 		}
 	}
-	dbIds := make([]int64, 0, len(visitedNode))
+	dbIds := make([]string, 0, len(visitedNode))
 	for id := range visitedNode {
 		dbIds = append(dbIds, id)
 	}
 	return dbIds, nil
 }
 
-func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *lpg.Graph) (entityRootNodes []*lpg.Node, entityRootDBIds []int64, entityInfo map[*lpg.Node]ls.EntityInfo, err error) {
+func (s *Session) CollectEntityDBIds(ctx *ls.Context, tx neo4j.ExplicitTransaction, config Config, grph *lpg.Graph, cache *Neo4jCache) (entityRootNodes []*lpg.Node, entityRootDBIds []string, entityInfo map[*lpg.Node]ls.EntityInfo, err error) {
+	start := time.Now()
 	entityInfo = ls.GetEntityInfo(grph)
 	// Remove any empty IDs
 	for k, v := range entityInfo {
@@ -474,63 +420,91 @@ func (s *Session) CollectEntityDBIds(tx neo4j.Transaction, config Config, grph *
 		l := config.MakeLabels(node.GetLabels().Slice())
 		labels[l] = append(labels[l], node)
 	}
-
+	fmt.Printf("EntityDBIds setup: %v\n", time.Since(start))
 	// Load entities by their unique labels
 	for label, rootNodes := range labels {
 		unwind := make([]interface{}, 0, len(rootNodes))
+		rootIds := slicemap.SliceMap[string, *lpg.Node]{}
 		for _, rootNode := range rootNodes {
 			id := entityInfo[rootNode].GetID()
+			rootIds.Put(id, rootNode)
 			if len(id) == 1 {
 				unwind = append(unwind, map[string]interface{}{"id": id[0]})
 			} else {
 				unwind = append(unwind, map[string]interface{}{"id": id})
 			}
 		}
-		query := fmt.Sprintf("unwind $ids as nodeId match (n%s) where n.`%s`=nodeId.id return ID(n),n.`%s`", label, config.Shorten(ls.EntityIDTerm), config.Shorten(ls.EntityIDTerm))
-		idrec, e := tx.Run(query, map[string]interface{}{"ids": unwind})
+		entityIDTerm := config.Shorten(ls.EntityIDTerm)
+		query := fmt.Sprintf("unwind $ids as nodeId match (n%s) where n.`%s`=nodeId.id return n", label, entityIDTerm)
+		start := time.Now()
+		idrec, e := tx.Run(ctx, query, map[string]interface{}{"ids": unwind})
+		fmt.Printf("Label %s query time %v nRecords\n", label, time.Since(start), len(unwind))
 		if e != nil {
 			err = e
 			return
 		}
-		for idrec.Next() {
+		start = time.Now()
+		nRecords := 0
+		for idrec.Next(ctx) {
+			nRecords++
 			record := idrec.Record()
-			dbId, _ := record.Values[0].(int64)
-			// Find the matching node
-			for _, rootNode := range rootNodes {
-				id := entityInfo[rootNode].GetID()
-				if len(id) == 1 {
-					if s, ok := record.Values[1].(string); ok {
-						if s == id[0] {
-							entityRootNodes = append(entityRootNodes, rootNode)
-							entityRootDBIds = append(entityRootDBIds, dbId)
-							break
-						}
-					}
-				} else {
-					if arr, ok := record.Values[1].([]interface{}); ok {
-						if len(arr) == len(id) {
-							found := true
-							for i := range arr {
-								if arr[i] != id[i] {
-									found = false
-									break
-								}
-							}
-							if found {
-								entityRootNodes = append(entityRootNodes, rootNode)
-								entityRootDBIds = append(entityRootDBIds, dbId)
-								break
-							}
-						}
-					}
+			dbNode, _ := record.Values[0].(neo4j.Node)
+			cache.putNodes(dbNode)
+			entityIDAny := dbNode.Props[entityIDTerm]
+			var entityRootNode *lpg.Node
+			var exists bool
+			if s, ok := entityIDAny.(string); ok {
+				entityRootNode, exists = rootIds.Get([]string{s})
+			} else if arr, ok := entityIDAny.([]interface{}); ok {
+				str := make([]string, 0, len(arr))
+				for i := range arr {
+					str[i] = arr[i].(string)
 				}
+				entityRootNode, exists = rootIds.Get(str)
 			}
+			if exists {
+				entityRootNodes = append(entityRootNodes, entityRootNode)
+				entityRootDBIds = append(entityRootDBIds, dbNode.ElementId)
+			} else {
+				panic(fmt.Sprintf("Unexpected node loaded: %+v", dbNode))
+			}
+			// // Find the matching node
+			// for _, rootNode := range rootNodes {
+			// 	id := entityInfo[rootNode].GetID()
+			// 	if len(id) == 1 {
+			// 		if s, ok := record.Values[1].(string); ok {
+			// 			if s == id[0] {
+			// 				entityRootNodes = append(entityRootNodes, rootNode)
+			// 				entityRootDBIds = append(entityRootDBIds, dbId)
+			// 				break
+			// 			}
+			// 		}
+			// 	} else {
+			// 		if arr, ok := record.Values[1].([]interface{}); ok {
+			// 			if len(arr) == len(id) {
+			// 				found := true
+			// 				for i := range arr {
+			// 					if arr[i] != id[i] {
+			// 						found = false
+			// 						break
+			// 					}
+			// 				}
+			// 				if found {
+			// 					entityRootNodes = append(entityRootNodes, rootNode)
+			// 					entityRootDBIds = append(entityRootDBIds, dbId)
+			// 					break
+			// 				}
+			// 			}
+			// 		}
+			//	}
+			//}
 		}
+		fmt.Printf("Label %s loading time %v nRecords: %d\n", label, time.Since(start), nRecords)
 	}
 	return
 }
 
-func contains(node *lpg.Node, hm map[*lpg.Node]int64) bool {
+func contains(node *lpg.Node, hm map[*lpg.Node]string) bool {
 	if _, exists := hm[node]; exists {
 		return true
 	}
@@ -611,6 +585,16 @@ func nativeValueToNeo4jValue(val interface{}) interface{} {
 			return err
 		}
 		return f
+	case opencypher.Date:
+		return neo4j.DateOf(val.Time())
+	case opencypher.LocalDateTime:
+		return neo4j.LocalDateTimeOf(val.Time())
+	case opencypher.Duration:
+		return neo4j.DurationOf(val.Months, val.Days, val.Seconds, val.Nanos)
+	case opencypher.Time:
+		return neo4j.LocalTimeOf(val.Time())
+	case opencypher.LocalTime:
+		return neo4j.LocalTimeOf(val.Time())
 	case types.TimeOfDay:
 		return neo4j.LocalTimeOf(val.ToTime())
 	case types.Date:

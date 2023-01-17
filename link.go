@@ -6,7 +6,7 @@ import (
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 type linkSpec struct {
@@ -100,14 +100,14 @@ func (spec linkSpec) getForeignKeys(entityRoot *lpg.Node) ([][]string, error) {
 	return fks, nil
 }
 
-func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]int64) error {
-	if err := LinkEntitiesByForeignKeys(ctx, tx, config, entityRoot, nodeMap); err != nil {
+func LinkNodesForNewEntity(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]string) error {
+	if err := LinkEntitiesByForeignKeys(ctx, tx, session, config, entityRoot, nodeMap); err != nil {
 		return err
 	}
-	return AddLinksToThisEntity(ctx, tx, config, entityRoot, nodeMap)
+	return AddLinksToThisEntity(ctx, tx, session, config, entityRoot, nodeMap)
 }
 
-func LinkEntitiesByForeignKeys(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]int64) error {
+func LinkEntitiesByForeignKeys(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]string) error {
 	links := make([]linkSpec, 0)
 	// Does the entity have any outstanding links we need to work on?
 	var itrErr error
@@ -138,14 +138,14 @@ func LinkEntitiesByForeignKeys(ctx *ls.Context, tx neo4j.Transaction, config Con
 		return itrErr
 	}
 	for _, link := range links {
-		if err := linkEntities(ctx, tx, config, entityRoot, link, nodeMap); err != nil {
+		if err := linkEntities(ctx, tx, session, config, entityRoot, link, nodeMap); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]int64) error {
+func linkEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, config Config, entityRoot *lpg.Node, spec linkSpec, nodeMap map[*lpg.Node]string) error {
 	foreignKeys, err := spec.getForeignKeys(entityRoot)
 	if err != nil {
 		return err
@@ -181,12 +181,12 @@ func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRo
 		}), params)
 
 		if spec.forward {
-			query = fmt.Sprintf(`match (target %s %s) with target match (source) where ID(source)=%d create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, nodeMap[linkToNode], config.MakeLabels([]string{spec.label}))
+			query = fmt.Sprintf(`match (target %s %s) with target match (source) where %s create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, session.IDEqFunc("source", nodeMap[linkToNode]), config.MakeLabels([]string{spec.label}))
 		} else {
-			query = fmt.Sprintf(`match (source %s %s) with source match (target) where ID(target)=%d create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, nodeMap[linkToNode], config.MakeLabels([]string{spec.label}))
+			query = fmt.Sprintf(`match (source %s %s) with source match (target) where %s create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, session.IDEqFunc("target", nodeMap[linkToNode]), config.MakeLabels([]string{spec.label}))
 		}
 		ctx.GetLogger().Debug(map[string]interface{}{"linkEntity": query, "params": params})
-		_, err := tx.Run(query, params)
+		_, err := tx.Run(ctx, query, params)
 		if err != nil {
 			return err
 		}
@@ -195,7 +195,7 @@ func linkEntities(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRo
 }
 
 // ID is entity id of entity root
-func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]int64) error {
+func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, config Config, entityRoot *lpg.Node, nodeMap map[*lpg.Node]string) error {
 	// Are there any links pointing to this entity in the DB?
 	idTerm, ok := entityRoot.GetProperty(ls.EntityIDTerm)
 	if !ok {
@@ -210,17 +210,17 @@ func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, 
 	if !ok {
 		return errors.New("invalid schema node, given entity root must contain schema node id property")
 	}
-	var fkNodesRec neo4j.Result
+	var fkNodesRec neo4j.ResultWithContext
 	var err error
 	entityLabels := ls.FilterNonLayerTypes(entityRoot.GetLabels().Slice())
 	if len(ID) > 1 {
-		fkNodesRec, err = tx.Run(fmt.Sprintf(
+		fkNodesRec, err = tx.Run(ctx, fmt.Sprintf(
 			"MATCH (n) WHERE n.`%s` IN $labels MATCH (n) WHERE ALL(cmp IN $ids WHERE cmp IN SPLIT(n.`%s`, %s)) RETURN n",
 			config.Shorten(ls.ReferenceFKFor), config.Shorten(ls.ReferenceFK), quoteStringLiteral(",")),
 			map[string]interface{}{"ids": ID, "labels": entityLabels},
 		)
 	} else {
-		fkNodesRec, err = tx.Run(fmt.Sprintf(
+		fkNodesRec, err = tx.Run(ctx, fmt.Sprintf(
 			"MATCH (n) WHERE n.`%s` IN $labels AND n.`%s` = $ids RETURN n",
 			config.Shorten(ls.ReferenceFKFor), config.Shorten(ls.ReferenceFK)),
 			map[string]interface{}{"ids": ID[0], "labels": entityLabels},
@@ -229,7 +229,7 @@ func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, 
 	if err != nil {
 		return err
 	}
-	for fkNodesRec.Next() {
+	for fkNodesRec.Next(ctx) {
 		rec := fkNodesRec.Record()
 		fkNode := rec.Values[0].(neo4j.Node)
 		dirTo := false
@@ -240,12 +240,12 @@ func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, 
 		if _, ok := fkNode.Props[ls.EntitySchemaTerm]; ok {
 			if dirTo {
 				// MATCH (n), (m) WHERE ID(n) = %d AND m.`%s` = ID CREATE (n)-[%s]->(m)
-				_, err := tx.Run(fmt.Sprintf("MATCH (n) MATCH (m) WHERE ID(n) = %d AND ID(m) = %d CREATE (n)-[%s]->(m)", fkNode.Id, int64(nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+				_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)-[%s]->(m)", session.IDEqFunc("n", fkNode.ElementId), session.IDEqFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
 				if err != nil {
 					return err
 				}
 			} else {
-				_, err := tx.Run(fmt.Sprintf("MATCH (n) MATCH (m) WHERE ID(n) = %d AND ID(m) = %d CREATE (n)<-[%s]-(m)", fkNode.Id, int64(nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+				_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)<-[%s]-(m)", session.IDEqFunc("n", fkNode.ElementId), session.IDEqFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
 				if err != nil {
 					return err
 				}
@@ -258,11 +258,11 @@ func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, 
 				if depth >= MAX_DEPTH {
 					return errors.New("cannot find entity node")
 				}
-				eNodesRec, err := tx.Run(fmt.Sprintf("MATCH (n)<-[*%d]-(m) WHERE ID(n) = %d AND m.`%s` IS NOT NULL RETURN m", depth, fkNode.Id, ls.EntitySchemaTerm), vars)
+				eNodesRec, err := tx.Run(ctx, fmt.Sprintf("MATCH (n)<-[*%d]-(m) WHERE %s AND m.`%s` IS NOT NULL RETURN m", depth, session.IDEqFunc("n", fkNode.ElementId), ls.EntitySchemaTerm), vars)
 				if err != nil {
 					return err
 				}
-				singleRec, err := eNodesRec.Collect()
+				singleRec, err := eNodesRec.Collect(ctx)
 				if err != nil {
 					return err
 				}
@@ -276,12 +276,12 @@ func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.Transaction, config Config, 
 				eNode := singleRec[0].Values[0].(neo4j.Node)
 				// connect found entity root to new node
 				if dirTo {
-					_, err := tx.Run(fmt.Sprintf("MATCH (n) MATCH (m) WHERE ID(n) = %d AND ID(m) = %d CREATE (n)-[%s]->(m)", eNode.Id, int64(nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+					_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)-[%s]->(m)", session.IDEqFunc("n", eNode.ElementId), session.IDEqFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
 					if err != nil {
 						return err
 					}
 				} else {
-					_, err := tx.Run(fmt.Sprintf("MATCH (n) MATCH (m) WHERE ID(n) = %d AND ID(m) = %d CREATE (n)<-[%s]-(m)", eNode.Id, int64(nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+					_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)<-[%s]-(m)", session.IDEqFunc("n", eNode.ElementId), session.IDEqFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
 					if err != nil {
 						return err
 					}
