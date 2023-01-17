@@ -13,7 +13,6 @@ require (
 	github.com/onsi/gomega v1.19.0
 	github.com/spf13/cobra v1.1.3
 	github.com/testcontainers/testcontainers-go v0.13.0
-	github.com/xuri/excelize/v2 v2.6.0
 )
 
 require gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
@@ -35,6 +34,7 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/fatih/structs v1.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -64,6 +64,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tkuchiki/go-timezone v0.2.0 // indirect
 	github.com/xuri/efp v0.0.0-20220407160117-ad0f7a785be8 // indirect
+	github.com/xuri/excelize/v2 v2.6.0 // indirect
 	github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 // indirect
 	go.opencensus.io v0.22.3 // indirect
 	golang.org/x/crypto v0.0.0-20220408190544-5352b0902921 // indirect

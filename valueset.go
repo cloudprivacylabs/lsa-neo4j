@@ -9,6 +9,7 @@ import (
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
+	"github.com/fatih/structs"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
 
@@ -67,9 +68,10 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 			}
 			currNodesetID = nodesetId
 			nodeset = Nodeset{
-				ID:     currNodesetID,
-				Labels: make([]string, 0),
-				Data:   make(map[string]NodesetData),
+				ID:         currNodesetID,
+				Labels:     []string{"NODESET"},
+				Properties: map[string]interface{}{"nodeset_id": currNodesetID},
+				Data:       make(map[string]NodesetData),
 			}
 			// Process a new nodeset, parse row and add properties nodeset
 			parseRow := func(row []string) error {
@@ -90,7 +92,7 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 						}
 					} else if header == "node_labels" {
 						if nsl, ok := nodeset.Data[nsDataID]; ok {
-							nsl.Labels = append(nsl.Labels, strings.Fields(row[idx])...)
+							nsl.Labels = strings.Fields(row[idx])
 							nodeset.Data[nsDataID] = nsl
 						}
 					} else {
@@ -130,29 +132,16 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 }
 
 // oldNodeset is nodeset pulled from DB
-func diff(oldNodeset, newNodeset *Nodeset) (rootOp string, insertions []NodesetData, deletions []string, updates []NodesetData) {
+func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp string, insertions []NodesetData, deletions []NodesetData, updates []NodesetData) {
 	// if DB nodeset does not exists, insert new nodeset
 	if oldNodeset.ID == "" {
-		root := NodesetData{
-			ID:         newNodeset.ID,
-			Properties: newNodeset.Properties,
-			Labels:     newNodeset.Labels,
-		}
-		insertions = append(insertions, root)
 		rootOp = "insertRoot"
 	} else {
 		// delete DB nodeset if newNodeset is empty
 		if newNodeset.ID == "" {
-			deletions = append(deletions, oldNodeset.ID)
 			rootOp = "deleteRoot"
-		} else if oldNodeset != newNodeset {
+		} else {
 			// update to use newNodeset if oldNodeset is not equal
-			root := NodesetData{
-				ID:         newNodeset.ID,
-				Properties: newNodeset.Properties,
-				Labels:     newNodeset.Labels,
-			}
-			updates = append(updates, root)
 			rootOp = "updateRoot"
 		}
 	}
@@ -181,7 +170,7 @@ func diff(oldNodeset, newNodeset *Nodeset) (rootOp string, insertions []NodesetD
 				updates = append(updates, update)
 			}
 		} else {
-			deletions = append(deletions, oid)
+			deletions = append(deletions, oldNsData)
 		}
 	}
 	for nid, newNsData := range newNodeset.Data {
@@ -194,13 +183,12 @@ func diff(oldNodeset, newNodeset *Nodeset) (rootOp string, insertions []NodesetD
 }
 
 func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
-	query := "MATCH (root:`NODESET` {nodeset_id: $id})-[:$id]->(m) return root,m"
-	idrec, err := tx.Run(query, map[string]interface{}{"id": nodesetId})
+	query := fmt.Sprintf("MATCH (root:`NODESET` {nodeset_id: %s})-[:%s]->(m) return root,m", quoteStringLiteral(nodesetId), nodesetId)
+	idrec, err := tx.Run(query, map[string]interface{}{})
 	if err != nil {
 		return Nodeset{}, err
 	}
 	ns := Nodeset{
-		ID:     nodesetId,
 		Labels: make([]string, 0),
 		Data:   make(map[string]NodesetData),
 	}
@@ -228,7 +216,54 @@ func LoadNodeset(tx neo4j.Transaction, nodesetId string) (Nodeset, error) {
 	return ns, nil
 }
 
-func Execute(tx neo4j.Transaction, oldNodeset, newNodeset *Nodeset, rootOp string, inserts, updates []NodesetData, deletions []string) error {
+func buildProps(props map[string]interface{}, vars map[string]interface{}) string {
+	out := strings.Builder{}
+	first := true
+
+	for k, v := range props {
+		if v == nil {
+			continue
+		}
+		if first {
+			out.WriteRune('{')
+			first = false
+		} else {
+			out.WriteRune(',')
+		}
+		out.WriteString(quoteBacktick(k))
+		out.WriteRune(':')
+		out.WriteRune('$')
+		tname := fmt.Sprintf("p%d", len(vars))
+		out.WriteString(tname)
+		vars[tname] = v.(string)
+		if !first {
+			out.WriteRune('}')
+		}
+	}
+
+	return out.String()
+}
+
+func Execute(tx neo4j.Transaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp string, inserts, updates, deletes []NodesetData) error {
+	// root op
+	// new nodeset - update/insert - merge? (for update)
+	// db nodeset - delete
+	switch rootOp {
+	case "insertRoot":
+		vars := make(map[string]interface{})
+		if _, err := tx.Run(fmt.Sprintf("CREATE (n %s %s)", cfg.MakeLabels(newNodeset.Labels), buildProps(newNodeset.Properties, vars)), vars); err != nil {
+			return err
+		}
+	case "updateRoot":
+		if _, err := tx.Run(fmt.Sprintf("MATCH (n) WHERE n.entityId = $eid SET n.props=$props, n%s", cfg.MakeLabels(oldNodeset.Labels)), map[string]interface{}{
+			"eid": oldNodeset.ID, "props": oldNodeset.Properties}); err != nil {
+			return err
+		}
+	case "deleteRoot":
+		if _, err := tx.Run("MATCH (n) WHERE n.entityId = $eid DETACH DELETE n", map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
+			return err
+		}
+	}
 	type groupedNodesetData struct {
 		labelExpr string
 		data      []NodesetData
@@ -238,7 +273,7 @@ func Execute(tx neo4j.Transaction, oldNodeset, newNodeset *Nodeset, rootOp strin
 		hm := make(map[string][]NodesetData)
 		for _, nsD := range nodesetData {
 			nsD.Labels = sort.StringSlice(nsD.Labels)
-			labelExpr := ""
+			labelExpr := cfg.MakeLabels(nsD.Labels)
 			hm[labelExpr] = append(hm[labelExpr], nsD)
 		}
 		for expr, nsData := range hm {
@@ -246,69 +281,35 @@ func Execute(tx neo4j.Transaction, oldNodeset, newNodeset *Nodeset, rootOp strin
 		}
 		return ret
 	}
-	type udata struct {
-		udata []map[string]interface{}
+	mapNodesetData := func(nodesetData []NodesetData) []map[string]interface{} {
+		ans := make([]map[string]interface{}, len(nodesetData))
+		for ix, item := range nodesetData {
+			ans[ix] = structs.Map(item)
+		}
+		return ans
 	}
 	if len(updates) > 0 {
-		unwindData := make(map[string]udata)
 		for ix, update := range groupByLabel(updates) {
-			unwind := make([]map[string]interface{}, 0)
-			item := map[string]interface{}{
-				"props": update.data[ix].Properties,
-			}
-			unwind = append(unwind, item)
-			unwindData[update.labelExpr] = udata{udata: unwind}
-		}
-		for label, unwind := range unwindData {
-			query := fmt.Sprintf(`unwind $nodes as node MATCH (n) WHERE n.entityId = node.ID SET n=node.props, n%s`, label)
-			if _, err := tx.Run(query, map[string]interface{}{"nodes": unwind.udata}); err != nil {
+			unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data), "props": update.data[ix].Properties}
+			query := fmt.Sprintf(`unwind $nodes as node MATCH (n) WHERE n.entityId = node.ID SET n=node.Properties, n%s`, update.labelExpr)
+			if _, err := tx.Run(query, unwindData); err != nil {
 				return err
 			}
 		}
 	}
 	if len(inserts) > 0 {
-		unwindData := make(map[string]udata)
-		for ix, insert := range groupByLabel(inserts) {
-			unwind := make([]map[string]interface{}, 0)
-			item := map[string]interface{}{
-				"props": insert.data[ix].Properties,
-			}
-			unwind = append(unwind, item)
-			unwindData[insert.labelExpr] = udata{udata: unwind}
-		}
-		for label, unwind := range unwindData {
-			query := fmt.Sprintf(`unwind $nodes as node create (a%s) set a=node.props`, label)
-			if _, err := tx.Run(query, map[string]interface{}{"nodes": unwind.udata}); err != nil {
+		for _, insert := range groupByLabel(inserts) {
+			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
+			query := fmt.Sprintf("UNWIND $nodes AS node CREATE (n%s) SET n=node.Properties WITH n MATCH(root:`NODESET` {nodeset_id: %s}) MERGE(root)-[:%s]->(n)",
+				insert.labelExpr, quoteStringLiteral(newNodeset.ID), newNodeset.ID)
+			if _, err := tx.Run(query, unwindData); err != nil {
 				return err
 			}
 		}
 	}
-	if len(deletions) > 0 {
-		if _, err := tx.Run("MATCH (n) WHERE n.entityId in $deletes DETACH DELETE n", map[string]interface{}{"deletes": deletions}); err != nil {
+	if len(deletes) > 0 {
+		if _, err := tx.Run("MATCH (n) WHERE n.entityId IN $deletes DETACH DELETE n", map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-func CommitNodesetsOperation(tx neo4j.Transaction, nodesets map[string]Nodeset, operation string) error {
-	for _, ns := range nodesets {
-		db_ns, err := LoadNodeset(tx, ns.ID)
-		if err != nil {
-			return err
-		}
-		switch operation {
-		case "apply":
-			// insert, update
-			rootOp, inserts, deletes, updates := diff(&db_ns, &ns)
-			if err := Execute(tx, &db_ns, &ns, rootOp, inserts, updates, deletes); err != nil {
-				return err
-			}
-		case "delete":
-			rootOp, inserts, deletes, updates := diff(&db_ns, &Nodeset{})
-			if err := Execute(tx, &db_ns, &ns, rootOp, inserts, updates, deletes); err != nil {
-				return err
-			}
 		}
 	}
 	return nil

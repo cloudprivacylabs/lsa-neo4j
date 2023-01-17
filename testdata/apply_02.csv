@@ -1,0 +1,12 @@
+nodeset_id,concept_id,node_id,node_labels,prop1,prop2
+fnd_bp_systolic,3000054,,E S F,p1,p2
+fnd_bp_systolic,3004249,,E S F,p1,p2
+fnd_bp_systolic,3009395,,E S F,p1,p2
+fnd_height,3008989,,V I X,p1,p2
+fnd_height,3013842,,V I X,p1,p2
+fnd_bmi,1314389,,U V X Y,p1,p2
+fnd_bmi,1576151,,U V X Y,p1,p2
+fnd_bp_diastolic,3012297,,Q Q Q,p1,p2
+fnd_bp_diastolic,3012888,,Q Q Q,p1,p2
+fnd_bps_systemic_noninvasive_direct_measure,3000605,,S P X,p1,p2
+fnd_bps_systemic_noninvasive_direct_measure,3004249,,S P X,p1,p2

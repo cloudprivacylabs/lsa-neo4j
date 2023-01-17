@@ -16,7 +16,7 @@ var (
 	nodesetCmd = &cobra.Command{
 		Use:   "nodeset",
 		Short: "prompts nodeset commands: apply or delete",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
 			session := drv.NewSession()
@@ -27,17 +27,12 @@ var (
 			if err != nil {
 				return err
 			}
-			var operation string
-			input, _ := cmd.Flags().GetString("input")
-			applyF, _ := cmd.Flags().GetString("apply")
-			deleteF, _ := cmd.Flags().GetString("delete")
-			if applyF != "" {
-				operation = applyF
-			} else if deleteF != "" {
-				operation = deleteF
-			} else {
-				return fmt.Errorf("err: more than one command given")
+			cfg, err := loadConfig(cmd)
+			if err != nil {
+				return err
 			}
+			input, _ := cmd.Flags().GetString("input")
+			opF, _ := cmd.Flags().GetString("operation")
 			startRow, err := cmd.Flags().GetInt("startRow")
 			if err != nil {
 				return err
@@ -62,9 +57,28 @@ var (
 			if err != nil {
 				return err
 			}
-			if err := neo.CommitNodesetsOperation(tx, nodesets, operation); err != nil {
-
+			for _, ns := range nodesets {
+				db_ns, err := neo.LoadNodeset(tx, ns.ID)
+				if err != nil {
+					return err
+				}
+				switch opF {
+				case "apply":
+					// insert, update
+					rootOp, inserts, deletes, updates := neo.NodesetDiff(db_ns, ns)
+					if err := neo.Execute(tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
+						tx.Rollback()
+						return err
+					}
+				case "delete":
+					rootOp, inserts, deletes, updates := neo.NodesetDiff(db_ns, neo.Nodeset{})
+					if err := neo.Execute(tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
+						tx.Rollback()
+						return err
+					}
+				}
 			}
+			tx.Commit()
 			return nil
 		},
 	}
@@ -122,8 +136,7 @@ func readSpreadsheetFile(fileName string) ([][]string, error) {
 
 func init() {
 	rootCmd.AddCommand(nodesetCmd)
-	nodesetCmd.Flags().String("apply", "", "modify the database to reflect the nodeset file; performs operations create/update")
-	nodesetCmd.Flags().String("delete", "", "delete the nodeset from the database")
+	nodesetCmd.Flags().String("operation", "", "modify the database to reflect the nodeset file; performs operations create/update")
 	nodesetCmd.Flags().String("input", "csv", "input nodeset file")
 	nodesetCmd.Flags().Int("startRow", 1, "Start row 0-based")
 	nodesetCmd.Flags().Int("endRow", -1, "End row 0-based")
