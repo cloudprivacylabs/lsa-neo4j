@@ -35,7 +35,7 @@ type NodesetData struct {
 	LinkedToOtherNodes bool
 }
 
-func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
+func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error) {
 	processed := false
 	ret := make(map[string]Nodeset)
 	getColumn := func(row []string, header string) string {
@@ -71,7 +71,7 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 			nodeset = Nodeset{
 				ID:         currNodesetID,
 				Labels:     []string{"NODESET"},
-				Properties: map[string]interface{}{"nodeset_id": currNodesetID},
+				Properties: cfg.ShortenProperties(map[string]interface{}{"nodeset_id": currNodesetID}),
 				Data:       make(map[string]NodesetData),
 			}
 			// Process a new nodeset, parse row and add properties nodeset
@@ -89,18 +89,18 @@ func ParseNodesetData(input NodesetInput) (map[string]Nodeset, error) {
 							nodeset.Data[nsDataID] = NodesetData{
 								ID:         nsDataID,
 								Labels:     make([]string, 0),
-								Properties: map[string]interface{}{ls.EntityIDTerm: val},
+								Properties: map[string]interface{}{cfg.Shorten(ls.EntityIDTerm): val},
 							}
 						}
 					} else if header == "node_labels" {
 						if nsl, ok := nodeset.Data[nsDataID]; ok {
 							nsl.Labels = strings.Fields(row[idx])
-							nodeset.Data[nsDataID] = nsl
+							nodeset.Data[cfg.Shorten(nsDataID)] = nsl
 						}
 					} else {
 						props, _ := nodeset.Data[nsDataID].Properties[input.ColumnNames()[idx]].([]string)
 						props = append(props, val)
-						nodeset.Data[nsDataID].Properties[input.ColumnNames()[idx]] = props
+						nodeset.Data[nsDataID].Properties[cfg.Shorten(input.ColumnNames()[idx])] = props
 					}
 				}
 				return nil
@@ -185,7 +185,7 @@ func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp string, insertions []No
 	return rootOp, insertions, deletions, updates
 }
 
-func LoadNodeset(ctx context.Context, tx neo4j.ExplicitTransaction, nodesetId string) (Nodeset, error) {
+func LoadNodeset(ctx context.Context, cfg Config, tx neo4j.ExplicitTransaction, nodesetId string) (Nodeset, error) {
 	query := fmt.Sprintf("MATCH (root:`NODESET` {nodeset_id: %s})-[:%s]->(m) return root,m", quoteStringLiteral(nodesetId), nodesetId)
 	idrec, err := tx.Run(ctx, query, map[string]interface{}{})
 	if err != nil {
@@ -201,7 +201,7 @@ func LoadNodeset(ctx context.Context, tx neo4j.ExplicitTransaction, nodesetId st
 		if !first {
 			nsCenter := rec.Values[0].(neo4j.Node)
 			for k, v := range nsCenter.Props {
-				if k == "nodeset_id" {
+				if k == cfg.Expand("nodeset_id") {
 					ns.ID = v.(string)
 				}
 			}
@@ -243,19 +243,21 @@ func buildProps(props map[string]interface{}, vars map[string]interface{}) strin
 		out.WriteRune('$')
 		tname := fmt.Sprintf("p%d", len(vars))
 		out.WriteString(tname)
-		vars[tname] = v.(string)
-		if !first {
-			out.WriteRune('}')
+		_, ok := v.(string)
+		if !ok {
+			vars[tname] = v.([]string)
+		} else {
+			vars[tname] = v.(string)
 		}
+	}
+	if !first {
+		out.WriteRune('}')
 	}
 
 	return out.String()
 }
 
 func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp string, inserts, updates, deletes []NodesetData) error {
-	// root op
-	// new nodeset - update/insert - merge? (for update)
-	// db nodeset - delete
 	switch rootOp {
 	case "insertRoot":
 		vars := make(map[string]interface{})
@@ -276,7 +278,6 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 		labelExpr string
 		data      []NodesetData
 	}
-	// incoming data missing (1) ESF
 	groupByLabel := func(nodesetData []NodesetData) []groupedNodesetData {
 		ret := make([]groupedNodesetData, 0)
 		hm := make(map[string][]NodesetData)
@@ -309,8 +310,9 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	if len(inserts) > 0 {
 		for _, insert := range groupByLabel(inserts) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
-			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s) ON CREATE SET n=node.Properties SET n=node.Properties WITH n MATCH(root:`NODESET` {nodeset_id: %s}) MERGE(root)-[:%s]->(n)",
+			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`https://lschema.org/entityId`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {nodeset_id: %s}) MERGE(root)-[:%s]->(n)",
 				insert.labelExpr, quoteStringLiteral(newNodeset.ID), newNodeset.ID)
+
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}

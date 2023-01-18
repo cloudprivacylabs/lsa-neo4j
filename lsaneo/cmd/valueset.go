@@ -55,12 +55,12 @@ var (
 				at:        0,
 				headerRow: headerRow,
 			}
-			nodesets, err := neo.ParseNodesetData(ssi)
+			nodesets, err := neo.ParseNodesetData(cfg, ssi)
 			if err != nil {
 				return err
 			}
 			for _, ns := range nodesets {
-				db_ns, err := neo.LoadNodeset(ctx, tx, ns.ID)
+				db_ns, err := neo.LoadNodeset(ctx, cfg, tx, ns.ID)
 				if err != nil {
 					return err
 				}

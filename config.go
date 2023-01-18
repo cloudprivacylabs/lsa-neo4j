@@ -79,6 +79,17 @@ func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) 
 	return props
 }
 
+func (cfg Config) ShortenProperties(props map[string]interface{}) map[string]interface{} {
+	propMap := make(map[string]interface{})
+	for k, v := range props {
+		short := cfg.Shorten(k)
+		if short != "" {
+			propMap[short] = v
+		}
+	}
+	return propMap
+}
+
 func (cfg Config) MakePropertiesObj(x withProperty) map[string]interface{} {
 	propMap := make(map[string]*ls.PropertyValue)
 	for k, v := range ls.PropertiesAsMap(x) {
