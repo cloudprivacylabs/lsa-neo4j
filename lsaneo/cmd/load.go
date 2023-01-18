@@ -30,29 +30,29 @@ var (
 			nodeIds, _ := cmd.Flags().GetBool("nodeIds")
 			for _, arg := range args {
 				grph := ls.NewDocumentGraph()
-				loadByID := func(f func(*lpg.Node) bool) error {
+				loadByID := func(f func(lpg.Node) bool) error {
 					// id, err := strconv.ParseInt(arg, 10, 64)
 					// if err != nil {
 					// 	return err
 					// }
 					return session.LoadEntityNodes(ctx, tx, grph, []string{arg}, cfg, f)
 				}
-				loadByEntityID := func(f func(*lpg.Node) bool) error {
+				loadByEntityID := func(f func(lpg.Node) bool) error {
 					return session.LoadEntityNodesByEntityId(ctx, tx, grph, []string{arg}, cfg, f)
 				}
-				var load func(func(*lpg.Node) bool) error
+				var load func(func(lpg.Node) bool) error
 				if nodeIds {
 					load = loadByID
 				} else {
 					load = loadByEntityID
 				}
 				if allNodes, _ := cmd.Flags().GetBool("allNodes"); allNodes {
-					err = load(func(*lpg.Node) bool {
+					err = load(func(lpg.Node) bool {
 						return true
 					})
 				} else {
 					if schema, _ := cmd.Flags().GetStringSlice("schema"); len(schema) > 0 {
-						err = load(func(nd *lpg.Node) bool {
+						err = load(func(nd lpg.Node) bool {
 							for ix := range schema {
 								if ls.AsPropertyValue(nd.GetProperty(ls.EntitySchemaTerm)).AsString() == schema[ix] {
 									return true

@@ -3,7 +3,6 @@ package neo4j
 import (
 	"context"
 	"fmt"
-	"io"
 
 	. "github.com/onsi/gomega"
 	"github.com/testcontainers/testcontainers-go"
@@ -16,8 +15,12 @@ const uri = "neo4j://34.213.163.7"
 const port = 7687
 const db = "neo4j"
 
-func Close(closer io.Closer, resourceName string) {
-	Expect(closer.Close()).To(BeNil(), "%s should be closed", resourceName)
+type CloseWithContext interface {
+	Close(context.Context) error
+}
+
+func Close(closer CloseWithContext, ctx context.Context, resourceName string) {
+	Expect(closer.Close(ctx)).To(BeNil(), "%s should be closed", resourceName)
 }
 
 func startContainer(ctx context.Context, user, pwd string) (testcontainers.Container, error) {

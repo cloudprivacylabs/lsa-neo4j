@@ -1,7 +1,6 @@
 package neo4j
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"testing"
@@ -20,16 +19,16 @@ func TestLsaNeo4j(t *testing.T) {
 	RunSpecs(t, "LsaNeo4j Suite")
 }
 
-func selectEntity(node *lpg.Node) bool {
+func selectEntity(node lpg.Node) bool {
 	return true
 }
 
 var _ = Describe("Driver", func() {
-	var ctx context.Context
+	var ctx ls.Context
 	var neo4jContainer testcontainers.Container
 	var session *Session
-	var driver neo4j.Driver
-	var tx neo4j.Transaction
+	var driver neo4j.DriverWithContext
+	var tx neo4j.ExplicitTransaction
 
 	var cfg Config
 	var grph *lpg.Graph
@@ -37,14 +36,14 @@ var _ = Describe("Driver", func() {
 	var err error
 
 	BeforeEach(func() {
-		ctx = context.Background()
+		ctx = *ls.DefaultContext()
 		var err error
 		neo4jContainer, err = startContainer(ctx, username, pwd)
 		Expect(err).To(BeNil(), "Container should start")
 		//port, err := neo4jContainer.MappedPort(ctx, "7687")
 		Expect(err).To(BeNil(), "Port should be resolved")
 		address := fmt.Sprintf("%s:%d", uri, port)
-		driver, err = neo4j.NewDriver(address, neo4j.BasicAuth(username, pwd, ""))
+		driver, err = neo4j.NewDriverWithContext(address, neo4j.BasicAuth(username, pwd, ""))
 		Expect(err).To(BeNil(), "Driver should be created")
 		err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 		Expect(err).To(BeNil(), "Could not read file: %s", "lsaneo/lsaneo.config.yaml")
@@ -54,17 +53,17 @@ var _ = Describe("Driver", func() {
 	})
 
 	AfterEach(func() {
-		Close(driver, "Driver")
+		Close(driver, ctx, "Driver")
 		Expect(neo4jContainer.Terminate(ctx)).To(BeNil(), "Container should stop")
 	})
 
 	It("Post to database", func() {
 		drv := NewDriver(driver, db)
-		session = drv.NewSession()
-		defer session.Close()
-		tx, err = session.BeginTransaction()
+		session = drv.NewSession(ctx)
+		defer session.Close(ctx)
+		tx, err = session.BeginTransaction(ctx)
 		Expect(err).To(BeNil(), "must be valid transaction")
-		eids, err = SaveGraph(ls.DefaultContext(), session, tx, grph, selectEntity, cfg, 0)
+		eids, err = Insert(ls.DefaultContext(), session, tx, grph, selectEntity, cfg, 0)
 		// Expect(err).To(BeNil(), "save graph error")
 		// err := tx.Commit()
 		// Expect(err).To(BeNil(), "unable to post graph to database")
@@ -72,12 +71,12 @@ var _ = Describe("Driver", func() {
 
 	It("Load from database", func() {
 		drv := NewDriver(driver, db)
-		session = drv.NewSession()
-		defer session.Close()
-		tx, err = session.BeginTransaction()
+		session = drv.NewSession(ctx)
+		defer session.Close(ctx)
+		tx, err = session.BeginTransaction(ctx)
 		Expect(err).To(BeNil(), "must be valid transaction")
 		dbGraph := ls.NewDocumentGraph()
-		_, err = loadEntityNodes(tx, dbGraph, eids, cfg, findNeighbors, selectEntity)
+		_, err = loadEntityNodes(&ctx, tx, session, dbGraph, eids, cfg, findNeighbors, selectEntity)
 		Expect(err).To(BeNil(), "unable to load nodes connected to entity", err)
 		// graph isomorphism
 		expGrph, err := cmdutil.ReadJSONGraph([]string{"testdata/config_driver_expected.json"}, nil)

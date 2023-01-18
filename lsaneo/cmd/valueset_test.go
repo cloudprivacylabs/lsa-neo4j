@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 
@@ -16,20 +15,18 @@ func TestParseNodesetData(t *testing.T) {
 		t.Error(err)
 	}
 	var cfg neo.Config
-	err = cmdutil.ReadJSONOrYAML("lsaneo.config.yaml", &cfg)
+	err = cmdutil.ReadJSONOrYAML("../lsaneo.config.yaml", &cfg)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		t.Error(err)
 	}
+	neo.InitNamespaceTrie(&cfg)
 	ssi := &spreadsheetInput{
 		rows:      sheet,
 		at:        0,
 		headerRow: 0,
 	}
-	nodesets, err := neo.ParseNodesetData(cfg, ssi)
+	_, err = neo.ParseNodesetData(cfg, ssi)
 	if err != nil {
 		t.Error(err)
-	}
-	for k, v := range nodesets {
-		fmt.Println(k, v)
 	}
 }

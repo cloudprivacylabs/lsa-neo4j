@@ -1,12 +1,12 @@
 package neo4j
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -24,11 +24,11 @@ func TestMergeNeo4j(t *testing.T) {
 }
 
 var _ = Describe("Merge", func() {
-	var ctx context.Context
+	var ctx ls.Context
 	var neo4jContainer testcontainers.Container
 	var session *Session
-	var driver neo4j.Driver
-	var tx neo4j.Transaction
+	var driver neo4j.DriverWithContext
+	var tx neo4j.ExplicitTransaction
 
 	var cfg Config
 	var memGraph *lpg.Graph
@@ -36,14 +36,14 @@ var _ = Describe("Merge", func() {
 	var deltas []Delta
 
 	BeforeEach(func() {
-		ctx = context.Background()
+		ctx = *ls.DefaultContext()
 		var err error
 		neo4jContainer, err = startContainer(ctx, username, pwd)
 		Expect(err).To(BeNil(), "Container should start")
 		//port, err := neo4jContainer.MappedPort(ctx, "7687")
 		Expect(err).To(BeNil(), "Port should be resolved")
 		address := fmt.Sprintf("%s:%d", uri, port)
-		driver, err = neo4j.NewDriver(address, neo4j.BasicAuth(username, pwd, ""))
+		driver, err = neo4j.NewDriverWithContext(address, neo4j.BasicAuth(username, pwd, ""))
 		Expect(err).To(BeNil(), "Driver should be created")
 		err = cmdutil.ReadJSONOrYAML("lsaneo/lsaneo.config.yaml", &cfg)
 		Expect(err).To(BeNil(), "Could not read file: %s", "lsaneo/lsaneo.config.yaml")
@@ -53,16 +53,16 @@ var _ = Describe("Merge", func() {
 	})
 
 	AfterEach(func() {
-		Close(driver, "Merge")
+		Close(driver, ctx, "Merge")
 		Expect(neo4jContainer.Terminate(ctx)).To(BeNil(), "Container should stop")
 	})
 
 	It("Merge in-memory graph to db graph", func() {
 		// post graph to empty database
 		drv := NewDriver(driver, db)
-		session = drv.NewSession()
-		defer session.Close()
-		tx, err = session.BeginTransaction()
+		session = drv.NewSession(ctx)
+		defer session.Close(ctx)
+		tx, err = session.BeginTransaction(ctx)
 		Expect(err).To(BeNil(), "must be valid transaction")
 		dbGraph := NewDBGraph(lpg.NewGraph())
 		deltas, err = Merge(memGraph, dbGraph, cfg)
@@ -72,54 +72,54 @@ var _ = Describe("Merge", func() {
 			_, ok := d.(CreateNodeDelta)
 			return ok
 		}) {
-			err := delta.Run(tx, dbGraph.NodeIds, dbGraph.EdgeIds, cfg)
+			err := delta.Run(&ctx, tx, session, dbGraph.NodeIds, dbGraph.EdgeIds, cfg)
 			Expect(err).To(BeNil(), "error posting to DB with delta: %v", delta)
 		}
 		for _, delta := range SelectDelta(deltas, func(d Delta) bool {
 			_, ok := d.(CreateNodeDelta)
 			return !ok
 		}) {
-			err := delta.Run(tx, dbGraph.NodeIds, dbGraph.EdgeIds, cfg)
+			err := delta.Run(&ctx, tx, session, dbGraph.NodeIds, dbGraph.EdgeIds, cfg)
 			Expect(err).To(BeNil(), "error posting to DB with delta: %v", delta)
 		}
-		err := tx.Commit()
+		err := tx.Commit(ctx)
 		Expect(err).To(BeNil(), "error committing transaction to DB")
 		// compare new db graph to expected graph
 		expectedGraph, err := testLoadGraph("testdata/merge_12.json")
 		drv = NewDriver(driver, db)
-		session = drv.NewSession()
-		defer session.Close()
-		tx, err = session.BeginTransaction()
+		session = drv.NewSession(ctx)
+		defer session.Close(ctx)
+		tx, err = session.BeginTransaction(ctx)
 
-		loadedDbGraph, err := session.LoadDBGraph(tx, memGraph, cfg)
+		loadedDbGraph, err := session.LoadDBGraph(&ctx, tx, memGraph, cfg, &Neo4jCache{})
 		if !lpg.CheckIsomorphism(dbGraph.G, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
 			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(loadedDbGraph.G), testPrintGraph(expectedGraph))
 		}
 
 		// load graph from database and merge in-memory graph onto db graph
 		drv = NewDriver(driver, db)
-		session = drv.NewSession()
-		defer session.Close()
-		tx, err = session.BeginTransaction()
+		session = drv.NewSession(ctx)
+		defer session.Close(ctx)
+		tx, err = session.BeginTransaction(ctx)
 		Expect(err).To(BeNil(), "must be valid transaction")
-		loadedDbGraph, err = session.LoadDBGraph(tx, memGraph, cfg)
+		loadedDbGraph, err = session.LoadDBGraph(&ctx, tx, memGraph, cfg, &Neo4jCache{})
 		Expect(err).To(BeNil(), "cannot load graph from database")
 		deltas, err = Merge(memGraph, loadedDbGraph, cfg)
 		Expect(err).To(BeNil(), "unable to merge memory graph onto db graph")
 		// apply deltas to database objects
 		for _, delta := range deltas {
-			err := delta.Run(tx, loadedDbGraph.NodeIds, loadedDbGraph.EdgeIds, cfg)
+			err := delta.Run(&ctx, tx, session, loadedDbGraph.NodeIds, loadedDbGraph.EdgeIds, cfg)
 			Expect(err).To(BeNil(), "error posting to DB with delta: %v", delta)
 		}
-		err = tx.Commit()
+		err = tx.Commit(ctx)
 		Expect(err).To(BeNil(), "error committing transaction to DB")
 
 		// reload database graph and compare to expected graph
 		drv = NewDriver(driver, db)
-		session = drv.NewSession()
-		defer session.Close()
-		tx, err = session.BeginTransaction()
-		loadedDbGraph, err = session.LoadDBGraph(tx, memGraph, cfg)
+		session = drv.NewSession(ctx)
+		defer session.Close(ctx)
+		tx, err = session.BeginTransaction(ctx)
+		loadedDbGraph, err = session.LoadDBGraph(&ctx, tx, memGraph, cfg, &Neo4jCache{})
 		if !lpg.CheckIsomorphism(dbGraph.G, expectedGraph, checkNodeEquivalence, checkEdgeEquivalence) {
 			log.Fatalf("Result:\n%s\nExpected:\n%s", testPrintGraph(loadedDbGraph.G), testPrintGraph(expectedGraph))
 		}
@@ -174,12 +174,12 @@ func mockLoadGraph(filename string) (*DBGraph, error) {
 	var ix int
 	for nodeItr := grph.GetNodes(); nodeItr.Next(); ix++ {
 		node := nodeItr.Node()
-		ret.NewNode(node, int64(ix))
+		ret.NewNode(node, strconv.Itoa(ix))
 	}
 	ix = 0
 	for edgeItr := grph.GetEdges(); edgeItr.Next(); ix++ {
 		edge := edgeItr.Edge()
-		ret.NewEdge(edge, int64(ix))
+		ret.NewEdge(edge, strconv.Itoa(ix))
 	}
 	return ret, nil
 }

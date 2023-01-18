@@ -108,7 +108,7 @@ func CreateEdgesBatch(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Se
 }
 
 // DeleteEntity.Queue will find all connected nodes to the given entity in the database and delete them
-func (d *DeleteEntity) Queue(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, q *JobQueue, selectEntity func(*lpg.Node) bool) error {
+func (d *DeleteEntity) Queue(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, q *JobQueue, selectEntity func(lpg.Node) bool) error {
 	ids, err := loadEntityNodes(ctx, tx, session, d.Graph, []string{d.entityId}, d.Config, findNeighbors, selectEntity)
 	if err != nil {
 		return err

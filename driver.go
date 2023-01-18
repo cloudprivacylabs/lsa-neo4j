@@ -67,7 +67,7 @@ func NewDriver(driver neo4j.DriverWithContext, databaseName string) *Driver {
 	return drv
 }
 
-func (d *Driver) Close() {
+func (d *Driver) Close(ctx context.Context) {
 	d.drv.Close(context.Background())
 }
 
@@ -151,12 +151,12 @@ func Insert(ctx *ls.Context, session *Session, tx neo4j.ExplicitTransaction, grp
 	}
 	return eids, nil
 }
-func (s *Session) LoadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, grph *lpg.Graph, rootIds []string, config Config, selectEntity func(*lpg.Node) bool) error {
+func (s *Session) LoadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, grph *lpg.Graph, rootIds []string, config Config, selectEntity func(lpg.Node) bool) error {
 	_, err := loadEntityNodes(ctx, tx, s, grph, rootIds, config, findNeighbors, selectEntity)
 	return err
 }
 
-func (s *Session) LoadEntityNodesByEntityId(ctx *ls.Context, tx neo4j.ExplicitTransaction, grph *lpg.Graph, rootIds []string, config Config, selectEntity func(*lpg.Node) bool) error {
+func (s *Session) LoadEntityNodesByEntityId(ctx *ls.Context, tx neo4j.ExplicitTransaction, grph *lpg.Graph, rootIds []string, config Config, selectEntity func(lpg.Node) bool) error {
 	idTerm := config.Shorten(ls.EntityIDTerm)
 	res, err := tx.Run(ctx, fmt.Sprintf("match (root) where root.`%s` in $ids return %s", idTerm, s.IDFunc("root")), map[string]interface{}{"ids": rootIds})
 	if err != nil {
@@ -310,7 +310,7 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 	}
 }
 
-func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *lpg.Graph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) ([]string, error) {
+func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *lpg.Graph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(lpg.Node) bool) ([]string, error) {
 	if len(rootIds) == 0 {
 		return nil, fmt.Errorf("Empty entity schema nodes")
 	}
@@ -350,7 +350,7 @@ func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Ses
 						panic(fmt.Errorf("Cannot set node value for %w %v", err, src))
 					}
 				}
-				if selectEntity == nil || selectEntity(src) {
+				if selectEntity == nil || selectEntity(*src) {
 					visitedNode[srcNode.id] = src
 				} else {
 					src.DetachAndRemove()
@@ -377,7 +377,7 @@ func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Ses
 						panic(fmt.Errorf("Cannot set node value for %w %v", err, nd))
 					}
 				}
-				if selectEntity == nil || selectEntity(nd) {
+				if selectEntity == nil || selectEntity(*nd) {
 					visitedNode[node.id] = nd
 					queue = append(queue, node.id)
 				} else {
