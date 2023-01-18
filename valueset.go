@@ -299,9 +299,9 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 		return ans
 	}
 	if len(updates) > 0 {
-		for ix, update := range groupByLabel(updates) {
-			unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data), "props": update.data[ix].Properties}
-			query := fmt.Sprintf(`unwind $nodes as node MATCH (n) WHERE n.entityId = node.ID SET n=node.Properties, n%s`, update.labelExpr)
+		for _, update := range groupByLabel(updates) {
+			unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data)}
+			query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`https://lschema.org/entityId` = node.ID SET n=node.Properties, n%s", update.labelExpr)
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}
