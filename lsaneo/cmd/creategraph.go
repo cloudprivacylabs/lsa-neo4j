@@ -55,7 +55,7 @@ var (
 					return err
 				}
 
-				_, err = neo.Insert(ctx, session, tx, g, func(lpg.Node) bool { return true }, cfg, batchSize)
+				_, err = neo.Insert(ctx, session, tx, g, func(*lpg.Node) bool { return true }, cfg, batchSize)
 				if err != nil {
 					tx.Rollback(ctx)
 					return err

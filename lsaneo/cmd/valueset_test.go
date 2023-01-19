@@ -10,7 +10,7 @@ import (
 )
 
 func TestParseNodesetData(t *testing.T) {
-	sheet, err := readSpreadsheetFile("../../testdata/apply_01.csv")
+	sheet, err := readSpreadsheetFile("../../testdata/apply_02.csv")
 	if err != nil {
 		t.Error(err)
 	}

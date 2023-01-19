@@ -1,15 +1,11 @@
 package cmd
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"strings"
 
-	neo "github.com/cloudprivacylabs/lsa-neo4j"
 	lsacsv "github.com/cloudprivacylabs/lsa/pkg/csv"
-	"github.com/cloudprivacylabs/lsa/pkg/ls"
-	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"github.com/spf13/cobra"
 )
 
@@ -17,74 +13,18 @@ var (
 	nodesetCmd = &cobra.Command{
 		Use:   "nodeset",
 		Short: "prompts nodeset commands: apply or delete",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			drv := getNeoDriver(cmd)
-			ctx := ls.DefaultContext()
-			session := drv.NewSession(ctx)
-			defer session.Close(ctx)
-			var tx neo4j.ExplicitTransaction
-			var err error
-			tx, err = session.BeginTransaction(ctx)
-			if err != nil {
-				return err
-			}
-			cfg, err := loadConfig(cmd)
-			if err != nil {
-				return err
-			}
-			input, _ := cmd.Flags().GetString("input")
-			opF, _ := cmd.Flags().GetString("operation")
-			startRow, err := cmd.Flags().GetInt("startRow")
-			if err != nil {
-				return err
-			}
-			headerRow, err := cmd.Flags().GetInt("headerRow")
-			if err != nil {
-				return err
-			}
-			if headerRow >= startRow {
-				return fmt.Errorf("Header row is ahead of start row")
-			}
-			data, err := readSpreadsheetFile(input)
-			if err != nil {
-				return err
-			}
-			ssi := &spreadsheetInput{
-				rows:      data,
-				at:        0,
-				headerRow: headerRow,
-			}
-			nodesets, err := neo.ParseNodesetData(cfg, ssi)
-			if err != nil {
-				return err
-			}
-			for _, ns := range nodesets {
-				db_ns, err := neo.LoadNodeset(ctx, cfg, tx, ns.ID)
-				if err != nil {
-					return err
-				}
-				switch opF {
-				case "apply":
-					// insert, update
-					rootOp, inserts, deletes, updates := neo.NodesetDiff(db_ns, ns)
-					if err := neo.Execute(ctx, tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
-						tx.Rollback(ctx)
-						return err
-					}
-				case "delete":
-					rootOp, inserts, deletes, updates := neo.NodesetDiff(db_ns, neo.Nodeset{})
-					if err := neo.Execute(ctx, tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
-						tx.Rollback(ctx)
-						return err
-					}
-				}
-			}
-			tx.Commit(ctx)
-			return nil
-		},
+		Args:  cobra.ExactArgs(1),
 	}
 )
+
+func init() {
+	rootCmd.AddCommand(nodesetCmd)
+	nodesetCmd.PersistentFlags().String("input", "csv", "input nodeset file")
+	nodesetCmd.MarkFlagRequired("input")
+	nodesetCmd.PersistentFlags().Int("startRow", 1, "Start row 0-based")
+	nodesetCmd.PersistentFlags().Int("endRow", -1, "End row 0-based")
+	nodesetCmd.PersistentFlags().Int("headerRow", 0, "Header row 0-based (default: 0) ")
+}
 
 type spreadsheetInput struct {
 	rows      [][]string
@@ -134,13 +74,4 @@ func readSpreadsheetFile(fileName string) ([][]string, error) {
 		return sheet, nil
 	}
 	return nil, nil
-}
-
-func init() {
-	rootCmd.AddCommand(nodesetCmd)
-	nodesetCmd.Flags().String("operation", "", "modify the database to reflect the nodeset file; performs operations create/update")
-	nodesetCmd.Flags().String("input", "csv", "input nodeset file")
-	nodesetCmd.Flags().Int("startRow", 1, "Start row 0-based")
-	nodesetCmd.Flags().Int("endRow", -1, "End row 0-based")
-	nodesetCmd.Flags().Int("headerRow", 0, "Header row 0-based (default: 0) ")
 }
