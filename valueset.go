@@ -29,10 +29,9 @@ type Nodeset struct {
 }
 
 type NodesetData struct {
-	ID                 string
-	Labels             []string
-	Properties         map[string]interface{}
-	LinkedToOtherNodes bool
+	ID         string
+	Labels     []string
+	Properties map[string]interface{}
 }
 
 func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error) {
@@ -71,7 +70,7 @@ func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error
 			nodeset = Nodeset{
 				ID:         currNodesetID,
 				Labels:     []string{"NODESET"},
-				Properties: cfg.ShortenProperties(map[string]interface{}{"nodeset_id": currNodesetID}),
+				Properties: cfg.ShortenProperties(map[string]interface{}{cfg.Shorten(ls.EntityIDTerm): currNodesetID}),
 				Data:       make(map[string]NodesetData),
 			}
 			// Process a new nodeset, parse row and add properties nodeset
@@ -94,8 +93,13 @@ func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error
 						}
 					} else if header == "node_labels" {
 						if nsl, ok := nodeset.Data[nsDataID]; ok {
-							nsl.Labels = strings.Fields(row[idx])
-							nodeset.Data[cfg.Shorten(nsDataID)] = nsl
+							if val == "" {
+								nsl.Labels = []string{"CONCEPT"}
+								nodeset.Data[cfg.Shorten(nsDataID)] = nsl
+							} else {
+								nsl.Labels = strings.Fields(row[idx])
+								nodeset.Data[cfg.Shorten(nsDataID)] = nsl
+							}
 						}
 					} else {
 						props, _ := nodeset.Data[nsDataID].Properties[input.ColumnNames()[idx]].([]string)
@@ -134,18 +138,26 @@ func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error
 	return ret, nil
 }
 
+type rootOpType int
+
+const (
+	rootOpInsert rootOpType = iota
+	rootOpUpdate
+	rootOpDelete
+)
+
 // oldNodeset is nodeset pulled from DB
-func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp string, insertions []NodesetData, deletions []NodesetData, updates []NodesetData) {
+func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp rootOpType, insertions []NodesetData, deletions []NodesetData, updates []NodesetData) {
 	// if DB nodeset does not exists, insert new nodeset
 	if oldNodeset.ID == "" {
-		rootOp = "insertRoot"
+		rootOp = rootOpInsert
 	} else {
 		// delete DB nodeset if newNodeset is empty
 		if newNodeset.ID == "" {
-			rootOp = "deleteRoot"
+			rootOp = rootOpDelete
 		} else {
 			// update to use newNodeset if oldNodeset is not equal
-			rootOp = "updateRoot"
+			rootOp = rootOpUpdate
 		}
 	}
 	for oid, oldNsData := range oldNodeset.Data {
@@ -186,7 +198,7 @@ func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp string, insertions []No
 }
 
 func LoadNodeset(ctx context.Context, cfg Config, tx neo4j.ExplicitTransaction, nodesetId string) (Nodeset, error) {
-	query := fmt.Sprintf("MATCH (root:`NODESET` {nodeset_id: %s})-[:%s]->(m) return root,m", quoteStringLiteral(nodesetId), nodesetId)
+	query := fmt.Sprintf("MATCH (root:`NODESET` {`%s`: %s})-[:%s]->(m) return root,m", cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(nodesetId), nodesetId)
 	idrec, err := tx.Run(ctx, query, map[string]interface{}{})
 	if err != nil {
 		return Nodeset{}, err
@@ -201,7 +213,7 @@ func LoadNodeset(ctx context.Context, cfg Config, tx neo4j.ExplicitTransaction, 
 		if !first {
 			nsCenter := rec.Values[0].(neo4j.Node)
 			for k, v := range nsCenter.Props {
-				if k == cfg.Expand("nodeset_id") {
+				if k == cfg.Shorten(ls.EntityIDTerm) {
 					ns.ID = v.(string)
 				}
 			}
@@ -257,20 +269,20 @@ func buildProps(props map[string]interface{}, vars map[string]interface{}) strin
 	return out.String()
 }
 
-func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp string, inserts, updates, deletes []NodesetData) error {
+func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp rootOpType, inserts, updates, deletes []NodesetData) error {
 	switch rootOp {
-	case "insertRoot":
+	case rootOpInsert:
 		vars := make(map[string]interface{})
 		if _, err := tx.Run(ctx, fmt.Sprintf("CREATE (n %s %s)", cfg.MakeLabels(newNodeset.Labels), buildProps(newNodeset.Properties, vars)), vars); err != nil {
 			return err
 		}
-	case "updateRoot":
-		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) WHERE n.entityId = $eid SET n.props=$props, n%s", cfg.MakeLabels(oldNodeset.Labels)), map[string]interface{}{
+	case rootOpUpdate:
+		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) WHERE n.%s = $eid SET n.props=$props, n%s", cfg.Shorten(ls.EntityIDTerm), cfg.MakeLabels(oldNodeset.Labels)), map[string]interface{}{
 			"eid": oldNodeset.ID, "props": oldNodeset.Properties}); err != nil {
 			return err
 		}
-	case "deleteRoot":
-		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n {nodeset_id: $eid})-[r:%s]->() DELETE r", oldNodeset.ID), map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
+	case rootOpDelete:
+		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n {`%s`: $eid})-[r:%s]->() DELETE r", cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID), map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
 			return err
 		}
 	}
@@ -301,7 +313,7 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	if len(updates) > 0 {
 		for _, update := range groupByLabel(updates) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data)}
-			query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`https://lschema.org/entityId` = node.ID SET n=node.Properties, n%s", update.labelExpr)
+			query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`%s` = node.ID SET n=node.Properties, n%s", cfg.Shorten(ls.EntityIDTerm), update.labelExpr)
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}
@@ -310,8 +322,8 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	if len(inserts) > 0 {
 		for _, insert := range groupByLabel(inserts) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
-			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`https://lschema.org/entityId`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {nodeset_id: %s}) MERGE(root)-[:%s]->(n)",
-				insert.labelExpr, quoteStringLiteral(newNodeset.ID), newNodeset.ID)
+			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n)",
+				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID)
 
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
@@ -319,7 +331,7 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 		}
 	}
 	if len(deletes) > 0 {
-		if _, err := tx.Run(ctx, "MATCH (n) WHERE n.`https://lschema.org/entityId` IN $deletes DETACH DELETE n", map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
+		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s) WHERE n.`%s` IN $deletes DETACH DELETE n", "NODESET", cfg.Shorten(ls.EntityIDTerm)), map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
 			return err
 		}
 	}

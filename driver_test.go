@@ -19,7 +19,7 @@ func TestLsaNeo4j(t *testing.T) {
 	RunSpecs(t, "LsaNeo4j Suite")
 }
 
-func selectEntity(node lpg.Node) bool {
+func selectEntity(node *lpg.Node) bool {
 	return true
 }
 
