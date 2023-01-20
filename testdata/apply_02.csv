@@ -1,0 +1,12 @@
+nodeset_id,concept_id,node_id,node_labels,prop1,prop2
+fnd_bp_systolic,3000054,,E S F,futes,e-miniatures
+fnd_bp_systolic,3004249,,E S F,footures,f
+fnd_bp_systolic,3009395,,E S F,p1,futures
+fnd_height,3008989,,V I X,p1,liquidity_contrast
+fnd_height,3013842,,V I X,p1,volatility_index
+fnd_bmi,1314389,,U V X Y,p1,shares
+fnd_bmi,1576151,,U V X Y,p1,ultra_vix
+fnd_bp_diastolic,3012297,,Q Q Q,p1,NQ
+fnd_bp_diastolic,3012888,,Q Q Q,p1, nasdaq_prop_2
+fnd_bps_systemic_noninvasive_direct_measure,3000605,,S P X,p1,index
+fnd_bps_systemic_noninvasive_direct_measure,3004249,,E S F,e-mini,spx_futures

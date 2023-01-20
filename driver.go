@@ -67,7 +67,7 @@ func NewDriver(driver neo4j.DriverWithContext, databaseName string) *Driver {
 	return drv
 }
 
-func (d *Driver) Close() {
+func (d *Driver) Close(ctx context.Context) {
 	d.drv.Close(context.Background())
 }
 
@@ -87,7 +87,7 @@ func (s *Session) Logf(format string, a ...interface{}) {
 }
 
 // Insert creates or adds to a graph on a database; does not check existing nodes
-func Insert(ctx *ls.Context, session *Session, tx neo4j.ExplicitTransaction, grph *lpg.Graph, selectEntity func(lpg.Node) bool, config Config, batch int) ([]string, error) {
+func Insert(ctx *ls.Context, session *Session, tx neo4j.ExplicitTransaction, grph *lpg.Graph, selectEntity func(*lpg.Node) bool, config Config, batch int) ([]string, error) {
 	eids := make([]string, 0)
 	mappedEntities := make(map[*lpg.Node]string) // holds all neo4j id's of entity schema and nonempty entity id
 	nonemptyEntityNodeIds := make([]string, 0)
