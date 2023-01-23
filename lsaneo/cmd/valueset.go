@@ -19,8 +19,6 @@ var (
 
 func init() {
 	rootCmd.AddCommand(nodesetCmd)
-	nodesetCmd.PersistentFlags().String("input", "csv", "input nodeset file")
-	nodesetCmd.MarkFlagRequired("input")
 	nodesetCmd.PersistentFlags().Int("startRow", 1, "Start row 0-based")
 	nodesetCmd.PersistentFlags().Int("endRow", -1, "End row 0-based")
 	nodesetCmd.PersistentFlags().Int("headerRow", 0, "Header row 0-based (default: 0) ")

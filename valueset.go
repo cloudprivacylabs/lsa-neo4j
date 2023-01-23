@@ -63,6 +63,9 @@ func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error
 				break
 			}
 			nodesetId := getColumn(row, "nodeset_id")
+			if nodesetId == "" {
+				continue
+			}
 			if _, seen := ret[nodesetId]; seen {
 				continue
 			}
@@ -75,38 +78,27 @@ func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error
 			}
 			// Process a new nodeset, parse row and add properties nodeset
 			parseRow := func(row []string) error {
-				var nsDataID string
+				cid := getColumn(row, "concept_id")
+				if len(cid) == 0 {
+					return nil
+				}
+				data := NodesetData{
+					ID:         cid,
+					Properties: map[string]interface{}{cfg.Shorten(ls.EntityIDTerm): cid},
+				}
+				labels := lpg.NewStringSet(strings.Fields(getColumn(row, "node_labels"))...)
+				if labels.Len() == 0 {
+					labels.Add("CONCEPT")
+				}
+				data.Labels = labels.Slice()
+
 				for idx := 0; idx < len(input.ColumnNames()); idx++ {
-					val := row[idx]
 					header := input.ColumnNames()[idx]
-					if header == "nodeset_id" {
-						currNodesetID = val
-						continue
-					} else if header == "concept_id" {
-						nsDataID = val
-						if _, seen := nodeset.Data[nsDataID]; !seen {
-							nodeset.Data[nsDataID] = NodesetData{
-								ID:         nsDataID,
-								Labels:     make([]string, 0),
-								Properties: map[string]interface{}{cfg.Shorten(ls.EntityIDTerm): val},
-							}
-						}
-					} else if header == "node_labels" {
-						if nsl, ok := nodeset.Data[nsDataID]; ok {
-							if val == "" {
-								nsl.Labels = []string{"CONCEPT"}
-								nodeset.Data[cfg.Shorten(nsDataID)] = nsl
-							} else {
-								nsl.Labels = strings.Fields(row[idx])
-								nodeset.Data[cfg.Shorten(nsDataID)] = nsl
-							}
-						}
-					} else {
-						props, _ := nodeset.Data[nsDataID].Properties[input.ColumnNames()[idx]].([]string)
-						props = append(props, val)
-						nodeset.Data[nsDataID].Properties[cfg.Shorten(input.ColumnNames()[idx])] = props
+					if header != "node_labels" && header != "concept_id" && header != "nodeset_id" {
+						data.Properties[cfg.Shorten(input.ColumnNames()[idx])] = row[idx]
 					}
 				}
+				nodeset.Data[cid] = data
 				return nil
 			}
 			if err := parseRow(row); err != nil {
@@ -135,6 +127,7 @@ func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error
 			break
 		}
 	}
+	fmt.Printf("%+v\n", ret)
 	return ret, nil
 }
 
@@ -204,34 +197,40 @@ func LoadNodeset(ctx context.Context, cfg Config, tx neo4j.ExplicitTransaction, 
 		return Nodeset{}, err
 	}
 	ns := Nodeset{
-		Labels: make([]string, 0),
-		Data:   make(map[string]NodesetData),
+		Labels:     make([]string, 0),
+		Data:       make(map[string]NodesetData),
+		Properties: make(map[string]any),
 	}
-	first := false
+	first := true
 	for idrec.Next(ctx) {
 		rec := idrec.Record()
-		if !first {
+		if first {
+			first = false
 			nsCenter := rec.Values[0].(neo4j.Node)
 			for k, v := range nsCenter.Props {
 				if k == cfg.Shorten(ls.EntityIDTerm) {
 					ns.ID = v.(string)
+					ns.Properties[k] = ns.ID
 				}
 			}
 			ns.Labels = nsCenter.Labels
-			first = true
 		}
 		nsLeaf := rec.Values[1].(neo4j.Node)
 		var nsLeafEntityId string
-		for k := range nsLeaf.Props {
-			if k == ls.EntityIDTerm {
-				nsLeafEntityId = k
+		for k, v := range nsLeaf.Props {
+			if k == cfg.Shorten(ls.EntityIDTerm) {
+				nsLeafEntityId = v.(string)
 			}
 		}
-		ns.Data[nsLeafEntityId] = NodesetData{
+		nsData := NodesetData{
 			ID:         nsLeafEntityId,
 			Labels:     nsLeaf.Labels,
-			Properties: nsLeaf.Props,
+			Properties: make(map[string]any),
 		}
+		for k, v := range nsLeaf.Props {
+			nsData.Properties[k] = v
+		}
+		ns.Data[nsLeafEntityId] = nsData
 	}
 	return ns, nil
 }
@@ -277,12 +276,13 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 			return err
 		}
 	case rootOpUpdate:
-		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) WHERE n.%s = $eid SET n.props=$props, n%s", cfg.Shorten(ls.EntityIDTerm), cfg.MakeLabels(oldNodeset.Labels)), map[string]interface{}{
-			"eid": oldNodeset.ID, "props": oldNodeset.Properties}); err != nil {
+		stmt := fmt.Sprintf("MATCH (n %s) WHERE n.`%s` = $eid SET n=$props, n%s", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), cfg.MakeLabels(newNodeset.Labels))
+		if _, err := tx.Run(ctx, stmt, map[string]interface{}{
+			"eid": oldNodeset.ID, "props": newNodeset.Properties}); err != nil {
 			return err
 		}
 	case rootOpDelete:
-		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n {`%s`: $eid})-[r:%s]->() DELETE r", cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID), map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
+		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s {`%s`: $eid})-[r:%s]->() DELETE r", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID), map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
 			return err
 		}
 	}
@@ -331,7 +331,7 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 		}
 	}
 	if len(deletes) > 0 {
-		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s) WHERE n.`%s` IN $deletes DETACH DELETE n", "NODESET", cfg.Shorten(ls.EntityIDTerm)), map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
+		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s) WHERE n.`%s` IN $deletes DETACH DELETE n", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm)), map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
 			return err
 		}
 	}

@@ -10,6 +10,7 @@ require (
 	github.com/cloudprivacylabs/lsa v1.0.0-beta20
 	github.com/cloudprivacylabs/opencypher v1.0.0-beta-13
 	github.com/fatih/structs v1.1.0
+	github.com/joho/godotenv v1.4.0
 	github.com/neo4j/neo4j-go-driver/v5 v5.4.0
 	github.com/nleeper/goment v1.4.4
 	github.com/onsi/ginkgo/v2 v2.1.4

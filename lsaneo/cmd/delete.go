@@ -14,7 +14,7 @@ var (
 		Use:   "delete",
 		Short: "delete",
 		Long:  "delete the nodeset from the database",
-		Args:  cobra.NoArgs,
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			drv := getNeoDriver(cmd)
 			ctx := ls.DefaultContext()
@@ -31,7 +31,6 @@ var (
 				return err
 			}
 			neo.InitNamespaceTrie(&cfg)
-			input, _ := cmd.Flags().GetString("input")
 			startRow, err := cmd.Flags().GetInt("startRow")
 			if err != nil {
 				return err
@@ -43,7 +42,7 @@ var (
 			if headerRow >= startRow {
 				return fmt.Errorf("Header row is ahead of start row")
 			}
-			data, err := readSpreadsheetFile(input)
+			data, err := readSpreadsheetFile(args[0])
 			if err != nil {
 				return err
 			}
