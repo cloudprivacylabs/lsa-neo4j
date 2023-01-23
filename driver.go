@@ -215,7 +215,11 @@ func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Sessi
 	for _, x := range ids {
 		remainingIds[x] = struct{}{}
 	}
-	idrec, err := tx.Run(ctx, fmt.Sprintf("MATCH (n)-[e]->(m) where %s in $id RETURN n,m,e", session.IDFunc("n")), map[string]interface{}{"id": ids})
+	idValues := make([]interface{}, 0, len(ids))
+	for _, x := range ids {
+		idValues = append(idValues, session.IDValue(x))
+	}
+	idrec, err := tx.Run(ctx, fmt.Sprintf("MATCH (n)-[e]->(m) where %s in $id RETURN n,m,e", session.IDFunc("n")), map[string]interface{}{"id": idValues})
 	if err != nil {
 		return sources, targets, edges, err
 	}
@@ -239,9 +243,9 @@ func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Sessi
 	if len(remainingIds) == 0 {
 		return sources, targets, edges, nil
 	}
-	rem := make([]string, 0, len(remainingIds))
+	rem := make([]interface{}, 0, len(remainingIds))
 	for x := range remainingIds {
-		rem = append(rem, x)
+		rem = append(rem, session.IDValue(x))
 	}
 	idrec, err = tx.Run(ctx, fmt.Sprintf("MATCH (n) where %s in $id RETURN n", session.IDFunc("n")), map[string]interface{}{"id": rem})
 	if err != nil {

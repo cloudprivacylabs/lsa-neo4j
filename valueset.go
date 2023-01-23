@@ -169,6 +169,10 @@ func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp rootOpType, insertions 
 			}
 			// if props are not equal, update to use newNodeset properties
 			if !reflect.DeepEqual(oldNsData.Properties, newNsData.Properties) {
+				// Keep the old, add the new
+				for k, v := range oldNsData.Properties {
+					update.Properties[k] = v
+				}
 				for k, v := range newNsData.Properties {
 					update.Properties[k] = v
 				}
