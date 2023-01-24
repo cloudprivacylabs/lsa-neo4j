@@ -166,6 +166,8 @@ func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp rootOpType, insertions 
 				// update - setting labels to those in newNodeset
 				update.Labels = newNsData.Labels
 				changed = true
+			} else {
+				update.Labels = oldNodeset.Labels
 			}
 			// if props are not equal, update to use newNodeset properties
 			if !reflect.DeepEqual(oldNsData.Properties, newNsData.Properties) {
@@ -317,7 +319,7 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	if len(updates) > 0 {
 		for _, update := range groupByLabel(updates) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data)}
-			query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`%s` = node.ID SET n=node.Properties, n%s", cfg.Shorten(ls.EntityIDTerm), update.labelExpr)
+			query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`%s` = node.ID SET n=node.Properties", cfg.Shorten(ls.EntityIDTerm))
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}
@@ -326,9 +328,16 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	if len(inserts) > 0 {
 		for _, insert := range groupByLabel(inserts) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
-			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n) MERGE(n)-[:%s]->(root)",
-				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID, newNodeset.ID)
+			query := fmt.Sprintf("UNWIND $nodes AS node CREATE (n%s {`%s`: node.ID}) SET n=node.Properties",
+				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm))
 
+			if _, err := tx.Run(ctx, query, unwindData); err != nil {
+				return err
+			}
+			// create edges
+			unwindData = map[string]interface{}{"nodes": mapNodesetData(insert.data)}
+			query = fmt.Sprintf("UNWIND $nodes AS node MATCH (n%s {`%s`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {`%s`: %s}) CREATE(root)-[:%s]->(n) CREATE(n)-[:%s]->(root)",
+				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID, newNodeset.ID)
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}
