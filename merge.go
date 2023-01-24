@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/cloudprivacylabs/lpg"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
@@ -699,9 +698,8 @@ func (ue UpdateEdgeDelta) Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, ses
 }
 
 func (s *Session) LoadDBGraph(ctx *ls.Context, tx neo4j.ExplicitTransaction, memGraph *lpg.Graph, config Config, cache *Neo4jCache) (*DBGraph, error) {
-	start := time.Now()
+
 	_, rootIds, _, err := s.CollectEntityDBIds(ctx, tx, config, memGraph, cache)
-	fmt.Printf("Collect entity DB ids: %v\n", time.Since(start))
 	if err != nil {
 		return nil, err
 	}
@@ -710,9 +708,8 @@ func (s *Session) LoadDBGraph(ctx *ls.Context, tx neo4j.ExplicitTransaction, mem
 	if len(rootIds) == 0 {
 		return dbg, nil
 	}
-	start = time.Now()
+
 	err = loadGraphByEntities(ctx, tx, s, dbg, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
-	fmt.Printf("Load entities: %v\n", time.Since(start))
 	if err != nil {
 		return nil, err
 	}
@@ -723,6 +720,7 @@ func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session 
 	if len(rootIds) == 0 {
 		return fmt.Errorf("Empty entity schema nodes")
 	}
+	fmt.Println("roots", rootIds)
 	// neo4j IDs
 	queue := make(map[string]struct{}, len(rootIds))
 	for _, id := range rootIds {
@@ -734,7 +732,9 @@ func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session 
 		for k := range queue {
 			q = append(q, k)
 		}
+		fmt.Println("Load", q)
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, q)
+		fmt.Println("Loaded", srcNodes)
 		if err != nil {
 			return err
 		}
