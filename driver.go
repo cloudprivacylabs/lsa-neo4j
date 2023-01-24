@@ -56,7 +56,7 @@ func NewDriver(driver neo4j.DriverWithContext, databaseName string) *Driver {
 		panic(err)
 	}
 	if srv.ProtocolVersion().Major >= 5 {
-		drv.IDEqFunc = func(objectName, id string) string { return fmt.Sprintf("elementId(%s)=\"%s\"", objectName, id) }
+		drv.IDEqFunc = func(objectName, id string) string { return fmt.Sprintf("elementId(%s)=%s", objectName, id) }
 		drv.IDFunc = func(objectName string) string { return fmt.Sprintf("elementId(%s)", objectName) }
 		drv.IDValue = func(value string) interface{} { return value }
 	} else {
