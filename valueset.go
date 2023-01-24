@@ -326,8 +326,8 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	if len(inserts) > 0 {
 		for _, insert := range groupByLabel(inserts) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
-			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n)",
-				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID)
+			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n) MERGE(n)-[:%s]->(root)",
+				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID, newNodeset.ID)
 
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
