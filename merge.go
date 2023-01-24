@@ -599,11 +599,11 @@ func (un UpdateNodeDelta) WriteQuery(session *Session, dbNodeIds map[*lpg.Node]s
 		panic(fmt.Sprintf("Node ID not known: %s", un.dbNode))
 	}
 	if len(labels) > 0 && len(prop) > 0 {
-		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE %s SET n = %v SET n%s", session.IDEqFunc("n", id), prop, labels))
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE %s SET n = %v SET n%s", session.IDEqValueFunc("n", id), prop, labels))
 	} else if len(labels) == 0 && len(prop) > 0 {
-		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE  %s SET n = %v", session.IDEqFunc("n", id), prop))
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE  %s SET n = %v", session.IDEqValueFunc("n", id), prop))
 	} else if len(prop) == 0 && len(labels) > 0 {
-		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE  %s SET n:%s", session.IDEqFunc("n", id), labels))
+		sb.WriteString(fmt.Sprintf("MATCH (n) WHERE  %s SET n:%s", session.IDEqValueFunc("n", id), labels))
 	}
 	return DeltaQuery{
 		Query: sb.String(),
@@ -653,7 +653,7 @@ func (ce CreateEdgeDelta) WriteQuery(session *Session, dbNodeIds map[*lpg.Node]s
 	label := c.MakeLabels([]string{ce.label})
 	props := c.MakeProperties(mapWithProperty(ce.properties), vars)
 	return DeltaQuery{
-		Query: fmt.Sprintf("MATCH (n) WHERE  %s MATCH (m) WHERE  %s CREATE (n)-[%s %s]->(m)", session.IDEqFunc("n", dbNodeIds[ce.fromDbNode]), session.IDEqFunc("m", dbNodeIds[ce.toDbNode]), label, props),
+		Query: fmt.Sprintf("MATCH (n) WHERE  %s MATCH (m) WHERE  %s CREATE (n)-[%s %s]->(m)", session.IDEqValueFunc("n", dbNodeIds[ce.fromDbNode]), session.IDEqValueFunc("m", dbNodeIds[ce.toDbNode]), label, props),
 		Vars:  vars,
 	}
 }
@@ -668,7 +668,7 @@ func (ue UpdateEdgeDelta) WriteQuery(session *Session, dbNodeIds map[*lpg.Node]s
 	vars := make(map[string]interface{})
 	props := c.MakeProperties(mapWithProperty(ue.properties), vars)
 	return DeltaQuery{
-		Query: fmt.Sprintf("MATCH ()-[e]->() WHERE %s set e=%s", session.IDEqFunc("e", dbEdgeIds[ue.dbEdge]), props),
+		Query: fmt.Sprintf("MATCH ()-[e]->() WHERE %s set e=%s", session.IDEqValueFunc("e", dbEdgeIds[ue.dbEdge]), props),
 		Vars:  vars,
 	}
 }

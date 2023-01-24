@@ -25,8 +25,10 @@ type Driver struct {
 	drv    neo4j.DriverWithContext
 	dbName string
 
-	// ID(objectName)=id
-	IDEqFunc func(objectName, id string) string
+	// ID(objectName)=id.
+	IDEqValueFunc func(objectName, id string) string
+	// ID(objectName)=varname.
+	IDEqVarFunc func(objectName, varname string) string
 	// ID(objectName)
 	IDFunc func(objectName string) string
 	// IDValue returns the actual ID value as a string or int64
@@ -56,11 +58,13 @@ func NewDriver(driver neo4j.DriverWithContext, databaseName string) *Driver {
 		panic(err)
 	}
 	if srv.ProtocolVersion().Major >= 5 {
-		drv.IDEqFunc = func(objectName, id string) string { return fmt.Sprintf("elementId(%s)=%s", objectName, id) }
+		drv.IDEqValueFunc = func(objectName, id string) string { return fmt.Sprintf("elementId(%s)=\"%s\"", objectName, id) }
+		drv.IDEqVarFunc = func(objectName, varname string) string { return fmt.Sprintf("elementId(%s)=%s", objectName, varname) }
 		drv.IDFunc = func(objectName string) string { return fmt.Sprintf("elementId(%s)", objectName) }
 		drv.IDValue = func(value string) interface{} { return value }
 	} else {
-		drv.IDEqFunc = func(objectName, id string) string { return fmt.Sprintf("id(%s)=%s", objectName, id) }
+		drv.IDEqValueFunc = func(objectName, id string) string { return fmt.Sprintf("id(%s)=%s", objectName, id) }
+		drv.IDEqVarFunc = func(objectName, varname string) string { return fmt.Sprintf("id(%s)=%s", objectName, varname) }
 		drv.IDFunc = func(objectName string) string { return fmt.Sprintf("id(%s)", objectName) }
 		drv.IDValue = func(value string) interface{} { v, _ := strconv.Atoi(value); return int64(v) }
 	}

@@ -208,11 +208,11 @@ func buildConnectQuery(session *Session, edges []*lpg.Edge, c Config, hm map[*lp
 		_, fromInScope := scopeNodes[from]
 		_, toInScope := scopeNodes[to]
 		if !fromInScope && !toInScope {
-			fmt.Fprintf(&sb, "match (n%d),(n%d) where %s and %s ", fromIx, toIx, session.IDEqFunc(fmt.Sprintf("n%d", fromIx), from), session.IDEqFunc(fmt.Sprintf("n%d", toIx), to))
+			fmt.Fprintf(&sb, "match (n%d),(n%d) where %s and %s ", fromIx, toIx, session.IDEqValueFunc(fmt.Sprintf("n%d", fromIx), from), session.IDEqValueFunc(fmt.Sprintf("n%d", toIx), to))
 		} else if fromInScope && !toInScope {
-			fmt.Fprintf(&sb, "match (n%d) where %s ", toIx, session.IDEqFunc(fmt.Sprintf("n%d", toIx), to))
+			fmt.Fprintf(&sb, "match (n%d) where %s ", toIx, session.IDEqValueFunc(fmt.Sprintf("n%d", toIx), to))
 		} else if !fromInScope && toInScope {
-			fmt.Fprintf(&sb, "match (n%d) where %s ", fromIx, session.IDEqFunc(fmt.Sprintf("n%d", fromIx), from))
+			fmt.Fprintf(&sb, "match (n%d) where %s ", fromIx, session.IDEqValueFunc(fmt.Sprintf("n%d", fromIx), from))
 		}
 		scopeNodes[from] = struct{}{}
 		scopeNodes[to] = struct{}{}
@@ -257,7 +257,7 @@ func CreateEdgesUnwind(ctx *ls.Context, session *Session, edges []*lpg.Edge, nod
 			query := fmt.Sprintf(`unwind $edges as edge 
 match(a) where %s with a,edge
 match(b) where %s 
-create (a)-[e%s]->(b) set e=edge.props return e`, session.IDEqFunc("a", "edge.from"), session.IDEqFunc("b", "edge.to"), labels)
+create (a)-[e%s]->(b) set e=edge.props return e`, session.IDEqVarFunc("a", "edge.from"), session.IDEqVarFunc("b", "edge.to"), labels)
 			idrec, err := tx.Run(ctx, query, map[string]interface{}{"edges": unwind})
 			if err != nil {
 				return err

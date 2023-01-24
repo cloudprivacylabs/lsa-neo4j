@@ -181,9 +181,9 @@ func linkEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Sessio
 		}), params)
 
 		if spec.forward {
-			query = fmt.Sprintf(`match (target %s %s) with target match (source) where %s create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, session.IDEqFunc("source", nodeMap[linkToNode]), config.MakeLabels([]string{spec.label}))
+			query = fmt.Sprintf(`match (target %s %s) with target match (source) where %s create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, session.IDEqValueFunc("source", nodeMap[linkToNode]), config.MakeLabels([]string{spec.label}))
 		} else {
-			query = fmt.Sprintf(`match (source %s %s) with source match (target) where %s create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, session.IDEqFunc("target", nodeMap[linkToNode]), config.MakeLabels([]string{spec.label}))
+			query = fmt.Sprintf(`match (source %s %s) with source match (target) where %s create (source)-[%s]->(target)`, nodeLabelsClause, nodePropertiesClause, session.IDEqValueFunc("target", nodeMap[linkToNode]), config.MakeLabels([]string{spec.label}))
 		}
 		ctx.GetLogger().Debug(map[string]interface{}{"linkEntity": query, "params": params})
 		_, err := tx.Run(ctx, query, params)
@@ -240,12 +240,12 @@ func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.ExplicitTransaction, session
 		if _, ok := fkNode.Props[ls.EntitySchemaTerm]; ok {
 			if dirTo {
 				// MATCH (n), (m) WHERE ID(n) = %d AND m.`%s` = ID CREATE (n)-[%s]->(m)
-				_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)-[%s]->(m)", session.IDEqFunc("n", fkNode.ElementId), session.IDEqFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+				_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)-[%s]->(m)", session.IDEqValueFunc("n", fkNode.ElementId), session.IDEqValueFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
 				if err != nil {
 					return err
 				}
 			} else {
-				_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)<-[%s]-(m)", session.IDEqFunc("n", fkNode.ElementId), session.IDEqFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+				_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)<-[%s]-(m)", session.IDEqValueFunc("n", fkNode.ElementId), session.IDEqValueFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
 				if err != nil {
 					return err
 				}
@@ -258,7 +258,7 @@ func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.ExplicitTransaction, session
 				if depth >= MAX_DEPTH {
 					return errors.New("cannot find entity node")
 				}
-				eNodesRec, err := tx.Run(ctx, fmt.Sprintf("MATCH (n)<-[*%d]-(m) WHERE %s AND m.`%s` IS NOT NULL RETURN m", depth, session.IDEqFunc("n", fkNode.ElementId), ls.EntitySchemaTerm), vars)
+				eNodesRec, err := tx.Run(ctx, fmt.Sprintf("MATCH (n)<-[*%d]-(m) WHERE %s AND m.`%s` IS NOT NULL RETURN m", depth, session.IDEqValueFunc("n", fkNode.ElementId), ls.EntitySchemaTerm), vars)
 				if err != nil {
 					return err
 				}
@@ -276,12 +276,12 @@ func AddLinksToThisEntity(ctx *ls.Context, tx neo4j.ExplicitTransaction, session
 				eNode := singleRec[0].Values[0].(neo4j.Node)
 				// connect found entity root to new node
 				if dirTo {
-					_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)-[%s]->(m)", session.IDEqFunc("n", eNode.ElementId), session.IDEqFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+					_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)-[%s]->(m)", session.IDEqValueFunc("n", eNode.ElementId), session.IDEqValueFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
 					if err != nil {
 						return err
 					}
 				} else {
-					_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)<-[%s]-(m)", session.IDEqFunc("n", eNode.ElementId), session.IDEqFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
+					_, err := tx.Run(ctx, fmt.Sprintf("MATCH (n) MATCH (m) WHERE %s AND %s CREATE (n)<-[%s]-(m)", session.IDEqValueFunc("n", eNode.ElementId), session.IDEqValueFunc("m", nodeMap[entityRoot]), config.MakeLabels([]string{ls.HasTerm})), vars)
 					if err != nil {
 						return err
 					}
