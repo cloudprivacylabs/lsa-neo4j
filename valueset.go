@@ -167,7 +167,7 @@ func NodesetDiff(oldNodeset, newNodeset Nodeset) (rootOp rootOpType, insertions 
 				update.Labels = newNsData.Labels
 				changed = true
 			} else {
-				update.Labels = oldNodeset.Labels
+				update.Labels = oldNsData.Labels
 			}
 			// if props are not equal, update to use newNodeset properties
 			if !reflect.DeepEqual(oldNsData.Properties, newNsData.Properties) {
@@ -319,7 +319,7 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	if len(updates) > 0 {
 		for _, update := range groupByLabel(updates) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data)}
-			query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`%s` = node.ID SET n=node.Properties", cfg.Shorten(ls.EntityIDTerm))
+			query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`%s` = node.ID SET n=node.Properties, n%s", cfg.Shorten(ls.EntityIDTerm), update.labelExpr)
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}
@@ -334,17 +334,27 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
 				return err
 			}
-			// create edges
-			unwindData = map[string]interface{}{"nodes": mapNodesetData(insert.data)}
-			query = fmt.Sprintf("UNWIND $nodes AS node MATCH (n%s {`%s`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {`%s`: %s}) CREATE(root)-[:%s]->(n) CREATE(n)-[:%s]->(root)",
-				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID, newNodeset.ID)
-			if _, err := tx.Run(ctx, query, unwindData); err != nil {
-				return err
-			}
 		}
 	}
 	if len(deletes) > 0 {
 		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s) WHERE n.`%s` IN $deletes DETACH DELETE n", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm)), map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
+			return err
+		}
+	}
+	newNodesetData := []NodesetData{}
+	for _, n := range newNodeset.Data {
+		newNodesetData = append(newNodesetData, NodesetData{
+			ID:         n.ID,
+			Labels:     n.Labels,
+			Properties: n.Properties,
+		})
+	}
+	// create edges, merge with valueset root
+	for _, n := range groupByLabel(newNodesetData) {
+		unwindData := map[string]interface{}{"nodes": mapNodesetData(n.data)}
+		query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n) MERGE(n)-[:%s]->(root)",
+			n.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID, newNodeset.ID)
+		if _, err := tx.Run(ctx, query, unwindData); err != nil {
 			return err
 		}
 	}

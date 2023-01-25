@@ -258,13 +258,9 @@ func CreateEdgesUnwind(ctx *ls.Context, session *Session, edges []*lpg.Edge, nod
 match(a) where %s with a,edge
 match(b) where %s 
 create (a)-[e%s]->(b) set e=edge.props return e`, session.IDEqVarFunc("a", "edge.from"), session.IDEqVarFunc("b", "edge.to"), labels)
-			idrec, err := tx.Run(ctx, query, map[string]interface{}{"edges": unwind})
+			_, err := tx.Run(ctx, query, map[string]interface{}{"edges": unwind})
 			if err != nil {
 				return err
-			}
-			for idrec.Next(ctx) {
-				rec := idrec.Record()
-				fmt.Println(rec)
 			}
 		}
 		return nil
