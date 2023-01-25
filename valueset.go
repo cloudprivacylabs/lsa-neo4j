@@ -274,8 +274,17 @@ func buildProps(props map[string]interface{}, vars map[string]interface{}) strin
 	return out.String()
 }
 
-func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp rootOpType, inserts, updates, deletes []NodesetData) error {
-	fmt.Println(rootOp, oldNodeset, deletes)
+func Execute(ctx *ls.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp rootOpType, inserts, updates, deletes []NodesetData) error {
+	if err := executeRootOp(ctx, tx, oldNodeset, newNodeset, cfg, rootOp, updates, inserts, deletes); err != nil {
+		return err
+	}
+	if err := executeDiff(ctx, tx, oldNodeset, newNodeset, cfg, updates, inserts, deletes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func executeRootOp(ctx *ls.Context, tx neo4j.ExplicitTransaction, oldNodeset, newNodeset Nodeset, cfg Config, rootOp rootOpType, updates, inserts, deletes []NodesetData) error {
 	switch rootOp {
 	case rootOpInsert:
 		vars := make(map[string]interface{})
@@ -289,11 +298,16 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 			return err
 		}
 	case rootOpDelete:
-		q := fmt.Sprintf("MATCH (n %s {`%s`: $eid})-[r:%s]->() DELETE r", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID)
+		q := fmt.Sprintf("MATCH (n %s {`%s`: $eid})-[r:%s]->(), (n %s {`%s`: $eid})<-[x:%s]-() DELETE r, x",
+			cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID, cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID)
 		if _, err := tx.Run(ctx, q, map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+func executeDiff(ctx *ls.Context, tx neo4j.ExplicitTransaction, oldNodeset, newNodeset Nodeset, cfg Config, updates, inserts, deletes []NodesetData) error {
 	type groupedNodesetData struct {
 		labelExpr string
 		data      []NodesetData
@@ -342,6 +356,7 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s) WHERE n.`%s` IN $deletes DETACH DELETE n", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm)), map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
 			return err
 		}
+		return nil
 	}
 	newNodesetData := []NodesetData{}
 	for _, n := range newNodeset.Data {
