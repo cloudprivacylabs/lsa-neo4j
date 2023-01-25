@@ -275,6 +275,7 @@ func buildProps(props map[string]interface{}, vars map[string]interface{}) strin
 }
 
 func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp rootOpType, inserts, updates, deletes []NodesetData) error {
+	fmt.Println(rootOp, oldNodeset, deletes)
 	switch rootOp {
 	case rootOpInsert:
 		vars := make(map[string]interface{})
@@ -288,7 +289,8 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 			return err
 		}
 	case rootOpDelete:
-		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s {`%s`: $eid})-[r:%s]->() DELETE r", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID), map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
+		q := fmt.Sprintf("MATCH (n %s {`%s`: $eid})-[r:%s]->() DELETE r", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID)
+		if _, err := tx.Run(ctx, q, map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
 			return err
 		}
 	}
@@ -328,7 +330,7 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	if len(inserts) > 0 {
 		for _, insert := range groupByLabel(inserts) {
 			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
-			query := fmt.Sprintf("UNWIND $nodes AS node CREATE (n%s {`%s`: node.ID}) SET n=node.Properties",
+			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties",
 				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm))
 
 			if _, err := tx.Run(ctx, query, unwindData); err != nil {
