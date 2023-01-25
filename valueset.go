@@ -352,7 +352,7 @@ func Execute(ctx context.Context, tx neo4j.ExplicitTransaction, cfg Config, oldN
 	// create edges, merge with valueset root
 	for _, n := range groupByLabel(newNodesetData) {
 		unwindData := map[string]interface{}{"nodes": mapNodesetData(n.data)}
-		query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n) MERGE(n)-[:%s]->(root)",
+		query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n) MERGE(n)-[:%s]->(root)",
 			n.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID, newNodeset.ID)
 		if _, err := tx.Run(ctx, query, unwindData); err != nil {
 			return err
