@@ -275,39 +275,6 @@ func buildProps(props map[string]interface{}, vars map[string]interface{}) strin
 }
 
 func Execute(ctx *ls.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodeset, newNodeset Nodeset, rootOp rootOpType, inserts, updates, deletes []NodesetData) error {
-	if err := executeRootOp(ctx, tx, oldNodeset, newNodeset, cfg, rootOp, updates, inserts, deletes); err != nil {
-		return err
-	}
-	if err := executeDiff(ctx, tx, oldNodeset, newNodeset, cfg, updates, inserts, deletes); err != nil {
-		return err
-	}
-	return nil
-}
-
-func executeRootOp(ctx *ls.Context, tx neo4j.ExplicitTransaction, oldNodeset, newNodeset Nodeset, cfg Config, rootOp rootOpType, updates, inserts, deletes []NodesetData) error {
-	switch rootOp {
-	case rootOpInsert:
-		vars := make(map[string]interface{})
-		if _, err := tx.Run(ctx, fmt.Sprintf("CREATE (n %s %s)", cfg.MakeLabels(newNodeset.Labels), buildProps(newNodeset.Properties, vars)), vars); err != nil {
-			return err
-		}
-	case rootOpUpdate:
-		stmt := fmt.Sprintf("MATCH (n %s) WHERE n.`%s` = $eid SET n=$props, n%s", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), cfg.MakeLabels(newNodeset.Labels))
-		if _, err := tx.Run(ctx, stmt, map[string]interface{}{
-			"eid": oldNodeset.ID, "props": newNodeset.Properties}); err != nil {
-			return err
-		}
-	case rootOpDelete:
-		q := fmt.Sprintf("MATCH (n %s {`%s`: $eid})-[r:%s]->(), (n %s {`%s`: $eid})<-[x:%s]-() DELETE r, x",
-			cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID, cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID)
-		if _, err := tx.Run(ctx, q, map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func executeDiff(ctx *ls.Context, tx neo4j.ExplicitTransaction, oldNodeset, newNodeset Nodeset, cfg Config, updates, inserts, deletes []NodesetData) error {
 	type groupedNodesetData struct {
 		labelExpr string
 		data      []NodesetData
@@ -332,48 +299,98 @@ func executeDiff(ctx *ls.Context, tx neo4j.ExplicitTransaction, oldNodeset, newN
 		}
 		return ans
 	}
-	if len(updates) > 0 {
-		for _, update := range groupByLabel(updates) {
-			unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data)}
-			query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`%s` = node.ID SET n=node.Properties, n%s", cfg.Shorten(ls.EntityIDTerm), update.labelExpr)
-			if _, err := tx.Run(ctx, query, unwindData); err != nil {
-				return err
+	updateNodes := func() error {
+		if len(updates) > 0 {
+			for _, update := range groupByLabel(updates) {
+				unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data)}
+				query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`%s` = node.ID SET n=node.Properties, n%s", cfg.Shorten(ls.EntityIDTerm), update.labelExpr)
+				if _, err := tx.Run(ctx, query, unwindData); err != nil {
+					return err
+				}
 			}
-		}
-	}
-	if len(inserts) > 0 {
-		for _, insert := range groupByLabel(inserts) {
-			unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
-			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties",
-				insert.labelExpr, cfg.Shorten(ls.EntityIDTerm))
-
-			if _, err := tx.Run(ctx, query, unwindData); err != nil {
-				return err
-			}
-		}
-	}
-	if len(deletes) > 0 {
-		if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s) WHERE n.`%s` IN $deletes DETACH DELETE n", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm)), map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
-			return err
 		}
 		return nil
 	}
-	newNodesetData := []NodesetData{}
-	for _, n := range newNodeset.Data {
-		newNodesetData = append(newNodesetData, NodesetData{
-			ID:         n.ID,
-			Labels:     n.Labels,
-			Properties: n.Properties,
-		})
+	insertNodes := func() error {
+		if len(inserts) > 0 {
+			for _, insert := range groupByLabel(inserts) {
+				unwindData := map[string]interface{}{"nodes": mapNodesetData(insert.data)}
+				query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) SET n=node.Properties",
+					insert.labelExpr, cfg.Shorten(ls.EntityIDTerm))
+
+				if _, err := tx.Run(ctx, query, unwindData); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
-	// create edges, merge with valueset root
-	for _, n := range groupByLabel(newNodesetData) {
-		unwindData := map[string]interface{}{"nodes": mapNodesetData(n.data)}
-		query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n) MERGE(n)-[:%s]->(root)",
-			n.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID, newNodeset.ID)
-		if _, err := tx.Run(ctx, query, unwindData); err != nil {
+	deleteNodes := func() error {
+		if len(deletes) > 0 {
+			if _, err := tx.Run(ctx, fmt.Sprintf("MATCH (n %s) WHERE n.`%s` IN $deletes DETACH DELETE n", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm)), map[string]interface{}{"deletes": mapNodesetData(deletes)}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	insertEdges := func() error {
+		newNodesetData := []NodesetData{}
+		for _, n := range newNodeset.Data {
+			newNodesetData = append(newNodesetData, NodesetData{
+				ID:         n.ID,
+				Labels:     n.Labels,
+				Properties: n.Properties,
+			})
+		}
+		// create edges, merge with valueset root
+		for _, n := range groupByLabel(newNodesetData) {
+			unwindData := map[string]interface{}{"nodes": mapNodesetData(n.data)}
+			query := fmt.Sprintf("UNWIND $nodes AS node MERGE (n%s {`%s`: node.ID}) WITH n MATCH(root:`NODESET` {`%s`: %s}) MERGE(root)-[:%s]->(n) MERGE(n)-[:%s]->(root)",
+				n.labelExpr, cfg.Shorten(ls.EntityIDTerm), cfg.Shorten(ls.EntityIDTerm), quoteStringLiteral(newNodeset.ID), newNodeset.ID, newNodeset.ID)
+			if _, err := tx.Run(ctx, query, unwindData); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if rootOp == rootOpDelete {
+		q := fmt.Sprintf("MATCH (n %s {`%s`: $eid})-[r:%s]->(), (n %s {`%s`: $eid})<-[x:%s]-() DELETE r, x",
+			cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID, cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), oldNodeset.ID)
+		if _, err := tx.Run(ctx, q, map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
+			return err
+		}
+		q = fmt.Sprintf("MATCH (n %s {`%s`: $eid}) DETACH DELETE n",
+			cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm))
+		if _, err := tx.Run(ctx, q, map[string]interface{}{"eid": oldNodeset.ID}); err != nil {
+			return err
+		}
+		if err := deleteNodes(); err != nil {
+			return err
+		}
+		return updateNodes()
+	}
+
+	switch rootOp {
+	case rootOpInsert:
+		vars := make(map[string]interface{})
+		if _, err := tx.Run(ctx, fmt.Sprintf("CREATE (n %s %s)", cfg.MakeLabels(newNodeset.Labels), buildProps(newNodeset.Properties, vars)), vars); err != nil {
+			return err
+		}
+	case rootOpUpdate:
+		stmt := fmt.Sprintf("MATCH (n %s) WHERE n.`%s` = $eid SET n=$props, n%s", cfg.MakeLabels(oldNodeset.Labels), cfg.Shorten(ls.EntityIDTerm), cfg.MakeLabels(newNodeset.Labels))
+		if _, err := tx.Run(ctx, stmt, map[string]interface{}{
+			"eid": oldNodeset.ID, "props": newNodeset.Properties}); err != nil {
 			return err
 		}
 	}
-	return nil
+	if err := insertNodes(); err != nil {
+		return err
+	}
+	if err := updateNodes(); err != nil {
+		return err
+	}
+	if err := deleteNodes(); err != nil {
+		return err
+	}
+	return insertEdges()
 }
