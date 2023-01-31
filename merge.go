@@ -720,7 +720,6 @@ func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session 
 	if len(rootIds) == 0 {
 		return fmt.Errorf("Empty entity schema nodes")
 	}
-	fmt.Println("roots", rootIds)
 	// neo4j IDs
 	queue := make(map[string]struct{}, len(rootIds))
 	for _, id := range rootIds {
@@ -732,9 +731,7 @@ func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session 
 		for k := range queue {
 			q = append(q, k)
 		}
-		fmt.Println("Load", q)
 		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, q)
-		fmt.Println("Loaded", srcNodes)
 		if err != nil {
 			return err
 		}

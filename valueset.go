@@ -127,7 +127,6 @@ func ParseNodesetData(cfg Config, input NodesetInput) (map[string]Nodeset, error
 			break
 		}
 	}
-	fmt.Printf("%+v\n", ret)
 	return ret, nil
 }
 

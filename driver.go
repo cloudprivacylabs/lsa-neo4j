@@ -428,7 +428,6 @@ func (s *Session) CollectEntityDBIds(ctx *ls.Context, tx neo4j.ExplicitTransacti
 		l := config.MakeLabels(node.GetLabels().Slice())
 		labels[l] = append(labels[l], node)
 	}
-	fmt.Printf("EntityDBIds setup: %v\n", time.Since(start))
 	// Load entities by their unique labels
 	for label, rootNodes := range labels {
 		unwind := make([]interface{}, 0, len(rootNodes))
@@ -446,7 +445,7 @@ func (s *Session) CollectEntityDBIds(ctx *ls.Context, tx neo4j.ExplicitTransacti
 		query := fmt.Sprintf("unwind $ids as nodeId match (n%s) where n.`%s`=nodeId.id return n", label, entityIDTerm)
 		start := time.Now()
 		idrec, e := tx.Run(ctx, query, map[string]interface{}{"ids": unwind})
-		fmt.Printf("Label %s query time %v nRecords\n", label, time.Since(start), len(unwind))
+
 		if e != nil {
 			err = e
 			return
@@ -507,7 +506,7 @@ func (s *Session) CollectEntityDBIds(ctx *ls.Context, tx neo4j.ExplicitTransacti
 			//	}
 			//}
 		}
-		fmt.Printf("Label %s loading time %v nRecords: %d\n", label, time.Since(start), nRecords)
+
 	}
 	return
 }
