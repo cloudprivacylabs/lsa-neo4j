@@ -413,7 +413,7 @@ func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Ses
 }
 
 func (s *Session) CollectEntityDBIds(ctx *ls.Context, tx neo4j.ExplicitTransaction, config Config, grph *lpg.Graph, cache *Neo4jCache) (entityRootNodes []*lpg.Node, entityRootDBIds []string, entityInfo map[*lpg.Node]ls.EntityInfo, err error) {
-	start := time.Now()
+
 	entityInfo = ls.GetEntityInfo(grph)
 	// Remove any empty IDs
 	for k, v := range entityInfo {
@@ -443,14 +443,12 @@ func (s *Session) CollectEntityDBIds(ctx *ls.Context, tx neo4j.ExplicitTransacti
 		}
 		entityIDTerm := config.Shorten(ls.EntityIDTerm)
 		query := fmt.Sprintf("unwind $ids as nodeId match (n%s) where n.`%s`=nodeId.id return n", label, entityIDTerm)
-		start := time.Now()
 		idrec, e := tx.Run(ctx, query, map[string]interface{}{"ids": unwind})
 
 		if e != nil {
 			err = e
 			return
 		}
-		start = time.Now()
 		nRecords := 0
 		for idrec.Next(ctx) {
 			nRecords++
