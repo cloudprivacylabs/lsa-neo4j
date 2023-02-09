@@ -6,9 +6,9 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/bserdar/slicemap v0.0.0-20230110022437-d67753b63828
-	github.com/cloudprivacylabs/lpg v1.0.11
+	github.com/cloudprivacylabs/lpg v1.0.14
 	github.com/cloudprivacylabs/lsa v1.0.0-beta20
-	github.com/cloudprivacylabs/opencypher v1.0.0-beta-13
+	github.com/cloudprivacylabs/opencypher v1.0.0-beta-14
 	github.com/fatih/structs v1.1.0
 	github.com/joho/godotenv v1.4.0
 	github.com/neo4j/neo4j-go-driver/v5 v5.4.0

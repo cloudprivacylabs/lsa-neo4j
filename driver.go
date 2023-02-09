@@ -626,31 +626,32 @@ func nativeValueToNeo4jValue(val interface{}) interface{} {
 }
 
 // buildDBPropertiesForSave writes the properties that will be ran by the query
-func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string]interface{}, properties map[string]*ls.PropertyValue, idAndValue map[string]*ls.PropertyValue) string {
+func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string]any, properties map[string]any) string {
 	out := strings.Builder{}
 	first := true
 
-	buildProperties := func(m map[string]*ls.PropertyValue) {
-		for k, v := range m {
-			expandedKey := c.Expand(k)
-			if v == nil {
-				continue
-			}
-			if first {
-				out.WriteRune('{')
-				first = false
-			} else {
-				out.WriteRune(',')
-			}
-			out.WriteString(quoteBacktick(k))
-			out.WriteRune(':')
-			out.WriteRune('$')
-			tname := fmt.Sprintf("p%d", len(vars))
-			out.WriteString(tname)
-			if v.IsString() {
+	for k, v := range properties {
+		expandedKey := c.Expand(k)
+		if v == nil {
+			continue
+		}
+		if first {
+			out.WriteRune('{')
+			first = false
+		} else {
+			out.WriteRune(',')
+		}
+		out.WriteString(quoteBacktick(k))
+		out.WriteRune(':')
+		out.WriteRune('$')
+		tname := fmt.Sprintf("p%d", len(vars))
+		out.WriteString(tname)
+
+		if pv, ok := v.(*ls.PropertyValue); ok {
+			if pv.IsString() {
 				switch k {
 				case c.Shorten(ls.AttributeIndexTerm):
-					vars[tname] = v.AsInt()
+					vars[tname] = pv.AsInt()
 				case c.Shorten(ls.NodeValueTerm):
 					node, ok := itemToSave.(*lpg.Node)
 					if ok {
@@ -678,11 +679,11 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 							}
 						}
 					} else {
-						vars[tname] = v.AsString()
+						vars[tname] = pv.AsString()
 					}
 				}
-			} else if v.IsStringSlice() {
-				vsl := v.AsInterfaceSlice()
+			} else if pv.IsStringSlice() {
+				vsl := pv.AsInterfaceSlice()
 				nsl := make([]interface{}, 0, len(vsl))
 				for _, vn := range vsl {
 					if _, exists := c.PropertyTypes[expandedKey]; exists {
@@ -697,11 +698,11 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 				}
 				vars[tname] = nsl
 			}
+		} else if WriteableType(v) {
+			vars[tname] = v
 		}
-	}
 
-	buildProperties(properties)
-	buildProperties(idAndValue)
+	}
 
 	if !first {
 		out.WriteRune('}')
@@ -710,62 +711,66 @@ func buildDBPropertiesForSave(c Config, itemToSave withProperty, vars map[string
 	return out.String()
 }
 
-func buildDBPropertiesForSaveObj(c Config, itemToSave withProperty, properties map[string]*ls.PropertyValue) map[string]interface{} {
+func buildDBPropertiesForSaveObj(c Config, itemToSave withProperty, properties map[string]any) map[string]any {
 	ret := make(map[string]interface{})
 	for k, v := range properties {
 		expandedKey := c.Expand(k)
 		if v == nil {
 			continue
 		}
-		if v.IsString() {
-			switch k {
-			case c.Shorten(ls.AttributeIndexTerm):
-				ret[k] = v.AsInt()
-			case c.Shorten(ls.NodeValueTerm):
-				node, ok := itemToSave.(*lpg.Node)
-				if ok {
-					val, _ := ls.GetNodeValue(node)
-					n4jNative := nativeValueToNeo4jValue(val)
-					ret[k] = n4jNative
-				}
-			default:
-				if _, exists := c.PropertyTypes[expandedKey]; exists {
-					switch itemToSave.(type) {
-					case *lpg.Node, *lpg.Edge:
-						val, _ := itemToSave.GetProperty(expandedKey)
-						n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, val.(*ls.PropertyValue).AsString())
-						if err != nil {
-							panic(err)
-						}
+		if pv, ok := v.(*ls.PropertyValue); ok {
+			if pv.IsString() {
+				switch k {
+				case c.Shorten(ls.AttributeIndexTerm):
+					ret[k] = pv.AsInt()
+				case c.Shorten(ls.NodeValueTerm):
+					node, ok := itemToSave.(*lpg.Node)
+					if ok {
+						val, _ := ls.GetNodeValue(node)
+						n4jNative := nativeValueToNeo4jValue(val)
 						ret[k] = n4jNative
-					default:
-						for _, v := range itemToSave.(mapWithProperty) {
-							n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, v.(*ls.PropertyValue).AsString())
+					}
+				default:
+					if _, exists := c.PropertyTypes[expandedKey]; exists {
+						switch itemToSave.(type) {
+						case *lpg.Node, *lpg.Edge:
+							val, _ := itemToSave.GetProperty(expandedKey)
+							n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, val.(*ls.PropertyValue).AsString())
 							if err != nil {
 								panic(err)
 							}
 							ret[k] = n4jNative
+						default:
+							for _, v := range itemToSave.(mapWithProperty) {
+								n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, v.(*ls.PropertyValue).AsString())
+								if err != nil {
+									panic(err)
+								}
+								ret[k] = n4jNative
+							}
 						}
+					} else {
+						ret[k] = pv.AsString()
 					}
-				} else {
-					ret[k] = v.AsString()
 				}
-			}
-		} else if v.IsStringSlice() {
-			vsl := v.AsInterfaceSlice()
-			nsl := make([]interface{}, 0, len(vsl))
-			for _, vn := range vsl {
-				if _, exists := c.PropertyTypes[expandedKey]; exists {
-					n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, vn.(*ls.PropertyValue).AsString())
-					if err != nil {
-						panic(err)
+			} else if pv.IsStringSlice() {
+				vsl := pv.AsInterfaceSlice()
+				nsl := make([]interface{}, 0, len(vsl))
+				for _, vn := range vsl {
+					if _, exists := c.PropertyTypes[expandedKey]; exists {
+						n4jNative, err := c.GetNeo4jPropertyValue(expandedKey, vn.(*ls.PropertyValue).AsString())
+						if err != nil {
+							panic(err)
+						}
+						nsl = append(nsl, n4jNative)
+					} else {
+						nsl = append(nsl, vn)
 					}
-					nsl = append(nsl, n4jNative)
-				} else {
-					nsl = append(nsl, vn)
 				}
+				ret[k] = nsl
 			}
-			ret[k] = nsl
+		} else if WriteableType(v) {
+			ret[k] = v
 		}
 	}
 	return ret
@@ -783,4 +788,17 @@ func quoteStringLiteral(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `'`, `\'`)
 	return `'` + s + `'`
+}
+
+// Determine if value is writeable
+func WriteableType(value any) bool {
+	switch value.(type) {
+	case int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32, time.Time, bool, string:
+		return true
+	case neo4j.Date, neo4j.LocalDateTime, neo4j.Duration, neo4j.Time, neo4j.LocalTime:
+		return true
+	case types.Measure, opencypher.Date, opencypher.LocalDateTime, opencypher.Duration, opencypher.Time, opencypher.LocalTime, types.TimeOfDay, types.Date, types.DateTime, types.GDay, types.GYear, types.GYearMonth, types.GMonthDay, types.UnixTime, types.UnixTimeNano:
+		return true
+	}
+	return false
 }

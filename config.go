@@ -67,20 +67,24 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 	return root
 }
 
-func (cfg Config) MakeProperties(x withProperty, txVars map[string]interface{}) string {
-	propMap := make(map[string]*ls.PropertyValue)
-	for k, v := range ls.PropertiesAsMap(x) {
-		short := cfg.Shorten(k)
-		if short != "" {
-			propMap[short] = v
+func (cfg Config) MakeProperties(x withProperty, txVars map[string]any) string {
+	propMap := make(map[string]any)
+	x.ForEachProperty(func(k string, v any) bool {
+		_, ok := v.(*ls.PropertyValue)
+		if WriteableType(v) || ok {
+			short := cfg.Shorten(k)
+			if short != "" {
+				propMap[short] = v
+			}
 		}
-	}
-	props := buildDBPropertiesForSave(cfg, x, txVars, propMap, nil)
+		return true
+	})
+	props := buildDBPropertiesForSave(cfg, x, txVars, propMap)
 	return props
 }
 
-func (cfg Config) ShortenProperties(props map[string]interface{}) map[string]interface{} {
-	propMap := make(map[string]interface{})
+func (cfg Config) ShortenProperties(props map[string]any) map[string]any {
+	propMap := make(map[string]any)
 	for k, v := range props {
 		short := cfg.Shorten(k)
 		if short != "" {
@@ -90,14 +94,18 @@ func (cfg Config) ShortenProperties(props map[string]interface{}) map[string]int
 	return propMap
 }
 
-func (cfg Config) MakePropertiesObj(x withProperty) map[string]interface{} {
-	propMap := make(map[string]*ls.PropertyValue)
-	for k, v := range ls.PropertiesAsMap(x) {
-		short := cfg.Shorten(k)
-		if short != "" {
-			propMap[short] = v
+func (cfg Config) MakePropertiesObj(x withProperty) map[string]any {
+	propMap := make(map[string]any)
+	x.ForEachProperty(func(k string, v any) bool {
+		_, ok := v.(*ls.PropertyValue)
+		if WriteableType(v) || ok {
+			short := cfg.Shorten(k)
+			if short != "" {
+				propMap[short] = v
+			}
 		}
-	}
+		return true
+	})
 	return buildDBPropertiesForSaveObj(cfg, x, propMap)
 }
 

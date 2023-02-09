@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -255,9 +256,8 @@ func CreateEdgesUnwind(ctx *ls.Context, session *Session, edges []*lpg.Edge, nod
 	return func(tx neo4j.ExplicitTransaction) error {
 		for labels, unwind := range unwindData {
 			query := fmt.Sprintf(`unwind $edges as edge 
-match(a) where %s with a,edge
-match(b) where %s 
-create (a)-[e%s]->(b) set e=edge.props return e`, session.IDEqVarFunc("a", "edge.from"), session.IDEqVarFunc("b", "edge.to"), labels)
+match(a),(b) where %s and %s 
+create (a)-[e%s]->(b) set e=edge.props`, session.IDEqVarFunc("a", "edge.from"), session.IDEqVarFunc("b", "edge.to"), labels)
 			_, err := tx.Run(ctx, query, map[string]interface{}{"edges": unwind})
 			if err != nil {
 				return err
@@ -270,7 +270,9 @@ create (a)-[e%s]->(b) set e=edge.props return e`, session.IDEqVarFunc("a", "edge
 func CreateNodesUnwind(ctx *ls.Context, nodes []*lpg.Node, nodeMap map[*lpg.Node]string, cfg Config) func(neo4j.ExplicitTransaction) error {
 	labels := make(map[string][]*lpg.Node)
 	for _, node := range nodes {
-		l := cfg.MakeLabels(node.GetLabels().Slice())
+		slice := node.GetLabels().Slice()
+		sort.Strings(slice)
+		l := cfg.MakeLabels(slice)
 		labels[l] = append(labels[l], node)
 	}
 
