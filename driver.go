@@ -59,7 +59,9 @@ func NewDriver(driver neo4j.DriverWithContext, databaseName string) *Driver {
 	}
 	if srv.ProtocolVersion().Major >= 5 {
 		drv.IDEqValueFunc = func(objectName, id string) string { return fmt.Sprintf("elementId(%s)=\"%s\"", objectName, id) }
-		drv.IDEqVarFunc = func(objectName, varname string) string { return fmt.Sprintf("elementId(%s)=%s", objectName, varname) }
+		drv.IDEqVarFunc = func(objectName, varname string) string {
+			return fmt.Sprintf("elementId(%s)in [%s]", objectName, varname)
+		}
 		drv.IDFunc = func(objectName string) string { return fmt.Sprintf("elementId(%s)", objectName) }
 		drv.IDValue = func(value string) interface{} { return value }
 	} else {
@@ -504,7 +506,6 @@ func (s *Session) CollectEntityDBIds(ctx *ls.Context, tx neo4j.ExplicitTransacti
 			//	}
 			//}
 		}
-
 	}
 	return
 }

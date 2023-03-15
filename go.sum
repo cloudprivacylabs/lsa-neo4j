@@ -130,6 +130,8 @@ github.com/cloudprivacylabs/lpg v1.0.14 h1:IRH3sS4NYiZ6ZpFOZRtnjka9lpSMEgkVsVCJq
 github.com/cloudprivacylabs/lpg v1.0.14/go.mod h1:3bLpI1OIk3h/ZVfGhq3sdULexmVbd7qANVhVSYbvCe8=
 github.com/cloudprivacylabs/lsa v1.0.0-beta20 h1:Tz3BwKtFmmQS+OjP4Uuc18QBeXfc32gsTYcTi3x2brc=
 github.com/cloudprivacylabs/lsa v1.0.0-beta20/go.mod h1:PRm+M+sgxtVPlQvnIYxqiOQS4x+aOfEzoLwzDp3Jwh4=
+github.com/cloudprivacylabs/lsa v1.0.0-beta22.0.20230315225333-da09d2f52eae h1:UaFnoptaV6qDUxmWnNB6/+COSvrgQpLU8Mb4VLW67LU=
+github.com/cloudprivacylabs/lsa v1.0.0-beta22.0.20230315225333-da09d2f52eae/go.mod h1:sQKhzUTPfeLe2UCcOmaNH6pQYM29aUxveY6vf0qe7Y4=
 github.com/cloudprivacylabs/opencypher v1.0.0-beta-13 h1:CF5Ib3zWsqOb81KQoLTwBcKP9CU+FwHWOVV8cCWh0LM=
 github.com/cloudprivacylabs/opencypher v1.0.0-beta-13/go.mod h1:gV6HqS6L9DY5n4HPnPS2ErvoR7TUFHJ94dXHgm5mhTY=
 github.com/cloudprivacylabs/opencypher v1.0.0-beta-14 h1:pL7EiYbYXVIgEWKFO8ZpUTf52x1I1dH9MFxKHOJrqTg=

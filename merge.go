@@ -2,7 +2,7 @@ package neo4j
 
 import (
 	"fmt"
-	"log"
+	"reflect"
 	"strings"
 
 	"github.com/cloudprivacylabs/lpg"
@@ -205,8 +205,7 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 			if dbEdge.GetTo() != toDbNode {
 				continue
 			}
-			propDiff := findPropDiff(edge, dbEdge)
-			if len(propDiff) == 0 {
+			if !propertiesChanged(edge, dbEdge) {
 				edgeAssociations[edge] = dbEdge
 				found = true
 				break
@@ -500,15 +499,15 @@ func buildCreateNodeQueries(session *Session, in []Delta, dbNodeIds map[*lpg.Nod
 // merge the memnode with the given dbnode
 func mergeNodes(memNode, dbNode *lpg.Node) Delta {
 	labels := findLabelDiff(memNode.GetLabels(), dbNode.GetLabels())
-	props := findPropDiff(memNode, dbNode)
-	if len(labels) == 0 && len(props) == 0 {
+	if len(labels) == 0 && !propertiesChanged(memNode, dbNode) {
 		return nil
 	}
 	oldLabels := dbNode.GetLabels().Slice()
 	// Apply changes to the dbNode
-	for k, v := range props {
+	memNode.ForEachProperty(func(k string, v any) bool {
 		dbNode.SetProperty(k, v)
-	}
+		return true
+	})
 	l := dbNode.GetLabels()
 	l.AddSet(memNode.GetLabels())
 	dbNode.SetLabels(l)
@@ -520,17 +519,17 @@ func mergeNodes(memNode, dbNode *lpg.Node) Delta {
 }
 
 func mergeEdges(memEdge, dbEdge *lpg.Edge) Delta {
-	props := findPropDiff(memEdge, dbEdge)
-	if len(props) == 0 {
+	if !propertiesChanged(memEdge, dbEdge) {
 		return nil
 	}
 	// Apply changes to the dbEdge
-	for k, v := range props {
+	memEdge.ForEachProperty(func(k string, v any) bool {
 		dbEdge.SetProperty(k, v)
-	}
+		return true
+	})
 	return UpdateEdgeDelta{
 		dbEdge:     dbEdge,
-		properties: props,
+		properties: ls.CloneProperties(dbEdge),
 	}
 }
 
@@ -538,7 +537,7 @@ func mergeNewEdge(memEdge *lpg.Edge, nodeAssociations map[*lpg.Node]*lpg.Node) (
 	// Find corresponding from/to nodes
 	from := nodeAssociations[memEdge.GetFrom()]
 	to := nodeAssociations[memEdge.GetTo()]
-	props := findPropDiff(memEdge, nil)
+	props := ls.CloneProperties(memEdge)
 	edge := from.GetGraph().NewEdge(from, to, memEdge.GetLabel(), props)
 	return edge, CreateEdgeDelta{
 		fromDbNode: from,
@@ -550,9 +549,8 @@ func mergeNewEdge(memEdge *lpg.Edge, nodeAssociations map[*lpg.Node]*lpg.Node) (
 }
 
 func mergeNewNode(memNode *lpg.Node, dbGraph *lpg.Graph) (*lpg.Node, Delta) {
-	props := findPropDiff(memNode, nil)
 	labels := memNode.GetLabels().Slice()
-	newNode := dbGraph.NewNode(labels, props)
+	newNode := dbGraph.NewNode(labels, ls.CloneProperties(memNode))
 	return newNode, CreateNodeDelta{
 		DBNode:  newNode,
 		MemNode: memNode,
@@ -570,34 +568,41 @@ func findLabelDiff(memLabels, dbLabels lpg.StringSet) []string {
 	return ret
 }
 
-// finds properties in memObj that are not in dbObj
-func findPropDiff(memObj, dbObj withProperty) map[string]interface{} {
-	ret := make(map[string]interface{})
+func propertiesChanged(memObj, dbObj withProperty) bool {
+	if dbObj == nil {
+		return true
+	}
+	ret := false
 	memObj.ForEachProperty(func(k string, v interface{}) bool {
-		if dbObj == nil {
-			ret[k] = v
-			return true
-		}
-		pv, ok := v.(*ls.PropertyValue)
-		if !ok {
-			v2, ok := dbObj.GetProperty(k)
-			if !ok || v2 != v {
-				ret[k] = v
-				return true
-			}
-		}
-		v2, ok := dbObj.GetProperty(k)
-		if !ok {
-			ret[k] = v
-			return true
-		}
-		pv2, ok := v2.(*ls.PropertyValue)
-		if !ok {
-			log.Printf("Error at %s: %v: Not property value", k, v)
+		v2, ok2 := dbObj.GetProperty(k)
+		if !ok2 {
+			ret = true
 			return false
 		}
-		if !pv2.IsEqual(pv) {
-			ret[k] = pv
+
+		pv1, ok1 := v.(*ls.PropertyValue)
+		pv2, ok2 := v2.(*ls.PropertyValue)
+		if ok1 && ok2 {
+			if !pv1.IsEqual(pv2) {
+				ret = true
+				return false
+			}
+			return true
+		}
+		var native1, native2 any
+		if ok1 {
+			native1 = pv1.GetNativeValue()
+		} else {
+			native1 = v
+		}
+		if ok2 {
+			native2 = pv2.GetNativeValue()
+		} else {
+			native2 = v2
+		}
+		if !reflect.DeepEqual(native1, native2) {
+			ret = true
+			return false
 		}
 		return true
 	})

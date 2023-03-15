@@ -232,42 +232,61 @@ func buildConnectQuery(session *Session, edges []*lpg.Edge, c Config, hm map[*lp
 	return sb.String()
 }
 
-func CreateEdgesUnwind(ctx *ls.Context, session *Session, edges []*lpg.Edge, nodeMap map[*lpg.Node]string, cfg Config) func(neo4j.ExplicitTransaction) error {
+func CreateEdgesUnwind(ctx *ls.Context, session *Session, edges []*lpg.Edge, dbGraph *DBGraph, cfg Config) func(neo4j.ExplicitTransaction) error {
 
 	labels := make(map[string][]*lpg.Edge)
 	for _, edge := range edges {
 		labels[edge.GetLabel()] = append(labels[edge.GetLabel()], edge)
 	}
-	unwindData := make(map[string][]map[string]interface{})
+	type udata struct {
+		insEdges []*lpg.Edge
+		u        []map[string]any
+	}
+	unwindData := make(map[string]udata)
 	for label, insEdges := range labels {
-		unwind := make([]map[string]interface{}, 0)
+		unwind := make([]map[string]any, 0)
 		for _, edge := range insEdges {
 			props := cfg.MakePropertiesObj(edge)
-			item := map[string]interface{}{
-				"from":  session.IDValue(nodeMap[edge.GetFrom()]),
-				"to":    session.IDValue(nodeMap[edge.GetTo()]),
+			item := map[string]any{
+				"from":  session.IDValue(dbGraph.NodeIds[edge.GetFrom()]),
+				"to":    session.IDValue(dbGraph.NodeIds[edge.GetTo()]),
 				"props": props,
 			}
 			unwind = append(unwind, item)
 		}
 		labels := cfg.MakeLabels([]string{label})
-		unwindData[labels] = unwind
+		unwindData[labels] = udata{insEdges: insEdges, u: unwind}
 	}
 	return func(tx neo4j.ExplicitTransaction) error {
 		for labels, unwind := range unwindData {
-			query := fmt.Sprintf(`unwind $edges as edge 
-match(a),(b) where %s and %s 
-create (a)-[e%s]->(b) set e=edge.props`, session.IDEqVarFunc("a", "edge.from"), session.IDEqVarFunc("b", "edge.to"), labels)
-			_, err := tx.Run(ctx, query, map[string]interface{}{"edges": unwind})
+			query := fmt.Sprintf(`unwind $edges as edge
+			match(a),(b) where %s and %s
+			create (a)-[e%s]->(b) set e=edge.props return e`, session.IDEqVarFunc("a", "edge.from"), session.IDEqVarFunc("b", "edge.to"), labels)
+			//			query := fmt.Sprintf(`unwind $edges as edge
+			//match(a),(b) where elementId(a) in [edge.from] and elementId(b) in [edge.to]
+			//create (a)-[e%s]->(b) set e=edge.props return e`, labels)
+			result, err := tx.Run(ctx, query, map[string]interface{}{"edges": unwind.u})
 			if err != nil {
 				return err
 			}
+			//fmt.Println("Insert edges", len(unwind.u), time.Since(start), query)
+			records, err := result.Collect(ctx)
+			if err != nil {
+				return err
+			}
+			for i := range records {
+				edge := unwind.insEdges[i]
+				id := records[i].Values[0].(neo4j.Relationship).ElementId
+				dbGraph.EdgeIds[edge] = id
+				dbGraph.Edges[id] = edge
+			}
+			//fmt.Println("Collect edges", len(unwind.u), time.Since(start))
 		}
 		return nil
 	}
 }
 
-func CreateNodesUnwind(ctx *ls.Context, nodes []*lpg.Node, nodeMap map[*lpg.Node]string, cfg Config) func(neo4j.ExplicitTransaction) error {
+func CreateNodesUnwind(ctx *ls.Context, nodes []*lpg.Node, dbGraph *DBGraph, cfg Config) func(neo4j.ExplicitTransaction) error {
 	labels := make(map[string][]*lpg.Node)
 	for _, node := range nodes {
 		slice := node.GetLabels().Slice()
@@ -278,14 +297,14 @@ func CreateNodesUnwind(ctx *ls.Context, nodes []*lpg.Node, nodeMap map[*lpg.Node
 
 	type udata struct {
 		insNodes []*lpg.Node
-		udata    []map[string]interface{}
+		udata    []map[string]any
 	}
 	unwindData := make(map[string]udata)
 	for label, insNodes := range labels {
-		unwind := make([]map[string]interface{}, 0)
+		unwind := make([]map[string]any, 0)
 		for _, insNode := range insNodes {
 			props := cfg.MakePropertiesObj(insNode)
-			item := map[string]interface{}{
+			item := map[string]any{
 				"props": props,
 			}
 			unwind = append(unwind, item)
@@ -305,7 +324,10 @@ create (a%s) set a=node.props return a`, label)
 				return err
 			}
 			for i := range records {
-				nodeMap[unwind.insNodes[i]] = records[i].Values[0].(neo4j.Node).ElementId
+				node := unwind.insNodes[i]
+				id := records[i].Values[0].(neo4j.Node).ElementId
+				dbGraph.NodeIds[node] = id
+				dbGraph.Nodes[id] = node
 			}
 		}
 		return nil
