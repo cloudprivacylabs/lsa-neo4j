@@ -7,8 +7,8 @@ require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/bserdar/slicemap v0.0.0-20230110022437-d67753b63828
 	github.com/cloudprivacylabs/lpg v1.0.14
-	github.com/cloudprivacylabs/lsa v1.0.0-beta22.0.20230315225333-da09d2f52eae
-	github.com/cloudprivacylabs/opencypher v1.0.0-beta-14
+	github.com/cloudprivacylabs/lsa v1.0.0-beta22.0.20230331153319-1f6fe3e7652f
+	github.com/cloudprivacylabs/opencypher v1.0.0-beta-15
 	github.com/fatih/structs v1.1.0
 	github.com/joho/godotenv v1.4.0
 	github.com/neo4j/neo4j-go-driver/v5 v5.4.0
@@ -30,6 +30,7 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210803070921-b358b509191a // indirect
 	github.com/bserdar/jsonstream v0.0.0-20190428032403-9f1769267072 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
+	github.com/cloudprivacylabs/lpg/v2 v2.0.0 // indirect
 	github.com/containerd/cgroups v1.0.1 // indirect
 	github.com/containerd/containerd v1.5.9 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/spf13/cobra"
@@ -19,6 +20,7 @@ var (
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 
+			output, _ := cmd.Flags().GetString("output")
 			var query string
 			if len(args) == 1 {
 				query = args[0]
@@ -61,16 +63,39 @@ var (
 			if err != nil {
 				return err
 			}
-			writer := csv.NewWriter(os.Stdout)
+			var out io.Writer
+			if output == "" {
+				out = os.Stdout
+			} else {
+				f, err := os.Create(output)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+				out = f
+			}
+			writer := csv.NewWriter(out)
 			defer writer.Flush()
 			writer.Write(keys)
 			rec := make([]string, len(keys))
+			type hasTime interface {
+				Time() time.Time
+			}
 			for result.Next(ctx) {
 				record := result.Record()
 				for i, k := range keys {
 					value, ok := record.Get(k)
 					if ok {
-						rec[i] = fmt.Sprint(value)
+						if value == nil {
+							rec[i] = ""
+						} else {
+							switch k := value.(type) {
+							case hasTime:
+								rec[i] = k.Time().Format(time.RFC3339)
+							default:
+								rec[i] = fmt.Sprint(value)
+							}
+						}
 					} else {
 						rec[i] = ""
 					}
@@ -85,4 +110,5 @@ var (
 
 func init() {
 	rootCmd.AddCommand(ocCmd)
+	ocCmd.Flags().String("output", "", "Output to file")
 }
