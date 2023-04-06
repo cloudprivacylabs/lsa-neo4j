@@ -67,6 +67,12 @@ func InitNamespaceTrie(cfg *Config) *Trie {
 	return root
 }
 
+// IsMergeEntity returns if the entity has a merge config
+func (cfg Config) IsMergeEntity(name string) bool {
+	_, ok := cfg.EntityMergeActions[name]
+	return ok
+}
+
 func (cfg Config) MakeProperties(x withProperty, txVars map[string]any) string {
 	propMap := make(map[string]any)
 	x.ForEachProperty(func(k string, v any) bool {

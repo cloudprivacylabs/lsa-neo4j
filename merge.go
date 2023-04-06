@@ -10,35 +10,6 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
-type DBGraph struct {
-	G *lpg.Graph
-
-	NodeIds map[*lpg.Node]string
-	Nodes   map[string]*lpg.Node
-	EdgeIds map[*lpg.Edge]string
-	Edges   map[string]*lpg.Edge
-}
-
-func NewDBGraph(g *lpg.Graph) *DBGraph {
-	return &DBGraph{
-		G:       g,
-		NodeIds: make(map[*lpg.Node]string),
-		Nodes:   make(map[string]*lpg.Node),
-		EdgeIds: make(map[*lpg.Edge]string),
-		Edges:   make(map[string]*lpg.Edge),
-	}
-}
-
-func (dbg *DBGraph) NewNode(node *lpg.Node, dbID string) {
-	dbg.Nodes[dbID] = node
-	dbg.NodeIds[node] = dbID
-}
-
-func (dbg *DBGraph) NewEdge(edge *lpg.Edge, dbID string) {
-	dbg.Edges[dbID] = edge
-	dbg.EdgeIds[edge] = dbID
-}
-
 type Delta interface {
 	WriteQuery(session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) DeltaQuery
 	Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, dbNodeIds map[*lpg.Node]string, dbEdgeIds map[*lpg.Edge]string, c Config) error
@@ -88,8 +59,8 @@ type UpdateEdgeDelta struct {
 }
 
 func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error) {
-	memEntitiesMap := ls.GetEntityInfo(memGraph)
-	dbEntitiesMap := ls.GetEntityInfo(dbGraph.G)
+	memEntitiesMap := ls.GetEntityRootsByID(memGraph)
+	dbEntitiesMap := ls.GetEntityRootsByID(dbGraph.G)
 	nodeAssociations := make(map[*lpg.Node]*lpg.Node)
 	edgeAssociations := make(map[*lpg.Edge]*lpg.Edge)
 	deltas := make([]Delta, 0)
@@ -100,16 +71,27 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 		unassociatedDbNodes[dbNode] = struct{}{}
 	}
 	for n := range memEntitiesMap {
-		schemaPV := ls.AsPropertyValue(n.GetProperty(ls.EntitySchemaTerm))
+		labels := n.GetLabels()
 		eidPV := ls.AsPropertyValue(n.GetProperty(ls.EntityIDTerm))
 		var foundDBEntity *lpg.Node
 		if eidPV != nil {
 			for db := range dbEntitiesMap {
-				if ls.AsPropertyValue(db.GetProperty(ls.EntitySchemaTerm)).IsEqual(schemaPV) &&
-					ls.AsPropertyValue(db.GetProperty(ls.EntityIDTerm)).IsEqual(eidPV) {
-					foundDBEntity = db
-					delete(dbEntitiesMap, db)
-					break
+				if ls.AsPropertyValue(db.GetProperty(ls.EntityIDTerm)).IsEqual(eidPV) {
+					for l := range labels.M {
+						if config.IsMergeEntity(l) && db.HasLabel(l) {
+							foundDBEntity = db
+							delete(dbEntitiesMap, db)
+							break
+						}
+					}
+					if foundDBEntity == nil {
+						if ls.AsPropertyValue(n.GetProperty(ls.SchemaNodeIDTerm)).AsString() ==
+							ls.AsPropertyValue(db.GetProperty(ls.SchemaNodeIDTerm)).AsString() {
+							foundDBEntity = db
+							delete(dbEntitiesMap, db)
+							break
+						}
+					}
 				}
 			}
 		}
@@ -122,19 +104,7 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 			}
 		}
 		merge, create := mergeActions.GetMerge(), mergeActions.GetCreate()
-		if merge && create {
-			deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas, merge, create)
-		} else if merge && !create {
-			if dbGraph != nil {
-				deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas, merge, create)
-			}
-		} else if !merge && create {
-			if dbGraph == nil {
-				deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas, merge, create)
-			}
-		} else if !merge && !create {
-			deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas, merge, create)
-		}
+		deltas = mergeSubtree(n, foundDBEntity, dbGraph, nodeAssociations, edgeAssociations, deltas, merge, create)
 	}
 
 	// Remove all db nodes that are associated with a memnode
@@ -236,7 +206,6 @@ func Merge(memGraph *lpg.Graph, dbGraph *DBGraph, config Config) ([]Delta, error
 	}
 
 	// Remove duplicate node creations from deltas
-
 	return deltas, nil
 }
 
@@ -727,103 +696,4 @@ func (ue UpdateEdgeDelta) Run(ctx *ls.Context, tx neo4j.ExplicitTransaction, ses
 	q := ue.WriteQuery(session, dbNodeIds, dbEdgeIds, c)
 	_, err := tx.Run(ctx, q.Query, q.Vars)
 	return err
-}
-
-func (s *Session) LoadDBGraph(ctx *ls.Context, tx neo4j.ExplicitTransaction, memGraph *lpg.Graph, config Config, cache *Neo4jCache) (*DBGraph, error) {
-
-	_, rootIds, _, err := s.CollectEntityDBIds(ctx, tx, config, memGraph, cache)
-	if err != nil {
-		return nil, err
-	}
-	g := ls.NewDocumentGraph()
-	dbg := NewDBGraph(g)
-	if len(rootIds) == 0 {
-		return dbg, nil
-	}
-
-	err = loadGraphByEntities(ctx, tx, s, dbg, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
-	if err != nil {
-		return nil, err
-	}
-	return dbg, nil
-}
-
-func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *DBGraph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) error {
-	if len(rootIds) == 0 {
-		return fmt.Errorf("Empty entity schema nodes")
-	}
-	// neo4j IDs
-	queue := make(map[string]struct{}, len(rootIds))
-	for _, id := range rootIds {
-		queue[id] = struct{}{}
-	}
-
-	for len(queue) > 0 {
-		q := make([]string, 0, len(queue))
-		for k := range queue {
-			q = append(q, k)
-		}
-		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, q)
-		// fmt.Printf("Find neighbors %v\n", queue)
-		// for _, x := range srcNodes {
-		// 	fmt.Printf("source: %+v\n", x)
-		// }
-		// for _, x := range adjNodes {
-		// 	fmt.Printf("adj: %+v\n", x)
-		// }
-		if err != nil {
-			return err
-		}
-		if len(srcNodes) == 0 {
-			break
-		}
-		queue = make(map[string]struct{})
-		makeNode := func(srcNode neo4jNode) *lpg.Node {
-			src := grph.G.NewNode(srcNode.labels, nil)
-			labels := make([]string, 0, len(srcNode.labels))
-			for _, lbl := range srcNode.labels {
-				labels = append(labels, config.Expand(lbl))
-			}
-			ss := lpg.NewStringSet(labels...)
-			if (ss.Has(ls.AttributeTypeValue) || ss.Has(ls.AttributeTypeObject) || ss.Has(ls.AttributeTypeArray)) && !ss.Has(ls.AttributeNodeTerm) {
-				ss.Add(ls.DocumentNodeTerm)
-			}
-			src.SetLabels(ss)
-			// Set properties and node value
-			BuildNodePropertiesAfterLoad(src, srcNode.props, config)
-			nv := SetNodeValueAfterLoad(config, src, srcNode.props)
-			if nv != nil {
-				if err := ls.SetNodeValue(src, nv); err != nil {
-					panic(fmt.Errorf("Cannot set node value for %w %v", err, src))
-				}
-			}
-			grph.NewNode(src, srcNode.id)
-			return src
-		}
-		for _, srcNode := range srcNodes {
-			if _, seen := grph.Nodes[srcNode.id]; !seen {
-				makeNode(srcNode)
-			}
-		}
-		for _, node := range adjNodes {
-			if _, seen := grph.Nodes[node.id]; !seen {
-				nd := makeNode(node)
-				if selectEntity != nil && selectEntity(nd) {
-					queue[node.id] = struct{}{}
-				}
-				if _, ok := node.props[config.Shorten(ls.EntitySchemaTerm)]; !ok {
-					queue[node.id] = struct{}{}
-				}
-			}
-		}
-		for _, edge := range adjRelationships {
-			if _, seen := grph.Edges[edge.id]; !seen {
-				src := grph.Nodes[edge.startId]
-				target := grph.Nodes[edge.endId]
-				e := grph.G.NewEdge(src, target, config.Expand(edge.types), edge.props)
-				grph.NewEdge(e, edge.id)
-			}
-		}
-	}
-	return nil
 }

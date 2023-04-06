@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bserdar/slicemap"
-
 	"github.com/cloudprivacylabs/lpg/v2"
 	"github.com/cloudprivacylabs/lsa/pkg/ls"
 	"github.com/cloudprivacylabs/lsa/pkg/types"
@@ -412,102 +410,6 @@ func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Ses
 		dbIds = append(dbIds, id)
 	}
 	return dbIds, nil
-}
-
-func (s *Session) CollectEntityDBIds(ctx *ls.Context, tx neo4j.ExplicitTransaction, config Config, grph *lpg.Graph, cache *Neo4jCache) (entityRootNodes []*lpg.Node, entityRootDBIds []string, entityInfo map[*lpg.Node]ls.EntityInfo, err error) {
-
-	entityInfo = ls.GetEntityInfo(grph)
-	// Remove any empty IDs
-	for k, v := range entityInfo {
-		if len(v.GetID()) == 0 {
-			delete(entityInfo, k)
-		}
-	}
-
-	// Collect unique labels
-	labels := make(map[string][]*lpg.Node)
-	for node := range entityInfo {
-		l := config.MakeLabels(node.GetLabels().Slice())
-		labels[l] = append(labels[l], node)
-	}
-	// Load entities by their unique labels
-	for label, rootNodes := range labels {
-		unwind := make([]interface{}, 0, len(rootNodes))
-		rootIds := slicemap.SliceMap[string, *lpg.Node]{}
-		for _, rootNode := range rootNodes {
-			id := entityInfo[rootNode].GetID()
-			rootIds.Put(id, rootNode)
-			if len(id) == 1 {
-				unwind = append(unwind, map[string]interface{}{"id": id[0]})
-			} else {
-				unwind = append(unwind, map[string]interface{}{"id": id})
-			}
-		}
-		entityIDTerm := config.Shorten(ls.EntityIDTerm)
-		query := fmt.Sprintf("unwind $ids as nodeId match (n%s) where n.`%s`=nodeId.id return n", label, entityIDTerm)
-		idrec, e := tx.Run(ctx, query, map[string]interface{}{"ids": unwind})
-
-		if e != nil {
-			err = e
-			return
-		}
-		nRecords := 0
-		for idrec.Next(ctx) {
-			nRecords++
-			record := idrec.Record()
-			dbNode, _ := record.Values[0].(neo4j.Node)
-			cache.putNodes(dbNode)
-			entityIDAny := dbNode.Props[entityIDTerm]
-			var entityRootNode *lpg.Node
-			var exists bool
-			if s, ok := entityIDAny.(string); ok {
-				entityRootNode, exists = rootIds.Get([]string{s})
-			} else if arr, ok := entityIDAny.([]interface{}); ok {
-				str := make([]string, 0, len(arr))
-				for i := range arr {
-					str[i] = arr[i].(string)
-				}
-				entityRootNode, exists = rootIds.Get(str)
-			}
-			if exists {
-				entityRootNodes = append(entityRootNodes, entityRootNode)
-				entityRootDBIds = append(entityRootDBIds, dbNode.ElementId)
-			} else {
-				panic(fmt.Sprintf("Unexpected node loaded: %+v", dbNode))
-			}
-			// // Find the matching node
-			// for _, rootNode := range rootNodes {
-			// 	id := entityInfo[rootNode].GetID()
-			// 	if len(id) == 1 {
-			// 		if s, ok := record.Values[1].(string); ok {
-			// 			if s == id[0] {
-			// 				entityRootNodes = append(entityRootNodes, rootNode)
-			// 				entityRootDBIds = append(entityRootDBIds, dbId)
-			// 				break
-			// 			}
-			// 		}
-			// 	} else {
-			// 		if arr, ok := record.Values[1].([]interface{}); ok {
-			// 			if len(arr) == len(id) {
-			// 				found := true
-			// 				for i := range arr {
-			// 					if arr[i] != id[i] {
-			// 						found = false
-			// 						break
-			// 					}
-			// 				}
-			// 				if found {
-			// 					entityRootNodes = append(entityRootNodes, rootNode)
-			// 					entityRootDBIds = append(entityRootDBIds, dbId)
-			// 					break
-			// 				}
-			// 			}
-			// 		}
-			//	}
-			//}
-		}
-	}
-	return
 }
 
 func contains(node *lpg.Node, hm map[*lpg.Node]string) bool {
