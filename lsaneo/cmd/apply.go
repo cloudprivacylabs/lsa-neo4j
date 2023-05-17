@@ -54,16 +54,21 @@ var (
 			if err != nil {
 				return err
 			}
+			fmt.Printf("Applying %d nodesets\n", len(nodesets))
 			for _, ns := range nodesets {
+				fmt.Printf("Loading %s...", ns.ID)
 				db_ns, err := neo.LoadNodeset(ctx, cfg, tx, ns.ID)
 				if err != nil {
 					return err
 				}
+				fmt.Println()
 				rootOp, inserts, deletes, updates := neo.NodesetDiff(db_ns, ns)
+				fmt.Printf("New nodes: %d, updated nodes: %d, deleted nodes: %d", len(inserts), len(updates), len(deletes))
 				if err := neo.Execute(ctx, tx, cfg, db_ns, ns, rootOp, inserts, updates, deletes); err != nil {
 					tx.Rollback(ctx)
 					return err
 				}
+				fmt.Println()
 			}
 			tx.Commit(ctx)
 			return nil

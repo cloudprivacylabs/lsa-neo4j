@@ -22,7 +22,14 @@ var (
 
 			output, _ := cmd.Flags().GetString("output")
 			var query string
-			if len(args) == 1 {
+			qf, _ := cmd.Flags().GetString("qf")
+			if len(qf) > 0 {
+				data, err := os.ReadFile(qf)
+				if err != nil {
+					return err
+				}
+				query = string(data)
+			} else if len(args) == 1 {
 				query = args[0]
 			} else {
 				rd := bufio.NewReader(os.Stdin)
@@ -111,4 +118,5 @@ var (
 func init() {
 	rootCmd.AddCommand(ocCmd)
 	ocCmd.Flags().String("output", "", "Output to file")
+	ocCmd.Flags().String("qf", "", "Query file")
 }

@@ -302,7 +302,7 @@ func Execute(ctx *ls.Context, tx neo4j.ExplicitTransaction, cfg Config, oldNodes
 		if len(updates) > 0 {
 			for _, update := range groupByLabel(updates) {
 				unwindData := map[string]interface{}{"nodes": mapNodesetData(update.data)}
-				query := fmt.Sprintf("unwind $nodes as node MATCH (n) WHERE n.`%s` = node.ID SET n=node.Properties, n%s", cfg.Shorten(ls.EntityIDTerm), update.labelExpr)
+				query := fmt.Sprintf("unwind $nodes as node MATCH (n%s) WHERE n.`%s` = node.ID SET n=node.Properties, n%s", update.labelExpr, cfg.Shorten(ls.EntityIDTerm), update.labelExpr)
 				if _, err := tx.Run(ctx, query, unwindData); err != nil {
 					return err
 				}
