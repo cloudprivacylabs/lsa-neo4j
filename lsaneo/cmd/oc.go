@@ -109,6 +109,9 @@ var (
 				}
 				writer.Write(rec)
 			}
+			if err := result.Err(); err != nil {
+				return err
+			}
 
 			return nil
 		},

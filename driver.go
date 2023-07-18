@@ -211,7 +211,7 @@ func newEdge(ob1 neo4j.Relationship) neo4jEdge {
 	return ob2
 }
 
-func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, ids []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
+func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, cfg Config, ids []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error) {
 	sources := make([]neo4jNode, 0)
 	targets := make([]neo4jNode, 0)
 	edges := make([]neo4jEdge, 0)
@@ -223,7 +223,9 @@ func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Sessi
 	for _, x := range ids {
 		idValues = append(idValues, session.IDValue(x))
 	}
-	idrec, err := tx.Run(ctx, fmt.Sprintf("MATCH (n)-[e]->(m) where %s in $id RETURN n,m,e", session.IDFunc("n")), map[string]interface{}{"id": idValues})
+	start := time.Now()
+	query := fmt.Sprintf("MATCH (n)-[e]->(m) where %s in $id and not exists(m.%s) RETURN n,m,e", session.IDFunc("n"), cfg.Shorten(ls.EntityIDTerm))
+	idrec, err := tx.Run(ctx, query, map[string]interface{}{"id": idValues})
 	if err != nil {
 		return sources, targets, edges, err
 	}
@@ -241,6 +243,7 @@ func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Sessi
 			}
 		}
 	}
+	fmt.Println(query, idValues, len(edges), time.Since(start))
 	for _, source := range sources {
 		delete(remainingIds, source.id)
 	}
@@ -251,7 +254,9 @@ func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Sessi
 	for x := range remainingIds {
 		rem = append(rem, session.IDValue(x))
 	}
-	idrec, err = tx.Run(ctx, fmt.Sprintf("MATCH (n) where %s in $id RETURN n", session.IDFunc("n")), map[string]interface{}{"id": rem})
+	start = time.Now()
+	query = fmt.Sprintf("MATCH (n) where %s in $id RETURN n", session.IDFunc("n"))
+	idrec, err = tx.Run(ctx, query, map[string]interface{}{"id": rem})
 	if err != nil {
 		return sources, targets, edges, err
 	}
@@ -259,6 +264,7 @@ func findNeighbors(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Sessi
 		record := idrec.Record()
 		sources = append(sources, newNode(record.Values[0].(neo4j.Node)))
 	}
+	fmt.Println(query, 1, time.Since(start))
 	return sources, targets, edges, nil
 }
 
@@ -318,7 +324,7 @@ func BuildNodePropertiesAfterLoad(node *lpg.Node, input map[string]interface{}, 
 	}
 }
 
-func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *lpg.Graph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) ([]string, error) {
+func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *lpg.Graph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, Config, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) ([]string, error) {
 	if len(rootIds) == 0 {
 		return nil, fmt.Errorf("Empty entity schema nodes")
 	}
@@ -330,7 +336,7 @@ func loadEntityNodes(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Ses
 	}
 
 	for len(queue) > 0 {
-		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, queue)
+		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, config, queue)
 		queue = queue[len(queue):]
 		if err != nil {
 			return nil, err

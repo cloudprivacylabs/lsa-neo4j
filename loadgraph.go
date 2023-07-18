@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/bserdar/slicemap"
 
@@ -54,20 +55,23 @@ func (s *Session) LoadDBGraph(ctx *ls.Context, tx neo4j.ExplicitTransaction, mem
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("n root ids", len(rootIds))
 	g := ls.NewDocumentGraph()
 	dbg := NewDBGraph(g)
 	if len(rootIds) == 0 {
 		return dbg, nil
 	}
 
+	start := time.Now()
 	err = loadGraphByEntities(ctx, tx, s, dbg, rootIds, config, findNeighbors, func(n *lpg.Node) bool { return true })
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Load by entities", time.Since(start))
 	return dbg, nil
 }
 
-func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *DBGraph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) error {
+func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session *Session, grph *DBGraph, rootIds []string, config Config, loadNeighbors func(*ls.Context, neo4j.ExplicitTransaction, *Session, Config, []string) ([]neo4jNode, []neo4jNode, []neo4jEdge, error), selectEntity func(*lpg.Node) bool) error {
 	if len(rootIds) == 0 {
 		return fmt.Errorf("Empty entity schema nodes")
 	}
@@ -82,14 +86,7 @@ func loadGraphByEntities(ctx *ls.Context, tx neo4j.ExplicitTransaction, session 
 		for k := range queue {
 			q = append(q, k)
 		}
-		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, q)
-		// fmt.Printf("Find neighbors %v\n", queue)
-		// for _, x := range srcNodes {
-		// 	fmt.Printf("source: %+v\n", x)
-		// }
-		// for _, x := range adjNodes {
-		// 	fmt.Printf("adj: %+v\n", x)
-		// }
+		srcNodes, adjNodes, adjRelationships, err := loadNeighbors(ctx, tx, session, config, q)
 		if err != nil {
 			return err
 		}

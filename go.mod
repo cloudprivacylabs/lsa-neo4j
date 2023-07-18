@@ -6,8 +6,8 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/bserdar/slicemap v0.0.0-20230110022437-d67753b63828
-	github.com/cloudprivacylabs/lpg v1.0.14
-	github.com/cloudprivacylabs/lsa v1.0.0-beta22.0.20230404220951-1736e96f8374
+	github.com/cloudprivacylabs/lpg/v2 v2.0.1
+	github.com/cloudprivacylabs/lsa v1.0.0
 	github.com/cloudprivacylabs/opencypher v1.0.0-beta-15
 	github.com/fatih/structs v1.1.0
 	github.com/joho/godotenv v1.4.0
@@ -19,7 +19,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.13.0
 )
 
-require gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+require gopkg.in/yaml.v3 v3.0.1 // indirect
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -30,7 +30,6 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20210803070921-b358b509191a // indirect
 	github.com/bserdar/jsonstream v0.0.0-20190428032403-9f1769267072 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
-	github.com/cloudprivacylabs/lpg/v2 v2.0.0 // indirect
 	github.com/containerd/cgroups v1.0.1 // indirect
 	github.com/containerd/containerd v1.5.9 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
@@ -61,18 +60,18 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
-	github.com/richardlehane/msoleps v1.0.1 // indirect
+	github.com/richardlehane/msoleps v1.0.3 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tkuchiki/go-timezone v0.2.0 // indirect
-	github.com/xuri/efp v0.0.0-20220407160117-ad0f7a785be8 // indirect
-	github.com/xuri/excelize/v2 v2.6.0 // indirect
+	github.com/xuri/efp v0.0.0-20220603152613-6918739fd470 // indirect
+	github.com/xuri/excelize/v2 v2.7.1 // indirect
 	github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 // indirect
 	go.opencensus.io v0.22.3 // indirect
-	golang.org/x/crypto v0.0.0-20220408190544-5352b0902921 // indirect
-	golang.org/x/net v0.0.0-20220407224826-aac1ed45d8e3 // indirect
-	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/crypto v0.8.0 // indirect
+	golang.org/x/net v0.9.0 // indirect
+	golang.org/x/sys v0.7.0 // indirect
+	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/genproto v0.0.0-20201110150050-8816d57aaa9a // indirect
 	google.golang.org/grpc v1.33.2 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
